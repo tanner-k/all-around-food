@@ -65,6 +65,7 @@ export type Recipe = z.infer<typeof RecipeSchema>;
 export type Ingredient = z.infer<typeof IngredientSchema>;
 export type Step = z.infer<typeof StepSchema>;
 
-export const recipeJsonSchema = zodToJsonSchema(RecipeSchema, {
-  name: "Recipe",
-});
+// Inline schema (no $ref wrapper) — Anthropic tool input_schema requires this shape.
+const _rawRecipeSchema = zodToJsonSchema(RecipeSchema) as Record<string, unknown>;
+delete _rawRecipeSchema.$schema;
+export const recipeJsonSchema = _rawRecipeSchema;

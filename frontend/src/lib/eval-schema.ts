@@ -43,6 +43,7 @@ export const EvaluationSchema = z.object({
 export type JudgeVerdict = z.infer<typeof JudgeVerdictSchema>;
 export type Evaluation = z.infer<typeof EvaluationSchema>;
 
-export const judgeVerdictJsonSchema = zodToJsonSchema(JudgeVerdictSchema, {
-  name: "JudgeVerdict",
-});
+// Inline schema (no $ref wrapper) — Anthropic tool input_schema requires this shape.
+const _rawJudgeSchema = zodToJsonSchema(JudgeVerdictSchema) as Record<string, unknown>;
+delete _rawJudgeSchema.$schema;
+export const judgeVerdictJsonSchema = _rawJudgeSchema;

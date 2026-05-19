@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from allaroundfood.eval_storage import EvalStore
@@ -35,6 +35,23 @@ def _get_recipe_store_path() -> Path:
 def _get_eval_store_path() -> Path:
     """Get the eval store path (for test injection via monkeypatch)."""
     return EVAL_STORE_PATH
+
+
+@app.get("/")
+async def root() -> dict[str, str]:
+    """Root endpoint — returns API metadata. Silences the 404 on bare /."""
+    return {
+        "service": "all-around-food",
+        "version": "0.2.0",
+        "docs": "/docs",
+        "health": "/healthz",
+    }
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    """Empty favicon to silence browser 404s."""
+    return Response(status_code=204)
 
 
 @app.get("/healthz")
