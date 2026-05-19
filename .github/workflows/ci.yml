@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+jobs:
+  frontend:
+    name: Frontend · pnpm lint · pnpm build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Install dependencies
+        if: hashFiles('frontend/package.json') != ''
+        run: cd frontend && pnpm install --frozen-lockfile
+
+      - name: Lint
+        if: hashFiles('frontend/package.json') != ''
+        run: cd frontend && pnpm lint
+
+      - name: Build
+        if: hashFiles('frontend/package.json') != ''
+        run: cd frontend && pnpm build
+
+  backend:
+    name: Backend · ruff · mypy · pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+
+      - name: Sync dependencies
+        if: hashFiles('backend/pyproject.toml') != ''
+        run: cd backend && uv sync
+
+      - name: Ruff check
+        if: hashFiles('backend/pyproject.toml') != ''
+        run: cd backend && uv run ruff check
+
+      - name: MyPy typecheck
+        if: hashFiles('backend/pyproject.toml') != ''
+        run: cd backend && uv run mypy
+
+      - name: pytest
+        if: hashFiles('backend/pyproject.toml') != ''
+        run: cd backend && uv run pytest
+
+  docs-sync:
+    name: CLAUDE.md == AGENTS.md
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify CLAUDE.md and AGENTS.md are identical
+        run: |
+          if ! diff -q CLAUDE.md AGENTS.md; then
+            echo "::error::CLAUDE.md and AGENTS.md must be identical."
+            exit 1
+          fi

@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>All Around Food · Wireframes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Patrick+Hand&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="wireframe-styles.css" />
+
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body { font-family: "Patrick Hand", system-ui, sans-serif; background: #f0eee9; }
+
+  /* Cover page styling for the intro card */
+  .cover {
+    background: var(--w-paper);
+    color: var(--w-ink);
+    padding: 28px 32px;
+    display: flex; flex-direction: column; gap: 14px;
+    width: 100%; height: 100%;
+    box-sizing: border-box;
+    font-family: "Patrick Hand", system-ui, sans-serif;
+  }
+  .cover .super { font-family: "Caveat", cursive; font-size: 22px; color: var(--w-accent); }
+  .cover .h1 { font-family: "Caveat", cursive; font-size: 60px; line-height: 1; font-weight: 700; }
+  .cover .h2 { font-family: "Caveat", cursive; font-size: 26px; color: var(--w-ink-soft); }
+  .cover .col2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .cover .card {
+    border: 1.5px solid var(--w-line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    background: var(--w-paper-2);
+  }
+  .cover .card .h { font-family: "Caveat", cursive; font-size: 24px; font-weight: 700; }
+  .cover .card .tag {
+    display: inline-block; font-family: "Caveat", cursive; font-size: 18px;
+    border: 1.5px solid var(--w-line); border-radius: 999px; padding: 0 10px; margin-bottom: 4px;
+  }
+  .cover ul { margin: 4px 0 0; padding-left: 18px; }
+  .cover li { margin-bottom: 2px; }
+  .cover .legend {
+    border: 1.5px dashed var(--w-accent);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--w-accent);
+    font-family: "Caveat", cursive;
+    font-size: 18px;
+  }
+</style>
+</head>
+
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<script type="text/babel" src="wireframes-common.jsx"></script>
+<script type="text/babel" src="screens-a.jsx"></script>
+<script type="text/babel" src="screens-b.jsx"></script>
+<script type="text/babel" src="screens-c.jsx"></script>
+<script type="text/babel" src="screens-cook.jsx"></script>
+<script type="text/babel" src="screens-chosen.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "showAnnotations": true,
+  "accent": "#c96442"
+}/*EDITMODE-END*/;
+
+const ACCENT_OPTIONS = ["#c96442", "#2a6f57", "#5b6cc9", "#7a4ec9"];
+
+const Cover = () => (
+  <div className="cover">
+    <div className="super">App plan · wireframes · v1</div>
+    <div className="h1">all around food</div>
+    <div className="h2">An AI cookbook that knows what's in your kitchen, what you've cooked, and what to buy next.</div>
+
+    <div className="col2" style={{ marginTop: 6 }}>
+      <div className="card">
+        <div className="h">The core idea</div>
+        <ul>
+          <li>Import any recipe — screenshot, link, photo, email</li>
+          <li>Standardize it — amounts inline with each step</li>
+          <li>Track your pantry — what's there, what's low</li>
+          <li>Plan your week — recipes that share ingredients</li>
+          <li>Shop smart — one list, grouped by aisle</li>
+        </ul>
+      </div>
+      <div className="card">
+        <div className="h">V1 scope (your picks)</div>
+        <ul>
+          <li>✓ Import (screenshot + link) → standardized format</li>
+          <li>✓ Inline amounts in steps</li>
+          <li>✓ Pantry · running-low alerts</li>
+          <li>✓ Shopping list grouped by aisle</li>
+          <li>✓ Weekly meal planner</li>
+          <li>✓ Recipe ranking / how-often-made</li>
+          <li>✓ "Recipes that share ingredients" suggestions</li>
+          <li>✓ Nutritional facts</li>
+        </ul>
+      </div>
+      <div className="card">
+        <div className="h">V2 / future</div>
+        <ul>
+          <li>Grocery store APIs — Kroger, Walmart pickup</li>
+          <li>Price comparison · Costco vs Smith's vs Walmart</li>
+          <li>Budget mode · estimate cost per recipe</li>
+          <li>Receipt scanning to auto-update pantry</li>
+          <li>Voice / hands-free cook mode</li>
+        </ul>
+      </div>
+      <div className="card" style={{ background: "#f0d8cd", borderColor: "var(--w-accent)" }}>
+        <div className="h" style={{ color: "var(--w-accent)" }}>★ Chosen direction · B + C</div>
+        <div style={{ marginTop: 2 }}><b>Plan is home</b> — the week drives shopping and suggestions.</div>
+        <div><b>Cookbook is the second tab</b> — magazine-y feed of YOUR recipes.</div>
+        <div className="small" style={{ marginTop: 6 }}>Nav: <b>Plan · Cookbook · Shop · Pantry · + Import</b></div>
+        <div className="small muted" style={{ marginTop: 6 }}>Deepened in the section just below this cover. Original A / B / C explorations remain for reference at the bottom.</div>
+      </div>
+    </div>
+
+    <div className="legend">↳ orange underlined text = inline ingredient amounts · the "no scrolling back" feature</div>
+  </div>
+);
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  // Apply accent globally
+  React.useEffect(() => {
+    document.documentElement.style.setProperty("--w-accent", t.accent || "#c96442");
+  }, [t.accent]);
+
+  // Toggle annotations via body class (CSS hides .wf-anno / .wf-annobar when off)
+  React.useEffect(() => {
+    document.body.classList.toggle("hide-anno", !t.showAnnotations);
+    if (!document.getElementById("anno-toggle-css")) {
+      const s = document.createElement("style");
+      s.id = "anno-toggle-css";
+      s.textContent = "body.hide-anno .wf-anno, body.hide-anno .wf-annobar { display: none !important; }";
+      document.head.appendChild(s);
+    }
+  }, [t.showAnnotations]);
+
+  const W = 880, H = 560;
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection id="intro" title="All around food · app plan" subtitle="An AI cookbook for home cooks. Read the cover, then scan three directions.">
+          <DCArtboard id="cover" label="Cover · the plan" width={1080} height={620}>
+            <Cover />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="chosen" title="★ Chosen direction · Plan is home + Cookbook is the browse tab" subtitle="The deeper exploration. B's planner provides structure; C's magazine-y cookbook provides browsing joy. Same data, two views.">
+          <DCArtboard id="x1" label="① Plan · home" width={W} height={H}><X1_Week /></DCArtboard>
+          <DCArtboard id="x2" label="② Cookbook · library" width={W} height={H}><X2_Cookbook /></DCArtboard>
+          <DCArtboard id="x3" label="③ Recipe detail" width={W} height={H}><X3_RecipeDetail /></DCArtboard>
+          <DCArtboard id="x4" label="④ Smart suggestions" width={W} height={H}><X4_Suggestions /></DCArtboard>
+          <DCArtboard id="x5" label="⑤ Shopping list" width={W} height={H}><X5_Shop /></DCArtboard>
+          <DCArtboard id="x6" label="⑥ Import (hero)" width={W} height={H}><X6_Import /></DCArtboard>
+          <DCArtboard id="x7" label="⑦ Pantry" width={W} height={H}><X7_Pantry /></DCArtboard>
+          <DCArtboard id="x8" label="⑧ IA map · how it fits" width={W} height={H}><X8_Map /></DCArtboard>
+        </DCSection>
+
+        <DCSection id="dir-a" title="A · Pantry-first (exploration · for reference)" subtitle="Your kitchen inventory is the source of truth. Recipes are filtered by what you have on hand.">
+          <DCArtboard id="a1" label="A1 · Pantry home" width={W} height={H}><A1_Pantry /></DCArtboard>
+          <DCArtboard id="a5" label="A2 · What can I make" width={W} height={H}><A5_WhatCanIMake /></DCArtboard>
+          <DCArtboard id="a2" label="A3 · Recipe detail" width={W} height={H}><A2_RecipeDetail /></DCArtboard>
+          <DCArtboard id="a3" label="A4 · Shopping list" width={W} height={H}><A3_Shopping /></DCArtboard>
+          <DCArtboard id="a4" label="A5 · Import flow" width={W} height={H}><A4_Import /></DCArtboard>
+        </DCSection>
+
+        <DCSection id="dir-b" title="B · Planner-first (exploration · for reference)" subtitle="The week is the home. Drag recipes onto days. Shopping list auto-generates. Suggestions favor ingredient overlap.">
+          <DCArtboard id="b1" label="B1 · Week view" width={W} height={H}><B1_Week /></DCArtboard>
+          <DCArtboard id="b2" label="B2 · Recipe library" width={W} height={H}><B2_Library /></DCArtboard>
+          <DCArtboard id="b3" label="B3 · Shared-ingredient suggestions" width={W} height={H}><B3_Suggestions /></DCArtboard>
+          <DCArtboard id="b4" label="B4 · Auto shopping list" width={W} height={H}><B4_AutoShop /></DCArtboard>
+        </DCSection>
+
+        <DCSection id="dir-c" title="C · Library-first (exploration · for reference)" subtitle="Your cookbook is the home — magazine-y feed of YOUR recipes. AI is a quiet helper. Import is the hero action.">
+          <DCArtboard id="c1" label="C1 · Cookbook home" width={W} height={H}><C1_Library /></DCArtboard>
+          <DCArtboard id="c2" label="C2 · Import (hero)" width={W} height={H}><C2_ImportHero /></DCArtboard>
+          <DCArtboard id="c3" label="C3 · Recipe (magazine)" width={W} height={H}><C3_RecipeMagazine /></DCArtboard>
+          <DCArtboard id="c4" label="C4 · Pantry tab" width={W} height={H}><C4_PantryUtility /></DCArtboard>
+        </DCSection>
+
+        <DCSection id="cook" title="Cook mode · 3 options" subtitle="How the step-by-step cooking view feels. These plug into any of the directions above — pick one.">
+          <DCArtboard id="cook1" label="Option 1 · One step at a time" width={W} height={H}><Cook1_StepByStep /></DCArtboard>
+          <DCArtboard id="cook2" label="Option 2 · Full scroll + sticky ref" width={W} height={H}><Cook2_FullScroll /></DCArtboard>
+          <DCArtboard id="cook3" label="Option 3 · Hands-free / voice" width={W} height={H}><Cook3_HandsFree /></DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Display">
+          <TweakToggle label="Show annotations" value={!!t.showAnnotations} onChange={(v) => setTweak("showAnnotations", v)} />
+          <TweakColor label="Accent" value={t.accent} options={ACCENT_OPTIONS} onChange={(v) => setTweak("accent", v)} />
+        </TweakSection>
+        <TweakSection title="Tips">
+          <div style={{ fontSize: 12, color: "rgba(60,50,40,.7)", lineHeight: 1.4 }}>
+            · Click any artboard's ⤢ to focus it fullscreen<br/>
+            · Use ← / → to flip between artboards in focus<br/>
+            · Drag the grip on a card to reorder
+          </div>
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+</body>
+</html>

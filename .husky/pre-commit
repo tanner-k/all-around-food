@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run linters on staged files only
+npx lint-staged
+
+# Optional: warn if any `- [x]` lines remain in TODO.md that haven't been promoted
+if grep -q "^- \[x\]" TODO.md 2>/dev/null; then
+  echo ""
+  echo "⚠️  TODO.md has checked-but-unpromoted items."
+  echo "   Run: python3 scripts/done.py \"<description>\" to move them to CHANGELOG.md"
+  echo ""
+fi

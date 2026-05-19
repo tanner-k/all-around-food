@@ -1,0 +1,1419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>All Around Food · Flow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #FAF7F2;
+    --paper: #FFFFFF;
+    --paper-2: #F3EEE3;
+    --ink: #1B1815;
+    --ink-soft: #5C544A;
+    --ink-mute: #8C8579;
+    --line: #E8E1D2;
+    --line-strong: #C9C0AB;
+    --terra: #C2613B;
+    --terra-soft: #F3DCCF;
+    --forest: #355E3B;
+    --forest-soft: #DBE5D6;
+    --warn: #B97A14;
+    --warn-soft: #F5E2B8;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: "Manrope", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .serif { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; }
+  .serif-i { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-weight: 400; }
+
+  /* ── Layout ─────────────────────────────────────────────────── */
+  .page { max-width: 1400px; margin: 0 auto; padding: 64px 56px 96px; }
+  section { padding: 80px 0; border-top: 1px solid var(--line); }
+  section:first-of-type { border-top: none; padding-top: 0; }
+
+  /* ── Page hero ──────────────────────────────────────────────── */
+  .hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 64px; align-items: end; }
+  .hero .tag {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--terra);
+  }
+  .hero h1 {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-weight: 400;
+    font-size: 96px;
+    line-height: 0.95;
+    margin: 16px 0 0;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 em { font-style: italic; color: var(--terra); }
+  .hero .lede {
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--ink-soft);
+    max-width: 480px;
+  }
+  .hero .lede strong { color: var(--ink); }
+  .hero .meta { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 16px; font-size: 13px; color: var(--ink-mute); }
+  .hero .meta span { border-left: 1px solid var(--line); padding-left: 16px; }
+  .hero .meta span:first-child { border: none; padding-left: 0; }
+
+  /* ── Section header ────────────────────────────────────────── */
+  .sec-head { display: grid; grid-template-columns: 280px 1fr; gap: 56px; margin-bottom: 56px; align-items: start; }
+  .sec-head .num {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-style: italic;
+    font-size: 80px;
+    line-height: 0.8;
+    color: var(--terra);
+    letter-spacing: -0.02em;
+  }
+  .sec-head .title {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-size: 44px;
+    line-height: 1.05;
+    margin: 0 0 14px;
+    letter-spacing: -0.01em;
+  }
+  .sec-head .title em { font-style: italic; color: var(--terra); }
+  .sec-head .desc { color: var(--ink-soft); font-size: 16px; max-width: 580px; }
+  .sec-head .scene {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--terra); margin-bottom: 10px;
+  }
+
+  /* ── Flow strip ─────────────────────────────────────────────── */
+  .flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 8px 4px 20px; scrollbar-width: thin; }
+  .step { flex: 0 0 auto; display: flex; flex-direction: column; gap: 12px; width: 320px; }
+  .step .caption {
+    display: flex; align-items: baseline; gap: 10px;
+    font-size: 13px;
+  }
+  .step .caption .n {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-style: italic;
+    font-size: 26px;
+    line-height: 1;
+    color: var(--terra);
+    flex-shrink: 0;
+  }
+  .step .caption .what { font-weight: 600; color: var(--ink); }
+  .step .caption .sub { color: var(--ink-mute); font-size: 12px; line-height: 1.4; }
+  .step .caption-wrap { display: flex; flex-direction: column; gap: 2px; }
+
+  /* Arrows between steps */
+  .arrow {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 56px;
+    color: var(--terra);
+    opacity: 0.65;
+    padding-top: 60px; /* aligns with screen middle */
+  }
+  .arrow svg { width: 100%; height: auto; display: block; }
+
+  /* ── Screen frame ───────────────────────────────────────────── */
+  .screen {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(27,24,21,0.02), 0 10px 30px -16px rgba(27,24,21,0.18);
+    display: flex; flex-direction: column;
+  }
+  .screen.tall { min-height: 540px; }
+  .screen .topbar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--paper-2);
+  }
+  .screen .topbar .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
+  .screen .topbar .url {
+    margin-left: 8px; padding: 3px 10px;
+    background: var(--paper); border-radius: 999px;
+    font-size: 11px; color: var(--ink-mute);
+    border: 1px solid var(--line);
+    flex: 1;
+  }
+
+  .screen .nav {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .screen .nav .logo {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .screen .nav .links { display: flex; gap: 8px; color: var(--ink-mute); flex-shrink: 0; font-size: 11px; }
+  .screen .nav .links .active { color: var(--ink); font-weight: 600; position: relative; }
+  .screen .nav .links .active::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -11px;
+    height: 2px; background: var(--terra);
+  }
+  .screen .nav .spacer { flex: 1; min-width: 4px; }
+  .screen .nav .import {
+    background: var(--ink); color: var(--paper);
+    padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 600;
+    flex-shrink: 0;
+  }
+
+  .screen .body {
+    padding: 16px;
+    display: flex; flex-direction: column;
+    gap: 12px;
+    flex: 1; min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ── In-screen UI primitives ────────────────────────────────── */
+  .h-title {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-size: 26px;
+    line-height: 1;
+    letter-spacing: -0.01em;
+  }
+  .h-title em { font-style: italic; color: var(--terra); }
+  .h-sub  { font-size: 12px; color: var(--ink-mute); }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 10px;
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+  .pill.dark { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .pill.terra { background: var(--terra); color: white; border-color: var(--terra); }
+  .pill.terra-soft { background: var(--terra-soft); color: var(--terra); border-color: transparent; }
+  .pill.forest { background: var(--forest-soft); color: var(--forest); border-color: transparent; }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+
+  .row { display: flex; align-items: center; gap: 8px; }
+  .row.between { justify-content: space-between; }
+  .row.wrap { flex-wrap: wrap; }
+  .col { display: flex; flex-direction: column; }
+  .grow { flex: 1; min-width: 0; }
+
+  /* Photo placeholders — warm gradient blocks, no Xs */
+  .photo {
+    background: linear-gradient(135deg, #E2D6C2, #C7B89C);
+    border-radius: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .photo.salmon  { background: linear-gradient(135deg, #F4C9A5, #D67D52); }
+  .photo.pasta   { background: linear-gradient(135deg, #F5DDA8, #C68B40); }
+  .photo.salad   { background: linear-gradient(135deg, #C7DAB0, #6E8D54); }
+  .photo.eggs    { background: linear-gradient(135deg, #F8E6BB, #E0A45A); }
+  .photo.chicken { background: linear-gradient(135deg, #EBD3AA, #B58456); }
+  .photo.tikka   { background: linear-gradient(135deg, #E8AE7C, #B14A2C); }
+  .photo.soup    { background: linear-gradient(135deg, #F1B69A, #C24B2A); }
+  .photo.rice    { background: linear-gradient(135deg, #E8DABE, #A88A55); }
+  .photo.gnocchi { background: linear-gradient(135deg, #F4D8B5, #C68056); }
+
+  /* Week calendar grid */
+  .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .day {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px 4px;
+    min-height: 76px;
+    display: flex; flex-direction: column; gap: 4px;
+    font-size: 10px;
+  }
+  .day .dl { color: var(--ink-mute); font-size: 9px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .day .dd { font-family: "Instrument Serif", Georgia, serif; font-size: 14px; }
+  .day .chip {
+    font-size: 9px;
+    padding: 2px 4px;
+    background: var(--paper-2);
+    border-radius: 3px;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+  .day .chip.empty { border: 1px dashed var(--line-strong); background: transparent; color: var(--ink-mute); text-align: center; }
+  .day.today { background: var(--terra-soft); border-color: var(--terra); }
+  .day.today .dl { color: var(--terra); }
+  .day.today .chip { background: var(--paper); }
+
+  /* Recipe mini-card */
+  .rcard {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .rcard .ph { aspect-ratio: 4/3; }
+  .rcard .meta { padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .rcard .t { font-family: "Instrument Serif", Georgia, serif; font-size: 14px; line-height: 1.1; }
+  .rcard .s { font-size: 10px; color: var(--ink-mute); }
+
+  /* Inline amount treatment — the signature feature */
+  .amt {
+    background: var(--terra-soft);
+    color: var(--terra);
+    padding: 0 5px;
+    border-radius: 3px;
+    font-weight: 600;
+    white-space: nowrap;
+    font-size: 0.95em;
+  }
+
+  /* ── Shopping list line ──────────────────────────── */
+  .listrow {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 0;
+    border-bottom: 1px dashed var(--line);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .listrow .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .listrow:last-child { border-bottom: none; }
+  .listrow .box {
+    width: 13px; height: 13px;
+    border: 1.5px solid var(--ink); border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .listrow.checked .box { background: var(--ink); }
+  .listrow.checked .box::before { content: "✓"; color: var(--paper); font-size: 9px; display: block; text-align: center; line-height: 11px; }
+  .listrow.checked { color: var(--ink-mute); text-decoration: line-through; }
+  .listrow .qty { color: var(--ink-mute); font-size: 11px; flex-shrink: 0; }
+  .listrow .nb { font-size: 10px; color: var(--terra); flex-shrink: 0; }
+
+  .aisle {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink-soft);
+    margin-top: 8px;
+    margin-bottom: 2px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 2px;
+  }
+  .aisle:first-child { margin-top: 0; }
+  .aisle .ct { float: right; font-style: normal; font-family: Manrope; font-size: 10px; color: var(--ink-mute); }
+
+  /* Step block */
+  .step-block {
+    background: var(--paper-2);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .step-block .n {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-style: italic;
+    font-size: 18px;
+    color: var(--terra);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .step-block.active { background: var(--paper); border: 2px solid var(--terra); }
+
+  /* Big CTA-ish dashed drop zone */
+  .drop {
+    border: 1.5px dashed var(--line-strong);
+    border-radius: 12px;
+    padding: 24px 12px;
+    text-align: center;
+    color: var(--ink-soft);
+    background: var(--paper-2);
+  }
+  .drop .icon { font-size: 28px; margin-bottom: 6px; }
+  .drop .lbl { font-family: "Instrument Serif", Georgia, serif; font-style: italic; font-size: 18px; color: var(--ink); }
+  .drop .sub { font-size: 11px; color: var(--ink-mute); margin-top: 2px; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+    cursor: default;
+    background: var(--paper-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+  }
+  .btn.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .btn.terra   { background: var(--terra); color: var(--paper); border-color: var(--terra); }
+  .btn.block   { width: 100%; }
+  .btn.big     { padding: 10px 16px; font-size: 13px; }
+
+  /* Modal overlay inside a screen */
+  .modal {
+    background: var(--paper);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 20px 40px -12px rgba(27,24,21,0.25);
+    border: 1px solid var(--line);
+    position: relative;
+    z-index: 2;
+    margin: 8px;
+  }
+  .scrim {
+    position: absolute; inset: 0;
+    background: rgba(27,24,21,0.25);
+    backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1;
+  }
+
+  /* Footer principles */
+  .principles {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px;
+    margin-top: 56px;
+    padding: 40px 0 0;
+    border-top: 1px solid var(--line);
+  }
+  .principles .p {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .principles .p .lab {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-style: italic;
+    font-size: 22px;
+    color: var(--terra);
+    line-height: 1;
+  }
+  .principles .p .ti {
+    font-size: 14px; font-weight: 600;
+  }
+  .principles .p .de {
+    font-size: 13px; color: var(--ink-soft);
+  }
+
+  /* Phone notification (Instagram screenshot setup) */
+  .phone {
+    background: linear-gradient(180deg, #1A1A1A, #0F0F0F);
+    border-radius: 28px;
+    padding: 14px 12px 18px;
+    color: white;
+    position: relative;
+  }
+  .phone .notch {
+    width: 80px; height: 18px; background: #000;
+    border-radius: 0 0 12px 12px;
+    margin: -14px auto 14px;
+  }
+  .phone .insta-bar {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .phone .avatar { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #f00, #ff0); }
+  .phone .post {
+    aspect-ratio: 1; border-radius: 8px; overflow: hidden;
+    background: linear-gradient(135deg, #F4D8B5, #C68056);
+    position: relative;
+  }
+  .phone .post .cap {
+    position: absolute; left: 8px; right: 8px; bottom: 8px;
+    font-family: "Instrument Serif", Georgia, serif;
+    font-style: italic;
+    font-size: 14px;
+    color: white;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+  }
+  .phone .actions { display: flex; gap: 14px; padding: 10px 2px 0; font-size: 14px; }
+  .phone .share-banner {
+    position: absolute; left: 12px; right: 12px; bottom: 12px;
+    background: var(--paper); color: var(--ink);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    font-size: 12px;
+  }
+  .phone .share-banner .icon { font-size: 18px; }
+  .phone .share-banner .grow { display: flex; flex-direction: column; }
+  .phone .share-banner .grow b { font-size: 13px; }
+  .phone .share-banner .grow span { color: var(--ink-mute); font-size: 11px; }
+
+  /* Loading dots / parsing animation */
+  .parse-list {
+    display: flex; flex-direction: column; gap: 6px;
+    font-size: 11px;
+    color: var(--ink-soft);
+  }
+  .parse-list .li {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .parse-list .li .check {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 1.5px solid var(--line-strong);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px;
+  }
+  .parse-list .li.done .check { background: var(--forest); border-color: var(--forest); color: white; }
+  .parse-list .li.done .check::before { content: "✓"; }
+  .parse-list .li.now .check { border-color: var(--terra); }
+  .parse-list .li.now .check::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--terra); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Footer */
+  footer { text-align: center; padding: 56px 0 0; color: var(--ink-mute); font-size: 13px; }
+  footer .marque {
+    font-family: "Instrument Serif", Georgia, serif;
+    font-style: italic;
+    font-size: 36px;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+
+  /* Print friendliness */
+  @media print {
+    .flow { overflow: visible; flex-wrap: wrap; }
+    section { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- ============================================================= -->
+  <!-- HERO                                                            -->
+  <!-- ============================================================= -->
+  <header style="padding: 0 0 24px;">
+    <div class="hero">
+      <div>
+        <div class="tag">App plan · v1 mockup</div>
+        <h1>all around <em>food</em>.</h1>
+      </div>
+      <div>
+        <div class="lede">
+          An AI cookbook that knows <strong>what's in your kitchen</strong>,
+          <strong>what you've cooked</strong>, and <strong>what to buy next</strong>.
+          One plan a week. One shopping run. No more scrolling back to the ingredients list.
+        </div>
+        <div class="meta">
+          <span>Web app · responsive</span>
+          <span>Plan is home</span>
+          <span>Cookbook is the second tab</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================= -->
+  <!-- FLOW 1 — THE WEEKLY RHYTHM                                       -->
+  <!-- ============================================================= -->
+  <section>
+    <div class="sec-head">
+      <div class="num">01</div>
+      <div>
+        <div class="scene">Sunday afternoon · 15 minutes</div>
+        <h2 class="title">Plan a week. <em>Shop once.</em> Cook all week.</h2>
+        <p class="desc">
+          The week is the home screen. AI proposes a plan that uses what's already in your pantry,
+          covers what's running low, and finds recipes that share ingredients so you buy once and cook twice.
+          One tap sends the shopping list to Kroger.
+        </p>
+      </div>
+    </div>
+
+    <div class="flow">
+
+      <!-- STEP 1 — Empty week -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links">
+              <span class="active">Plan</span>
+              <span>Cookbook</span>
+              <span>Shop</span>
+              <span>Pantry</span>
+            </span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div class="row between">
+              <div class="col">
+                <div class="h-title">Week of <em>May 18</em></div>
+                <div class="h-sub">No meals planned yet</div>
+              </div>
+              <span class="pill terra">✨ Auto-plan</span>
+            </div>
+            <div class="week">
+              <div class="day"><div class="dl">Mon</div><div class="dd">18</div><div class="chip empty">+</div></div>
+              <div class="day"><div class="dl">Tue</div><div class="dd">19</div><div class="chip empty">+</div></div>
+              <div class="day"><div class="dl">Wed</div><div class="dd">20</div><div class="chip empty">+</div></div>
+              <div class="day"><div class="dl">Thu</div><div class="dd">21</div><div class="chip empty">+</div></div>
+              <div class="day"><div class="dl">Fri</div><div class="dd">22</div><div class="chip empty">+</div></div>
+              <div class="day"><div class="dl">Sat</div><div class="dd">23</div><div class="chip empty">+</div></div>
+              <div class="day"><div class="dl">Sun</div><div class="dd">24</div><div class="chip empty">+</div></div>
+            </div>
+            <div style="border:1px solid var(--line); border-radius:10px; padding:12px;">
+              <div style="font-size:12px; font-weight:600; margin-bottom:6px;">Last week, you cooked</div>
+              <div class="row" style="gap:6px;">
+                <div class="rcard" style="width:80px;"><div class="ph photo eggs" style="aspect-ratio:1/1;"></div></div>
+                <div class="rcard" style="width:80px;"><div class="ph photo pasta" style="aspect-ratio:1/1;"></div></div>
+                <div class="rcard" style="width:80px;"><div class="ph photo salad" style="aspect-ratio:1/1;"></div></div>
+              </div>
+            </div>
+            <div style="background: var(--terra-soft); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--terra);">
+              <strong>Tip:</strong> Auto-plan uses your pantry, your history, and what's on sale.
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">①</span>
+          <div class="caption-wrap">
+            <span class="what">Open the week</span>
+            <span class="sub">Empty Sunday. Time to plan.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 2 — Auto-plan suggestions -->
+      <div class="step">
+        <div class="screen tall" style="position: relative;">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food / plan</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span class="active">Plan</span><span>Cookbook</span><span>Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body" style="filter: blur(0.5px);">
+            <div class="row between">
+              <div class="h-title">Week of <em>May 18</em></div>
+              <span class="pill terra-soft">✨ planning</span>
+            </div>
+            <div class="week" style="opacity: 0.5;">
+              <div class="day"><div class="dl">M</div><div class="dd">18</div></div>
+              <div class="day"><div class="dl">T</div><div class="dd">19</div></div>
+              <div class="day"><div class="dl">W</div><div class="dd">20</div></div>
+              <div class="day"><div class="dl">T</div><div class="dd">21</div></div>
+              <div class="day"><div class="dl">F</div><div class="dd">22</div></div>
+              <div class="day"><div class="dl">S</div><div class="dd">23</div></div>
+              <div class="day"><div class="dl">S</div><div class="dd">24</div></div>
+            </div>
+          </div>
+
+          <div class="scrim">
+            <div class="modal" style="width: 280px;">
+              <div class="row between" style="margin-bottom: 10px;">
+                <div class="h-title" style="font-size: 20px;"><em>Auto-plan</em></div>
+                <span class="pill terra-soft">7 meals · est $68</span>
+              </div>
+              <div class="h-sub" style="margin-bottom: 10px;">Optimized for shared ingredients + what's already in pantry.</div>
+
+              <div class="col" style="gap: 6px; margin-bottom: 12px;">
+                <div class="row" style="gap:8px;">
+                  <div class="photo pasta" style="width: 36px; height: 36px;"></div>
+                  <div class="grow">
+                    <div style="font-size: 12px; font-weight: 600;">Weeknight pasta</div>
+                    <div style="font-size: 10px; color: var(--ink-mute);">Mon · 25 min</div>
+                  </div>
+                  <span class="pill forest" style="font-size:10px;">on hand</span>
+                </div>
+                <div class="row" style="gap:8px;">
+                  <div class="photo tikka" style="width: 36px; height: 36px;"></div>
+                  <div class="grow">
+                    <div style="font-size: 12px; font-weight: 600;">Tikka masala</div>
+                    <div style="font-size: 10px; color: var(--ink-mute);">Tue · uses your paprika</div>
+                  </div>
+                  <span class="pill warn" style="font-size:10px;">uses low</span>
+                </div>
+                <div class="row" style="gap:8px;">
+                  <div class="photo salmon" style="width: 36px; height: 36px;"></div>
+                  <div class="grow">
+                    <div style="font-size: 12px; font-weight: 600;">Sheet-pan salmon</div>
+                    <div style="font-size: 10px; color: var(--ink-mute);">Wed · 30 min</div>
+                  </div>
+                </div>
+                <div class="row" style="gap:8px;">
+                  <div class="photo chicken" style="width: 36px; height: 36px;"></div>
+                  <div class="grow">
+                    <div style="font-size: 12px; font-weight: 600;">Roast chicken</div>
+                    <div style="font-size: 10px; color: var(--ink-mute);">Sat · stock for Sun soup</div>
+                  </div>
+                  <span class="pill forest" style="font-size:10px;">2-fer</span>
+                </div>
+                <div style="font-size: 10px; color: var(--ink-mute); padding-left: 4px;">+ 3 more · drag any to swap</div>
+              </div>
+
+              <div class="row" style="gap: 8px;">
+                <span class="btn grow">Shuffle</span>
+                <span class="btn terra grow">Looks good →</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">②</span>
+          <div class="caption-wrap">
+            <span class="what">Tap Auto-plan ✨</span>
+            <span class="sub">AI proposes 7 meals. Edit or accept.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 3 — Week filled -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food / plan</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span class="active">Plan</span><span>Cookbook</span><span>Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div class="row between">
+              <div class="col">
+                <div class="h-title">Week of <em>May 18</em></div>
+                <div class="h-sub">7 meals · 23 items · est $68</div>
+              </div>
+              <span class="pill dark">Review shopping →</span>
+            </div>
+            <div class="week">
+              <div class="day"><div class="dl">Mon</div><div class="dd">18</div><div class="chip">Pasta</div></div>
+              <div class="day"><div class="dl">Tue</div><div class="dd">19</div><div class="chip">Tikka</div></div>
+              <div class="day"><div class="dl">Wed</div><div class="dd">20</div><div class="chip">Salmon</div></div>
+              <div class="day"><div class="dl">Thu</div><div class="dd">21</div><div class="chip">Leftovers</div></div>
+              <div class="day"><div class="dl">Fri</div><div class="dd">22</div><div class="chip">Pizza</div></div>
+              <div class="day"><div class="dl">Sat</div><div class="dd">23</div><div class="chip">Roast</div><div class="chip">Salad</div></div>
+              <div class="day"><div class="dl">Sun</div><div class="dd">24</div><div class="chip">Brunch</div></div>
+            </div>
+            <div style="background: var(--forest-soft); border-radius:10px; padding: 10px 12px; font-size:12px; color: var(--forest);">
+              <strong>Saves $14 this week</strong> · pasta + tomato soup + caprese share 6 ingredients
+            </div>
+            <div style="border:1px solid var(--line); border-radius: 10px; padding: 10px 12px;">
+              <div style="font-size: 11px; color: var(--ink-mute); margin-bottom: 4px;">PLANNED RECIPES</div>
+              <div class="row wrap" style="gap: 4px;">
+                <span class="pill">Pasta</span>
+                <span class="pill">Tikka</span>
+                <span class="pill">Salmon</span>
+                <span class="pill">Pizza</span>
+                <span class="pill">Roast chicken</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">③</span>
+          <div class="caption-wrap">
+            <span class="what">Week is set</span>
+            <span class="sub">Drag to swap, or move on to shop.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 4 — Shopping list -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food / shop</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span>Plan</span><span>Cookbook</span><span class="active">Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div class="row between">
+              <div class="col">
+                <div class="h-title">Shopping <em>list</em></div>
+                <div class="h-sub">23 items · grouped by aisle</div>
+              </div>
+              <span class="pill dark">Send to Kroger</span>
+            </div>
+
+            <div class="aisle">Produce <span class="ct">9</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Tomatoes</span><span class="qty">6</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Onions</span><span class="qty">3</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Garlic</span><span class="qty">2 heads</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Lemons</span><span class="qty">3</span></div>
+
+            <div class="aisle">Spices &amp; oils <span class="ct">2</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Paprika</span><span class="nb">low</span><span class="qty">1 jar</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Olive oil</span><span class="nb">low</span><span class="qty">1 btl</span></div>
+
+            <div class="aisle">Meat &amp; seafood <span class="ct">3</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Salmon</span><span class="qty">4 · 6oz</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Whole chicken</span><span class="qty">4 lb</span></div>
+
+            <div class="aisle">Dairy <span class="ct">4</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Eggs</span><span class="qty">dozen</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Milk</span><span class="qty">½ gal</span></div>
+            <div class="listrow"><span class="box"></span><span class="name">Parmesan</span><span class="qty">¼ lb</span></div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">④</span>
+          <div class="caption-wrap">
+            <span class="what">List is auto-grouped</span>
+            <span class="sub">By aisle. Pantry-covered items hidden.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 5 — Tuesday cooking -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food / plan</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span class="active">Plan</span><span>Cookbook</span><span>Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div class="row between">
+              <div class="col">
+                <div class="h-title"><em>Tuesday</em> · May 19</div>
+                <div class="h-sub">Tonight's dinner</div>
+              </div>
+              <span class="pill forest">all on hand</span>
+            </div>
+
+            <div class="rcard">
+              <div class="ph photo tikka" style="aspect-ratio: 16/10;"></div>
+              <div class="meta" style="padding: 12px;">
+                <div class="t" style="font-size: 22px;">Tikka masala</div>
+                <div class="s">50 min · serves 4 · ★★★★★ · made 3× this year</div>
+              </div>
+            </div>
+
+            <div class="row" style="gap: 6px;">
+              <span class="pill">⏱ 50 min</span>
+              <span class="pill">510 kcal</span>
+              <span class="pill">★ 5.0</span>
+            </div>
+
+            <div style="background: var(--paper-2); border-radius: 10px; padding: 10px 12px;">
+              <div style="font-size: 11px; color: var(--ink-mute); margin-bottom: 4px;">PANTRY CHECK</div>
+              <div style="font-size: 12px;">All 11 ingredients in stock · including <strong>paprika</strong> you bought Sun</div>
+            </div>
+
+            <div class="btn terra big block">Start cooking →</div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">⑤</span>
+          <div class="caption-wrap">
+            <span class="what">Tuesday night</span>
+            <span class="sub">Open the app, tap "Start cooking."</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="margin-top: 32px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); display: grid; grid-template-columns: 160px 1fr; gap: 24px; align-items: center;">
+      <div class="serif-i" style="font-size: 28px; color: var(--terra); line-height: 1;">The payoff</div>
+      <div style="font-size: 14px; color: var(--ink-soft);">
+        Sunday Future-You knows what's for dinner every night. Pantry & shopping list stay in sync automatically.
+        Recipes that share ingredients save real money — the app surfaces those pairings by default.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- FLOW 2 — SAVE A RECIPE                                          -->
+  <!-- ============================================================= -->
+  <section>
+    <div class="sec-head">
+      <div class="num">02</div>
+      <div>
+        <div class="scene">Mid-week · 10 seconds</div>
+        <h2 class="title">Found a recipe on Instagram. <em>Save it</em>.</h2>
+        <p class="desc">
+          Anywhere you spot a recipe — Instagram, TikTok, NYT Cooking, a friend's text — drop it in.
+          The AI extracts the title, ingredients, steps, photo, and nutrition, then rewrites it in your
+          standard format with amounts inline in every step.
+        </p>
+      </div>
+    </div>
+
+    <div class="flow">
+
+      <!-- STEP 1 — Phone w/ Instagram -->
+      <div class="step">
+        <div class="phone" style="width: 320px;">
+          <div class="notch"></div>
+          <div class="insta-bar">
+            <div class="avatar"></div>
+            <div class="col grow"><b style="font-size:12px;">@bestpastatok</b><span style="font-size:10px; opacity:.6;">2 hours ago</span></div>
+            <div>•••</div>
+          </div>
+          <div class="post">
+            <div class="cap">Crispy gnocchi w/ jammy tomatoes — 30 min</div>
+          </div>
+          <div class="actions"><span>♡</span><span>💬</span><span style="color: var(--terra);">↑</span></div>
+
+          <div class="share-banner">
+            <span class="icon">🍴</span>
+            <div class="grow"><b>all around food</b><span>Save recipe</span></div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">①</span>
+          <div class="caption-wrap">
+            <span class="what">See it in the wild</span>
+            <span class="sub">iOS share sheet · Chrome extension · ⌘V</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 2 — Drop / paste -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food / import</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span>Plan</span><span>Cookbook</span><span>Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div class="h-title">Save a <em>recipe</em></div>
+            <div class="h-sub">Anywhere you find one — drop it in.</div>
+
+            <div class="drop" style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+              <div class="icon">⬇</div>
+              <div class="lbl">Drop screenshot or paste link</div>
+              <div class="sub">⌘V works on every screen</div>
+            </div>
+
+            <div class="row wrap" style="gap: 6px;">
+              <span class="pill">📷 Screenshot</span>
+              <span class="pill">🔗 URL</span>
+              <span class="pill">🎬 TikTok</span>
+              <span class="pill">📧 Email</span>
+              <span class="pill">✍ Type</span>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">②</span>
+          <div class="caption-wrap">
+            <span class="what">Drop into the app</span>
+            <span class="sub">Screenshot, paste, or share-sheet.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 3 — AI parsing -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food / import</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span>Plan</span><span>Cookbook</span><span>Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div class="h-title">Reading the <em>recipe</em>…</div>
+            <div class="h-sub">instagram.com/p/abc · 8 seconds</div>
+
+            <div class="photo gnocchi" style="aspect-ratio: 4/3; border-radius: 10px;"></div>
+
+            <div class="parse-list">
+              <div class="li done"><span class="check"></span><span>Detected: <strong>Crispy gnocchi w/ tomatoes</strong></span></div>
+              <div class="li done"><span class="check"></span><span>Extracted 8 ingredients</span></div>
+              <div class="li done"><span class="check"></span><span>Extracted 5 steps · placed amounts inline</span></div>
+              <div class="li now"><span class="check"></span><span>Calculating nutrition…</span></div>
+              <div class="li"><span class="check"></span><span style="opacity: .5;">Auto-tagging</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">③</span>
+          <div class="caption-wrap">
+            <span class="what">AI parses</span>
+            <span class="sub">~10 seconds end-to-end.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 4 — Review extracted -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food / import / review</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span>Plan</span><span>Cookbook</span><span>Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div class="row between">
+              <div>
+                <div class="h-title"><em>Crispy gnocchi</em> w/ tomatoes</div>
+                <div class="h-sub">30 min · serves 4 · 470 kcal</div>
+              </div>
+              <span class="pill terra-soft">parsed</span>
+            </div>
+
+            <div class="photo gnocchi" style="aspect-ratio: 16/9; border-radius: 10px;"></div>
+
+            <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em;">Ingredients · tap to edit</div>
+            <div style="font-size: 12px; line-height: 1.6;">
+              · gnocchi <span class="amt">1 lb</span><br/>
+              · cherry tomatoes <span class="amt">2 cups</span><br/>
+              · garlic <span class="amt">3 cloves</span><br/>
+              · olive oil <span class="amt">3 Tbsp</span><br/>
+              <span style="color: var(--ink-mute);">+ 4 more</span>
+            </div>
+
+            <div class="row wrap" style="gap: 4px;">
+              <span class="pill">weeknight</span>
+              <span class="pill">vegetarian</span>
+              <span class="pill">≤ 30 min</span>
+            </div>
+
+            <div class="row" style="gap: 8px; margin-top: auto;">
+              <span class="btn grow">Edit</span>
+              <span class="btn terra grow">Save</span>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">④</span>
+          <div class="caption-wrap">
+            <span class="what">Review &amp; save</span>
+            <span class="sub">Edit anything, then save to cookbook.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 5 — Saved to cookbook -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food / cookbook</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span>Plan</span><span class="active">Cookbook</span><span>Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div class="row between">
+              <div>
+                <div class="h-title">Your <em>cookbook</em></div>
+                <div class="h-sub">143 recipes · new added</div>
+              </div>
+            </div>
+
+            <div class="row wrap" style="gap: 4px;">
+              <span class="pill dark">most made</span>
+              <span class="pill">recent</span>
+              <span class="pill">on hand</span>
+              <span class="pill">untried</span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div class="rcard" style="border: 2px solid var(--terra);">
+                <div class="ph photo gnocchi"></div>
+                <div class="meta">
+                  <div class="t">Crispy gnocchi</div>
+                  <div class="s" style="color: var(--terra);">just added</div>
+                </div>
+              </div>
+              <div class="rcard"><div class="ph photo rice"></div><div class="meta"><div class="t">Egg fried rice</div><div class="s">11× this year</div></div></div>
+              <div class="rcard"><div class="ph photo pasta"></div><div class="meta"><div class="t">Weeknight pasta</div><div class="s">8× this year</div></div></div>
+              <div class="rcard"><div class="ph photo eggs"></div><div class="meta"><div class="t">Brunch eggs</div><div class="s">9× this year</div></div></div>
+              <div class="rcard"><div class="ph photo salmon"></div><div class="meta"><div class="t">Sheet-pan salmon</div><div class="s">5× this year</div></div></div>
+              <div class="rcard"><div class="ph photo salad"></div><div class="meta"><div class="t">Lemon salad</div><div class="s">6× this year</div></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">⑤</span>
+          <div class="caption-wrap">
+            <span class="what">In your cookbook</span>
+            <span class="sub">Drag to a day, or cook anytime.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="margin-top: 32px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); display: grid; grid-template-columns: 160px 1fr; gap: 24px; align-items: center;">
+      <div class="serif-i" style="font-size: 28px; color: var(--terra); line-height: 1;">Why it matters</div>
+      <div style="font-size: 14px; color: var(--ink-soft);">
+        Every recipe, no matter the source, gets rewritten in your standardized format —
+        <strong>amounts inline in steps</strong>, the same nutrition block, the same tag system.
+        Ten years of saved recipes look like one cookbook, not ten.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- FLOW 3 — COOK TONIGHT                                            -->
+  <!-- ============================================================= -->
+  <section>
+    <div class="sec-head">
+      <div class="num">03</div>
+      <div>
+        <div class="scene">Wednesday · 6:30pm</div>
+        <h2 class="title">Cook tonight. <em>No scrolling back.</em></h2>
+        <p class="desc">
+          The whole reason for the inline-amounts feature: when you're in the middle of cooking, hands oily,
+          you don't have to keep scrolling back to the ingredients list. Every amount lives inside the step
+          that uses it. Tap an amount to start a timer or check off the ingredient.
+        </p>
+      </div>
+    </div>
+
+    <div class="flow">
+
+      <!-- STEP 1 — Today's recipe -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span class="active">Plan</span><span>Cookbook</span><span>Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div class="row between">
+              <div class="col">
+                <div class="h-title">Week of <em>May 18</em></div>
+                <div class="h-sub">Tonight: sheet-pan salmon</div>
+              </div>
+              <span class="pill forest">on hand</span>
+            </div>
+            <div class="week">
+              <div class="day"><div class="dl">M</div><div class="dd">18</div><div class="chip">Pasta</div></div>
+              <div class="day"><div class="dl">T</div><div class="dd">19</div><div class="chip">Tikka</div></div>
+              <div class="day today"><div class="dl">Wed</div><div class="dd">20</div><div class="chip">Salmon</div></div>
+              <div class="day"><div class="dl">T</div><div class="dd">21</div><div class="chip">Leftovers</div></div>
+              <div class="day"><div class="dl">F</div><div class="dd">22</div><div class="chip">Pizza</div></div>
+              <div class="day"><div class="dl">S</div><div class="dd">23</div><div class="chip">Roast</div></div>
+              <div class="day"><div class="dl">S</div><div class="dd">24</div><div class="chip">Brunch</div></div>
+            </div>
+
+            <div class="rcard">
+              <div class="ph photo salmon" style="aspect-ratio: 16/9;"></div>
+              <div class="meta" style="padding: 10px 12px;">
+                <div class="t" style="font-size: 18px;">Sheet-pan salmon w/ lemon</div>
+                <div class="s">30 min · ★★★★ · made 5× this year</div>
+              </div>
+            </div>
+
+            <div class="btn terra big block">Open recipe →</div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">①</span>
+          <div class="caption-wrap">
+            <span class="what">Wed at 6:30pm</span>
+            <span class="sub">Today is bordered. Tap to open.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 2 — Recipe detail -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food / r / sheet-pan-salmon</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span>Plan</span><span class="active">Cookbook</span><span>Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div style="font-size: 10px; letter-spacing: 0.1em; color: var(--ink-mute); text-transform: uppercase;">Weeknight · 30 min</div>
+            <div class="h-title" style="font-size: 28px; line-height: 1;">Sheet-pan <em>salmon</em></div>
+
+            <div class="photo salmon" style="aspect-ratio: 16/10; border-radius: 10px;"></div>
+
+            <div class="row" style="gap: 6px;">
+              <span class="pill">⏱ 30 min</span>
+              <span class="pill">🍴 serves 4</span>
+              <span class="pill">510 kcal</span>
+              <span class="pill forest">on hand</span>
+            </div>
+
+            <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 4px;">Ingredients</div>
+            <div style="font-size: 11px; line-height: 1.5;">
+              · salmon fillets <span class="amt">4 · 6oz</span> · asparagus <span class="amt">1 lb</span>
+              <br/>· olive oil <span class="amt">3 Tbsp</span> · lemon <span class="amt">1</span>
+              <br/>· garlic <span class="amt">3 cloves</span> · salt + pepper
+            </div>
+
+            <div class="btn terra big block">Start cook mode →</div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">②</span>
+          <div class="caption-wrap">
+            <span class="what">Recipe detail</span>
+            <span class="sub">Magazine view. Then start cook mode.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 3 — Cook mode (the hero) -->
+      <div class="step">
+        <div class="screen tall" style="background: var(--paper);">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">cook · screen on</span>
+          </div>
+          <div class="body" style="padding: 18px; gap: 14px;">
+            <div class="row between">
+              <span class="pill">← Exit</span>
+              <span style="font-size: 11px; color: var(--ink-mute);">Step 2 of 3</span>
+              <span class="pill terra-soft">⏲ 8:42</span>
+            </div>
+
+            <div style="height: 3px; background: var(--paper-2); border-radius: 2px; overflow: hidden;">
+              <div style="width: 66%; height: 100%; background: var(--terra);"></div>
+            </div>
+
+            <div class="step-block">
+              <div class="n">1.</div>
+              <div>Heat oven to <span class="amt">425°F</span>. Toss <span class="amt">1 lb asparagus</span> with <span class="amt">2 Tbsp olive oil</span>, salt, pepper.</div>
+            </div>
+
+            <div class="step-block active">
+              <div class="n">2.</div>
+              <div style="font-size: 14px;">Lay <span class="amt">4 salmon fillets</span> on the sheet pan. Drizzle <span class="amt">1 Tbsp olive oil</span>, top with <span class="amt">3 garlic cloves</span> + <span class="amt">lemon slices</span>.</div>
+            </div>
+
+            <div class="step-block" style="opacity: 0.45;">
+              <div class="n">3.</div>
+              <div>Roast <span class="amt">12 min</span>. Salmon should flake; asparagus tender-crisp.</div>
+            </div>
+
+            <div class="row" style="gap: 8px; margin-top: auto;">
+              <span class="btn grow">‹ Back</span>
+              <span class="btn terra grow">Next →</span>
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">③</span>
+          <div class="caption-wrap">
+            <span class="what">Cook mode · the hero</span>
+            <span class="sub">Big text. Amounts inline. Tap any to start a timer.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow"><svg viewBox="0 0 56 16"><path d="M0 8 H50 M44 2 L50 8 L44 14" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+
+      <!-- STEP 4 — Done -->
+      <div class="step">
+        <div class="screen tall">
+          <div class="topbar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="url">allaround.food / r / sheet-pan-salmon</span>
+          </div>
+          <div class="nav">
+            <span class="logo">all around food</span>
+            <span class="links"><span class="active">Plan</span><span>Cookbook</span><span>Shop</span><span>Pantry</span></span>
+            <span class="spacer"></span>
+            <span class="import">+ Import</span>
+          </div>
+          <div class="body">
+            <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.1em;">Tonight · cooked in 32 min</div>
+            <div class="h-title">Done · <em>nice work</em>.</div>
+
+            <div class="photo salmon" style="aspect-ratio: 16/10; border-radius: 10px; position: relative;">
+              <div style="position: absolute; left: 50%; bottom: -14px; transform: translateX(-50%); background: var(--paper); border-radius: 999px; padding: 4px 12px; font-size: 11px; border: 1px solid var(--line);">+ add a photo</div>
+            </div>
+
+            <div style="margin-top: 14px;">
+              <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Rate this make</div>
+              <div style="font-size: 24px; color: var(--terra);">★ ★ ★ ★ <span style="color: var(--line-strong);">★</span></div>
+            </div>
+
+            <div style="font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 4px;">Note for next time</div>
+            <div style="border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; color: var(--ink-soft); font-style: italic;">
+              Did 14 min not 12, was perfect.
+            </div>
+
+            <div style="background: var(--forest-soft); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--forest);">
+              <strong>Pantry updated:</strong> salmon, asparagus, lemon, garlic, olive oil decremented.
+            </div>
+          </div>
+        </div>
+        <div class="caption">
+          <span class="n">④</span>
+          <div class="caption-wrap">
+            <span class="what">Log &amp; learn</span>
+            <span class="sub">Pantry auto-updates. Notes feed next time.</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="margin-top: 32px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); display: grid; grid-template-columns: 160px 1fr; gap: 24px; align-items: center;">
+      <div class="serif-i" style="font-size: 28px; color: var(--terra); line-height: 1;">The loop closes</div>
+      <div style="font-size: 14px; color: var(--ink-soft);">
+        Cooking a recipe decrements the pantry. Pantry feeds the shopping list. Shopping list feeds next week's plan.
+        Notes ("14 min, not 12") show up the next time you make this. <strong>The app gets sharper every week.</strong>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================= -->
+  <!-- PRINCIPLES                                                       -->
+  <!-- ============================================================= -->
+  <section>
+    <div class="sec-head">
+      <div class="num">★</div>
+      <div>
+        <h2 class="title">Four things this app <em>commits to.</em></h2>
+        <p class="desc">The non-negotiables. Every feature in V1 serves at least one of these.</p>
+      </div>
+    </div>
+
+    <div class="principles" style="border-top: none; margin-top: 0; padding-top: 0;">
+      <div class="p">
+        <div class="lab">i.</div>
+        <div class="ti">Amounts live inline</div>
+        <div class="de">In every step, in every recipe, no matter the source. Scrolling back is a bug.</div>
+      </div>
+      <div class="p">
+        <div class="lab">ii.</div>
+        <div class="ti">One source of truth: pantry</div>
+        <div class="de">Recipes know what you have. Shop knows what you need. Pantry updates when you cook.</div>
+      </div>
+      <div class="p">
+        <div class="lab">iii.</div>
+        <div class="ti">Plan once, shop once</div>
+        <div class="de">Sunday gives you the whole week. The shopping list is grouped by aisle, ready to send.</div>
+      </div>
+      <div class="p">
+        <div class="lab">iv.</div>
+        <div class="ti">Import is one tap</div>
+        <div class="de">⌘V, share sheet, Chrome extension. Anywhere you find a recipe, it's already saved.</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+      <div style="border: 1px solid var(--line); border-radius: 14px; padding: 24px 28px; background: var(--paper);">
+        <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--terra); font-weight: 600;">V1 scope</div>
+        <div class="serif" style="font-size: 26px; margin: 4px 0 12px;">What ships first</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; font-size: 13px; color: var(--ink-soft);">
+          <div>· Import (screenshot + link)</div>
+          <div>· Standardized recipe format</div>
+          <div>· Inline amounts in steps</div>
+          <div>· Pantry · running-low alerts</div>
+          <div>· Shopping list by aisle</div>
+          <div>· Weekly meal planner</div>
+          <div>· Recipe ranking / frequency</div>
+          <div>· Shared-ingredient suggestions</div>
+          <div>· Nutritional facts</div>
+          <div>· Cook mode (web + mobile)</div>
+        </div>
+      </div>
+
+      <div style="border: 1px solid var(--line); border-radius: 14px; padding: 24px 28px; background: var(--paper-2);">
+        <div style="font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-mute); font-weight: 600;">V2 &amp; beyond</div>
+        <div class="serif" style="font-size: 26px; margin: 4px 0 12px;">When the loop is solid</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; font-size: 13px; color: var(--ink-soft);">
+          <div>· Kroger / Walmart pickup APIs</div>
+          <div>· Cross-store price comparison</div>
+          <div>· Budget mode · cost per recipe</div>
+          <div>· Receipt scan → pantry auto-fill</div>
+          <div>· Photo of fridge → pantry sync</div>
+          <div>· Voice / hands-free cook mode</div>
+          <div>· Friends &amp; sharing</div>
+          <div>· Native iOS / Android</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="marque">all around food.</div>
+    <div>Plan a week. Shop once. Cook all week.</div>
+    <div style="margin-top: 6px;">v1 mockup · May 2026</div>
+  </footer>
+
+</div>
+
+</body>
+</html>

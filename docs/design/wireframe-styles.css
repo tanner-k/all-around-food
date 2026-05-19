@@ -1,0 +1,270 @@
+/* Sketchy wireframe aesthetic — handwritten font + ink on paper + 1 accent */
+
+:root {
+  --w-paper: #f6f2ea;
+  --w-paper-2: #efe9dd;
+  --w-ink: #2a2521;
+  --w-ink-soft: #4a423b;
+  --w-line: #2a2521;
+  --w-mute: #b8b0a3;
+  --w-mute-2: #d6cebf;
+  --w-accent: #c96442;
+  --w-accent-soft: #f0d8cd;
+  --w-good: #5a7a4a;
+  --w-warn: #c98e42;
+  --w-bad:  #b04a32;
+  --w-radius: 6px;
+}
+
+.wf {
+  background: var(--w-paper);
+  color: var(--w-ink);
+  font-family: "Patrick Hand", "Caveat", "Comic Sans MS", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.35;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-hand   { font-family: "Caveat", cursive; font-weight: 600; }
+.wf-body   { font-family: "Patrick Hand", cursive; }
+
+/* Browser chrome (sketchy) */
+.wf-chrome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 8px;
+  border-bottom: 1.5px solid var(--w-line);
+  background: var(--w-paper-2);
+}
+.wf-chrome .dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 1.5px solid var(--w-line);
+}
+.wf-chrome .url {
+  flex: 1; padding: 4px 10px;
+  border: 1.5px solid var(--w-line);
+  border-radius: 999px;
+  font-size: 14px;
+  background: var(--w-paper);
+  color: var(--w-ink-soft);
+  margin-left: 8px;
+}
+
+/* App nav */
+.wf-nav {
+  display: flex; align-items: center; gap: 18px;
+  padding: 12px 18px;
+  border-bottom: 1.5px solid var(--w-line);
+}
+.wf-nav .logo {
+  font-family: "Caveat", cursive;
+  font-size: 22px; font-weight: 700;
+}
+.wf-nav .links { display: flex; gap: 14px; color: var(--w-ink-soft); font-size: 15px; }
+.wf-nav .links span.active { color: var(--w-accent); border-bottom: 1.5px solid var(--w-accent); }
+.wf-nav .spacer { flex: 1; }
+.wf-nav .pill {
+  border: 1.5px solid var(--w-line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 14px;
+}
+
+/* Body / canvas of a screen */
+.wf-body-area {
+  flex: 1; min-height: 0;
+  padding: 14px 18px;
+  display: flex; flex-direction: column; gap: 10px;
+  overflow: hidden;
+}
+
+/* Hand-drawn primitives */
+.wf-box {
+  border: 1.5px solid var(--w-line);
+  border-radius: var(--w-radius);
+  background: var(--w-paper);
+  padding: 10px 12px;
+}
+.wf-box.dash { border-style: dashed; }
+.wf-box.fill { background: var(--w-paper-2); }
+.wf-box.accent { background: var(--w-accent-soft); border-color: var(--w-accent); }
+.wf-box.tight { padding: 6px 8px; }
+.wf-box.flat  { padding: 0; overflow: hidden; }
+
+.wf-line {
+  height: 1.5px; background: var(--w-line);
+  border-radius: 2px;
+}
+.wf-line.thin { height: 1px; background: var(--w-mute); }
+
+/* Skeleton text lines */
+.wf-skel {
+  height: 8px; border-radius: 3px;
+  background: var(--w-mute-2);
+}
+.wf-skel.dark { background: var(--w-mute); }
+
+/* Image / photo placeholders — diagonal X */
+.wf-photo {
+  background:
+    linear-gradient(45deg, transparent 49%, var(--w-mute) 49%, var(--w-mute) 51%, transparent 51%),
+    linear-gradient(-45deg, transparent 49%, var(--w-mute) 49%, var(--w-mute) 51%, transparent 51%),
+    var(--w-paper-2);
+  border: 1.5px solid var(--w-line);
+  border-radius: var(--w-radius);
+}
+
+/* Pills, chips, buttons */
+.wf-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1.5px solid var(--w-line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 14px;
+  background: var(--w-paper);
+  white-space: nowrap;
+}
+.wf-pill.accent { background: var(--w-accent); color: white; border-color: var(--w-accent); }
+.wf-pill.soft   { background: var(--w-paper-2); }
+.wf-pill.warn   { background: #f4e6c4; border-color: var(--w-warn); color: var(--w-warn); }
+.wf-pill.good   { background: #e2ecd9; border-color: var(--w-good); color: var(--w-good); }
+
+.wf-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1.5px solid var(--w-line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  background: var(--w-paper);
+  font-family: inherit;
+  font-size: 15px;
+}
+.wf-btn.cta { background: var(--w-accent); color: white; border-color: var(--w-accent); }
+.wf-btn.big { padding: 10px 18px; font-size: 18px; }
+
+/* Annotations — handwritten margin notes */
+.wf-anno {
+  font-family: "Caveat", cursive;
+  font-size: 18px;
+  color: var(--w-accent);
+  display: flex; align-items: flex-start; gap: 6px;
+}
+.wf-anno .arrow {
+  display: inline-block;
+  margin-top: 2px;
+}
+
+/* Sticky annotation row beneath an artboard */
+.wf-annobar {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 8px 14px;
+  background: linear-gradient(0deg, var(--w-paper) 70%, transparent);
+  font-family: "Caveat", cursive;
+  font-size: 17px;
+  color: var(--w-accent);
+  border-top: 1.5px dashed var(--w-accent);
+}
+
+/* "Show annotations" toggle hides annotation marks */
+.wf.no-anno .wf-anno,
+.wf.no-anno .wf-annobar { display: none !important; }
+
+/* Aisle / category dividers */
+.wf-aisle {
+  font-family: "Caveat", cursive;
+  font-size: 20px;
+  color: var(--w-ink-soft);
+  border-bottom: 1.5px solid var(--w-line);
+  padding-bottom: 2px;
+  margin-top: 4px;
+}
+
+/* Day cells (planner) */
+.wf-day {
+  border: 1.5px solid var(--w-line);
+  border-radius: var(--w-radius);
+  padding: 6px 6px 8px;
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--w-paper);
+  min-height: 0;
+}
+.wf-day .label {
+  font-family: "Caveat", cursive;
+  font-size: 17px;
+  color: var(--w-ink-soft);
+}
+
+/* Recipe card variants */
+.wf-card {
+  border: 1.5px solid var(--w-line);
+  border-radius: var(--w-radius);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  background: var(--w-paper);
+}
+.wf-card .thumb { aspect-ratio: 4/3; }
+.wf-card .meta  { padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
+.wf-card .title { font-family: "Caveat", cursive; font-size: 18px; line-height: 1; }
+.wf-card .sub   { font-size: 13px; color: var(--w-ink-soft); }
+
+/* Stars */
+.wf-stars { letter-spacing: 1px; color: var(--w-accent); font-size: 13px; }
+
+/* Checkbox */
+.wf-check {
+  width: 16px; height: 16px;
+  border: 1.5px solid var(--w-line);
+  border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.wf-check.on { background: var(--w-ink); color: var(--w-paper); }
+.wf-check.on::before { content: "✓"; font-size: 12px; line-height: 1; }
+
+/* Section header within section */
+.wf-h {
+  font-family: "Caveat", cursive;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+.wf-h2 {
+  font-family: "Caveat", cursive;
+  font-size: 20px;
+  color: var(--w-ink-soft);
+}
+
+/* Tiny ingredient inline-pill (the "amounts in steps" thing) */
+.wf-amt {
+  display: inline-block;
+  border-bottom: 1.5px solid var(--w-accent);
+  color: var(--w-accent);
+  padding: 0 2px;
+  font-weight: 600;
+}
+
+/* Vertically scroll any content that overflows (we want artboards to look like
+   real viewports, not auto-grow); each artboard sets max-height via height prop */
+.wf-scroll {
+  flex: 1; min-height: 0; overflow: hidden;
+}
+
+/* utility */
+.row { display: flex; gap: 8px; align-items: center; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.between { justify-content: space-between; }
+.center { justify-content: center; align-items: center; }
+.wrap { flex-wrap: wrap; }
+.muted { color: var(--w-ink-soft); }
+.tiny  { font-size: 12px; }
+.small { font-size: 13px; }
+.big   { font-size: 18px; }
+.bold  { font-weight: 700; }
+.grow  { flex: 1; }
+.gap-4 { gap: 4px; } .gap-6 { gap: 6px; } .gap-12 { gap: 12px; }
