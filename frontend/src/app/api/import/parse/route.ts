@@ -62,9 +62,24 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error("[parse] worker failed:", err);
+    // Surface the real upstream error to the UI so it's diagnosable.
+    const e = err as { status?: number; message?: string };
+    const status = e?.status ?? 500;
+    let hint = "";
+    if (status === 401) {
+      hint =
+        " — auth failed. Confirm ANTHROPIC_API_KEY in frontend/.env.local AND restart `pnpm dev` (Next.js only loads .env at startup).";
+    } else if (status === 429) {
+      hint = " — rate limited. Wait a moment and try again.";
+    } else if (status >= 500 && status < 600) {
+      hint = " — upstream Anthropic API error; retried 4x. Try again in a moment.";
+    }
     return NextResponse.json(
-      { error: "Recipe parsing failed", detail: String(err) },
-      { status: 500 }
+      {
+        error: `Recipe parsing failed (${status})${hint}`,
+        detail: e?.message ?? String(err),
+      },
+      { status: 502 }
     );
   }
 

@@ -12,7 +12,16 @@ import {
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
   if (!_client) {
-    _client = new Anthropic();
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error(
+        "ANTHROPIC_API_KEY is not set. Add it to frontend/.env.local and RESTART the dev server (Next.js loads .env at startup, not on edit)."
+      );
+    }
+    _client = new Anthropic({
+      // Retry on 408/409/429/5xx with exponential backoff.
+      // Default is 2; bumping to 4 to ride out transient 502s from Cloudflare.
+      maxRetries: 4,
+    });
   }
   return _client;
 }
