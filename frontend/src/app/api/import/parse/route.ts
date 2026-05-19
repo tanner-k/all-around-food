@@ -1,0 +1,139 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import {
+  parseRecipeFromImage,
+  parseRecipeFromUrl,
+  gradeRecipeParse,
+  sha256Hex,
+} from "@/lib/claude";
+import { EvaluationSchema, type Evaluation } from "@/lib/eval-schema";
+
+const ImageBodySchema = z.object({
+  kind: z.literal("image"),
+  data: z.string(),
+  mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+});
+
+const UrlBodySchema = z.object({
+  kind: z.literal("url"),
+  url: z.string().url(),
+});
+
+const BodySchema = z.discriminatedUnion("kind", [
+  ImageBodySchema,
+  UrlBodySchema,
+]);
+
+export async function POST(req: NextRequest) {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const parsed = BodySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid request", details: parsed.error.flatten() },
+      { status: 400 }
+    );
+  }
+
+  const validBody = parsed.data;
+
+  let recipe;
+  let workerPrompt: string;
+  let strippedText: string | undefined;
+
+  try {
+    if (validBody.kind === "image") {
+      const result = await parseRecipeFromImage(
+        validBody.data,
+        validBody.mediaType
+      );
+      recipe = result.recipe;
+      workerPrompt = result.workerPrompt;
+    } else {
+      const result = await parseRecipeFromUrl(validBody.url);
+      recipe = result.recipe;
+      workerPrompt = result.workerPrompt;
+      strippedText = result.strippedText;
+    }
+  } catch (err) {
+    console.error("[parse] worker failed:", err);
+    return NextResponse.json(
+      { error: "Recipe parsing failed", detail: String(err) },
+      { status: 500 }
+    );
+  }
+
+  // Assign timestamps
+  recipe = { ...recipe, id: "", created_at: new Date().toISOString() };
+
+  // Fire-and-forget grading
+  void (async () => {
+    try {
+      let sourceRef: string;
+      if (validBody.kind === "url") {
+        sourceRef = validBody.url;
+      } else {
+        const bytes = Buffer.from(validBody.data, "base64");
+        sourceRef = `screenshot:${await sha256Hex(bytes.buffer as ArrayBuffer)}`;
+      }
+
+      const sourceContent =
+        validBody.kind === "image"
+          ? ({
+              kind: "image" as const,
+              base64: validBody.data,
+              mediaType: validBody.mediaType,
+            })
+          : ({
+              kind: "url-text" as const,
+              text: strippedText ?? "",
+            });
+
+      const { verdict, judgePrompt, rawJudgeOutput } = await gradeRecipeParse({
+        sourceKind: validBody.kind,
+        sourceRef,
+        workerPrompt,
+        workerOutput: recipe,
+        sourceContent,
+      });
+
+      const evaluation: Evaluation = EvaluationSchema.parse({
+        id: crypto.randomUUID(),
+        created_at: new Date().toISOString(),
+        source_kind: validBody.kind,
+        source_ref: sourceRef,
+        worker_model: "claude-haiku-4-5",
+        worker_prompt: workerPrompt,
+        worker_output: JSON.stringify(recipe),
+        worker_parse_confidence: recipe.parse_confidence,
+        judge_model: "claude-sonnet-4-6",
+        judge_prompt: judgePrompt,
+        ...verdict,
+        raw_judge_output: rawJudgeOutput,
+      });
+
+      const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
+      const res = await fetch(`${backendUrl}/evaluations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(evaluation),
+      });
+      if (!res.ok) {
+        console.error(
+          "[eval] backend rejected:",
+          res.status,
+          await res.text()
+        );
+      }
+    } catch (err) {
+      console.error("[eval] grading failed:", err);
+    }
+  })();
+
+  return NextResponse.json(recipe);
+}
