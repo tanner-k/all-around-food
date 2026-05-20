@@ -48,10 +48,11 @@ export default async function CookbookPage() {
             {recipes.map((recipe, idx) => {
               const isNewest = idx === 0;
               return (
-                <div
+                <Link
                   key={recipe.id || idx}
+                  href={`/cookbook/${recipe.id}`}
                   className={[
-                    "rounded-xl overflow-hidden bg-paper",
+                    "rounded-xl overflow-hidden bg-paper block transition-shadow hover:shadow-md",
                     isNewest
                       ? "border-2 border-terra"
                       : "border border-line",
@@ -76,7 +77,7 @@ export default async function CookbookPage() {
                         : `${recipe.times_made}× this year`}
                     </p>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>

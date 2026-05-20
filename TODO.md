@@ -20,12 +20,22 @@
 - [x] /evaluations dev dashboard (stats + expandable table)
 - [x] docs/evaluations.md guide
 
-## Phase C (Next)
+## Phase C (Completed)
+- [x] Recipe detail page (/cookbook/[id]) — magazine-style with hero, meta pills, grouped ingredients
+- [x] Cook mode (/cookbook/[id]/cook) — two layouts (step-by-step + full-scroll), toggleable, persisted in localStorage
+- [x] Mark-cooked action (increment times_made)
+- [x] Edit a saved recipe (/cookbook/[id]/edit) — structured form with add/remove rows
+- [x] Backend: PUT /recipes/{id} and POST /recipes/{id}/cooked endpoints + RecipeStore methods
+- [x] Responsive layouts for detail, cook, edit screens
+- [x] Per-step countdown timer in cook mode
+- [x] InlineAmountText component extracted and reused
+
+## Phase D (Next)
 - [ ] Real E2E smoke test with Playwright (import flow end-to-end in browser)
 - [ ] Deploy backend somewhere reachable from Vercel (staging API)
-- [ ] Recipe detail page (/cookbook/[id])
-- [ ] Cook mode (hero hands-free flow with step navigation)
-- [ ] Edit a saved recipe (inline edit or modal)
+- [ ] Planner (weekly meal plan)
+- [ ] Smart shopping list
+- [ ] Pantry inventory
 
 ## Later
 - [ ] Real responsive mobile layout (current is desktop-first)

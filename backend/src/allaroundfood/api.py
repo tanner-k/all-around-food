@@ -106,11 +106,67 @@ async def get_recipe(recipe_id: str) -> Recipe:
     """
     store_path = _get_recipe_store_path()
     store = RecipeStore.load(store_path)
-    recipes = store.all()
-    for recipe in recipes:
-        if recipe.id == recipe_id:
-            return recipe
-    raise HTTPException(status_code=404, detail="Recipe not found")
+    recipe = store.get(recipe_id)
+    if recipe is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    return recipe
+
+
+@app.put("/recipes/{recipe_id}")
+async def put_recipe(recipe_id: str, recipe: Recipe) -> Recipe:
+    """Update a recipe by ID.
+
+    Args:
+        recipe_id: ID of the recipe to update.
+        recipe: Updated Recipe data.
+
+    Returns:
+        Updated Recipe.
+
+    Raises:
+        HTTPException: If recipe not found.
+    """
+    store_path = _get_recipe_store_path()
+    store = RecipeStore.load(store_path)
+
+    # Ensure the recipe ID in the path takes precedence
+    recipe_to_save = recipe.model_copy(update={"id": recipe_id})
+
+    try:
+        store = store.update(recipe_id, recipe_to_save)
+        store.save()
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="Recipe not found") from e
+
+    return recipe_to_save
+
+
+@app.post("/recipes/{recipe_id}/cooked")
+async def post_recipe_cooked(recipe_id: str) -> Recipe:
+    """Mark a recipe as cooked by incrementing times_made.
+
+    Args:
+        recipe_id: ID of the recipe to mark as cooked.
+
+    Returns:
+        Updated Recipe with incremented times_made.
+
+    Raises:
+        HTTPException: If recipe not found.
+    """
+    store_path = _get_recipe_store_path()
+    store = RecipeStore.load(store_path)
+
+    recipe = store.get(recipe_id)
+    if recipe is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    # Increment times_made
+    updated_recipe = recipe.model_copy(update={"times_made": recipe.times_made + 1})
+    store = store.update(recipe_id, updated_recipe)
+    store.save()
+
+    return updated_recipe
 
 
 @app.post("/evaluations")

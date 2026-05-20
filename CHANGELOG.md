@@ -10,6 +10,25 @@
 
 <!-- Newest first -->
 
+## [Unreleased] — Phase C
+
+**Added**
+
+- Recipe detail page at `/cookbook/[id]` — magazine-style view with hero, meta pills, grouped ingredients, inline-amount steps.
+- Immersive cook mode at `/cookbook/[id]/cook` — two layouts (one-step-at-a-time and full-scroll with sticky ingredient panel), user-toggleable, choice persisted in `localStorage`.
+- Per-step countdown timer in cook mode (tap a step with a duration).
+- "Done" screen with a `Mark as cooked` action that increments `times_made`.
+- Edit a saved recipe at `/cookbook/[id]/edit` — structured form, add/remove ingredient + step rows.
+- Backend: `PUT /recipes/{id}` (full edit) and `POST /recipes/{id}/cooked` (increment times_made) endpoints; `RecipeStore.update()` and `RecipeStore.get()` methods.
+- `InlineAmountText` shared component — inline-amount step rendering extracted from `RecipeReview` and reused across detail + cook mode.
+- Responsive layouts for the recipe detail, cook mode, and edit screens.
+- 8 new backend tests (recipe update, get-by-id, mark-cooked endpoints).
+
+**Changed**
+
+- `/cookbook` recipe cards now link to the recipe detail page.
+- `GET /recipes/{id}` refactored to use `RecipeStore.get()` instead of scanning all recipes.
+
 ## [Unreleased] — Phase B
 
 **Added**

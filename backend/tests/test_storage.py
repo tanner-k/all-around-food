@@ -295,3 +295,127 @@ def test_backward_compat_old_parquet(tmp_path: Path) -> None:
     assert recipe.storage_instructions is None
     assert recipe.times_made == 0
     assert recipe.parse_confidence is None
+
+
+def test_get_by_id(tmp_path: Path) -> None:
+    """Get a recipe by ID; unknown ID returns None."""
+    db_path = tmp_path / "get_by_id.parquet"
+
+    recipe1 = Recipe(
+        id="recipe-1",
+        title="Recipe 1",
+        ingredients=[Ingredient(name="ingredient1", quantity=Quantity(as_written="1"))],
+        steps=[Step(order=1, instruction="Step 1")],
+    )
+
+    recipe2 = Recipe(
+        id="recipe-2",
+        title="Recipe 2",
+        ingredients=[Ingredient(name="ingredient2", quantity=Quantity(as_written="1"))],
+        steps=[Step(order=1, instruction="Step 2")],
+    )
+
+    store = RecipeStore.load(db_path)
+    store = store.add(recipe1)
+    store = store.add(recipe2)
+
+    # Get existing recipes
+    result1 = store.get("recipe-1")
+    assert result1 is not None
+    assert result1.id == "recipe-1"
+    assert result1.title == "Recipe 1"
+
+    result2 = store.get("recipe-2")
+    assert result2 is not None
+    assert result2.id == "recipe-2"
+    assert result2.title == "Recipe 2"
+
+    # Get unknown recipe
+    result_unknown = store.get("nonexistent")
+    assert result_unknown is None
+
+
+def test_update_replaces_row(tmp_path: Path) -> None:
+    """Update a recipe; the row is replaced with new data."""
+    db_path = tmp_path / "update_replace.parquet"
+
+    original_recipe = Recipe(
+        id="recipe-1",
+        title="Original Title",
+        description="Original description",
+        ingredients=[Ingredient(name="ingredient1", quantity=Quantity(as_written="1"))],
+        steps=[Step(order=1, instruction="Step 1")],
+    )
+
+    store = RecipeStore.load(db_path)
+    store = store.add(original_recipe)
+
+    # Update the recipe with a new title
+    updated_recipe = original_recipe.model_copy(
+        update={"title": "Updated Title", "description": "Updated description"}
+    )
+    store_updated = store.update("recipe-1", updated_recipe)
+    store_updated.save()
+
+    # Load fresh and verify update
+    store_loaded = RecipeStore.load(db_path)
+    result = store_loaded.get("recipe-1")
+    assert result is not None
+    assert result.title == "Updated Title"
+    assert result.description == "Updated description"
+    # Count should be unchanged
+    assert len(store_loaded.all()) == 1
+
+
+def test_update_unknown_id_raises(tmp_path: Path) -> None:
+    """Update with unknown ID raises KeyError."""
+    db_path = tmp_path / "update_unknown.parquet"
+
+    recipe = Recipe(
+        id="recipe-1",
+        title="Recipe 1",
+        ingredients=[Ingredient(name="ingredient1", quantity=Quantity(as_written="1"))],
+        steps=[Step(order=1, instruction="Step 1")],
+    )
+
+    store = RecipeStore.load(db_path)
+    store = store.add(recipe)
+
+    # Try to update unknown recipe
+    new_recipe = Recipe(
+        id="recipe-2",
+        title="Recipe 2",
+        ingredients=[Ingredient(name="ingredient2", quantity=Quantity(as_written="1"))],
+        steps=[Step(order=1, instruction="Step 2")],
+    )
+
+    try:
+        store.update("nonexistent", new_recipe)
+        raise AssertionError("Expected KeyError")
+    except KeyError as e:
+        assert str(e) == "'nonexistent'"
+
+
+def test_update_returns_new_instance(tmp_path: Path) -> None:
+    """Update returns a new RecipeStore; original is unchanged (immutability)."""
+    db_path = tmp_path / "update_new_instance.parquet"
+
+    recipe = Recipe(
+        id="recipe-1",
+        title="Original Title",
+        ingredients=[Ingredient(name="ingredient1", quantity=Quantity(as_written="1"))],
+        steps=[Step(order=1, instruction="Step 1")],
+    )
+
+    store1 = RecipeStore.load(db_path)
+    store1 = store1.add(recipe)
+
+    updated_recipe = recipe.model_copy(update={"title": "New Title"})
+    store2 = store1.update("recipe-1", updated_recipe)
+
+    # Verify store2 is a different instance
+    assert store2 is not store1
+    # Verify store1 still has old data
+    assert store1.get("recipe-1").title == "Original Title"
+    # Verify store2 has new data
+    assert store2.get("recipe-1").title == "New Title"

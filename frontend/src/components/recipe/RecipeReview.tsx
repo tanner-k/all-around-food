@@ -2,37 +2,13 @@
 
 import { useState } from "react";
 import type { Recipe } from "@/lib/recipe-schema";
+import { InlineAmountText } from "./InlineAmountText";
 
 interface RecipeReviewProps {
   recipe: Recipe;
   onSave: (recipe: Recipe) => void;
 }
 
-function highlightAmounts(text: string, ingredientNames: string[]): React.ReactNode {
-  if (!ingredientNames.length) return text;
-
-  // Build a case-insensitive regex for all ingredient names (longest first)
-  const sorted = [...ingredientNames].sort((a, b) => b.length - a.length);
-  const pattern = new RegExp(
-    `(${sorted.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
-    "gi"
-  );
-
-  const parts = text.split(pattern);
-  return parts.map((part, i) => {
-    if (i % 2 === 1) {
-      return (
-        <span
-          key={i}
-          className="bg-terra-soft text-terra px-1 rounded font-semibold text-[0.95em] whitespace-nowrap"
-        >
-          {part}
-        </span>
-      );
-    }
-    return part;
-  });
-}
 
 export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProps) {
   const [recipe, setRecipe] = useState(initialRecipe);
@@ -136,7 +112,10 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
                 {step.order}.
               </span>
               <p className="text-sm text-ink leading-relaxed">
-                {highlightAmounts(step.instruction, step.inline_amounts)}
+                <InlineAmountText
+                  instruction={step.instruction}
+                  inlineAmounts={step.inline_amounts}
+                />
               </p>
             </li>
           ))}

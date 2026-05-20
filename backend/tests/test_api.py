@@ -274,3 +274,201 @@ def test_evaluations_stats_with_data(client: TestClient) -> None:
     assert stats["min_overall"] == 6
     assert stats["max_overall"] == 10
     assert stats["last_30d_count"] == 3  # All are recent
+
+
+def test_put_recipe(client: TestClient) -> None:
+    """PUT /recipes/{recipe_id} updates an existing recipe."""
+    # First, POST a recipe
+    recipe_data = {
+        "id": "recipe-1",
+        "title": "Original Title",
+        "description": None,
+        "source_url": None,
+        "source_attribution": None,
+        "prep_time_min": 10,
+        "cook_time_min": 20,
+        "total_time_min": 30,
+        "servings": 4,
+        "yield_text": None,
+        "ingredients": [
+            {
+                "name": "pasta",
+                "quantity": {"value": 1.0, "unit": "lb", "as_written": "1 lb"},
+                "preparation": None,
+                "optional": False,
+                "group": None,
+                "notes": None,
+            }
+        ],
+        "steps": [
+            {
+                "order": 1,
+                "instruction": "Boil water",
+                "duration_min": None,
+                "temperature_f": None,
+                "equipment": [],
+                "inline_amounts": [],
+            }
+        ],
+        "equipment": [],
+        "cuisine": None,
+        "course": None,
+        "dietary_tags": [],
+        "difficulty": None,
+        "nutrition": None,
+        "notes": None,
+        "storage_instructions": None,
+        "times_made": 0,
+        "parse_confidence": None,
+    }
+
+    client.post("/recipes", json=recipe_data)
+
+    # Now PUT with updated title
+    updated_recipe_data = recipe_data.copy()
+    updated_recipe_data["title"] = "Updated Title"
+    updated_recipe_data["description"] = "A new description"
+
+    response = client.put("/recipes/recipe-1", json=updated_recipe_data)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["id"] == "recipe-1"
+    assert result["title"] == "Updated Title"
+    assert result["description"] == "A new description"
+
+    # Verify by GET
+    response = client.get("/recipes/recipe-1")
+    assert response.status_code == 200
+    recipe = response.json()
+    assert recipe["title"] == "Updated Title"
+    assert recipe["description"] == "A new description"
+
+
+def test_put_recipe_404(client: TestClient) -> None:
+    """PUT /recipes/{recipe_id} with unknown ID returns 404."""
+    recipe_data = {
+        "id": "recipe-1",
+        "title": "Some Title",
+        "description": None,
+        "source_url": None,
+        "source_attribution": None,
+        "prep_time_min": None,
+        "cook_time_min": None,
+        "total_time_min": None,
+        "servings": None,
+        "yield_text": None,
+        "ingredients": [
+            {
+                "name": "flour",
+                "quantity": {"value": 1.0, "unit": "cup", "as_written": "1 cup"},
+                "preparation": None,
+                "optional": False,
+                "group": None,
+                "notes": None,
+            }
+        ],
+        "steps": [
+            {
+                "order": 1,
+                "instruction": "Mix",
+                "duration_min": None,
+                "temperature_f": None,
+                "equipment": [],
+                "inline_amounts": [],
+            }
+        ],
+        "equipment": [],
+        "cuisine": None,
+        "course": None,
+        "dietary_tags": [],
+        "difficulty": None,
+        "nutrition": None,
+        "notes": None,
+        "storage_instructions": None,
+        "times_made": 0,
+        "parse_confidence": None,
+    }
+
+    response = client.put("/recipes/nonexistent", json=recipe_data)
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_post_cooked_increments(client: TestClient) -> None:
+    """POST /recipes/{recipe_id}/cooked increments times_made."""
+    # First, POST a recipe
+    recipe_data = {
+        "id": "recipe-1",
+        "title": "Test Recipe",
+        "description": None,
+        "source_url": None,
+        "source_attribution": None,
+        "prep_time_min": None,
+        "cook_time_min": None,
+        "total_time_min": None,
+        "servings": None,
+        "yield_text": None,
+        "ingredients": [
+            {
+                "name": "flour",
+                "quantity": {"value": 1.0, "unit": "cup", "as_written": "1 cup"},
+                "preparation": None,
+                "optional": False,
+                "group": None,
+                "notes": None,
+            }
+        ],
+        "steps": [
+            {
+                "order": 1,
+                "instruction": "Mix",
+                "duration_min": None,
+                "temperature_f": None,
+                "equipment": [],
+                "inline_amounts": [],
+            }
+        ],
+        "equipment": [],
+        "cuisine": None,
+        "course": None,
+        "dietary_tags": [],
+        "difficulty": None,
+        "nutrition": None,
+        "notes": None,
+        "storage_instructions": None,
+        "times_made": 0,
+        "parse_confidence": None,
+    }
+
+    client.post("/recipes", json=recipe_data)
+
+    # Verify initial times_made is 0
+    response = client.get("/recipes/recipe-1")
+    assert response.json()["times_made"] == 0
+
+    # Mark as cooked
+    response = client.post("/recipes/recipe-1/cooked")
+    assert response.status_code == 200
+    result = response.json()
+    assert result["times_made"] == 1
+
+    # Verify by GET
+    response = client.get("/recipes/recipe-1")
+    assert response.json()["times_made"] == 1
+
+    # Mark as cooked again
+    response = client.post("/recipes/recipe-1/cooked")
+    assert response.status_code == 200
+    result = response.json()
+    assert result["times_made"] == 2
+
+    # Verify by GET
+    response = client.get("/recipes/recipe-1")
+    assert response.json()["times_made"] == 2
+
+
+def test_post_cooked_404(client: TestClient) -> None:
+    """POST /recipes/{recipe_id}/cooked with unknown ID returns 404."""
+    response = client.post("/recipes/nonexistent/cooked")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
