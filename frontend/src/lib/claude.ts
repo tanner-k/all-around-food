@@ -13,20 +13,22 @@ import {
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
   if (!_client) {
-    const key = process.env.ANTHROPIC_API_KEY;
+    // Project-specific name so it never collides with a global ANTHROPIC_API_KEY
+    // exported in the user's shell (which would override .env.local in Next.js).
+    const key = process.env.ANTHROPIC_API_KEY_PARSING;
     if (!key) {
       throw new Error(
-        "ANTHROPIC_API_KEY is not set. Add it to frontend/.env.local and RESTART the dev server (Next.js loads .env at startup, not on edit)."
+        "ANTHROPIC_API_KEY_PARSING is not set. Add it to frontend/.env.local and RESTART the dev server (Next.js loads .env at startup, not on edit)."
       );
     }
     // Safe diagnostic: fingerprint, never the key itself. Compare against
-    //   printf '%s' "$(grep ^ANTHROPIC_API_KEY frontend/.env.local | cut -d= -f2)" | shasum -a 256
-    // If the fp differs, an OS-level env var is overriding .env.local.
+    //   printf '%s' "$(grep ^ANTHROPIC_API_KEY_PARSING frontend/.env.local | cut -d= -f2)" | shasum -a 256
     const fp = createHash("sha256").update(key).digest("hex").slice(0, 8);
     console.log(
-      `[claude] ANTHROPIC_API_KEY in use: len=${key.length} fp=${fp}`
+      `[claude] ANTHROPIC_API_KEY_PARSING in use: len=${key.length} fp=${fp}`
     );
     _client = new Anthropic({
+      apiKey: key,
       // Retry on 408/409/429/5xx with exponential backoff.
       // Default is 2; bumping to 4 to ride out transient 502s from Cloudflare.
       maxRetries: 4,

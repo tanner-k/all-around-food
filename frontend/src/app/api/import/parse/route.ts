@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     let hint = "";
     if (status === 401) {
       hint =
-        " — auth failed. Confirm ANTHROPIC_API_KEY in frontend/.env.local AND restart `pnpm dev` (Next.js only loads .env at startup).";
+        " — auth failed. Confirm ANTHROPIC_API_KEY_PARSING in frontend/.env.local AND restart `pnpm dev` (Next.js only loads .env at startup).";
     } else if (status === 429) {
       hint = " — rate limited. Wait a moment and try again.";
     } else if (status >= 500 && status < 600) {

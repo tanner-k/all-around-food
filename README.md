@@ -25,8 +25,13 @@ Copy the env template and add your API key:
 ```bash
 cp frontend/.env.local.example frontend/.env.local
 # Edit frontend/.env.local and paste your Anthropic API key:
-# ANTHROPIC_API_KEY=sk-ant-...
+# ANTHROPIC_API_KEY_PARSING=sk-ant-...
 ```
+
+> The key is named `ANTHROPIC_API_KEY_PARSING` (not `ANTHROPIC_API_KEY`) on
+> purpose — a project-specific name can't be shadowed by a global
+> `ANTHROPIC_API_KEY` exported in your shell, which Next.js would otherwise
+> prioritize over `.env.local`.
 
 **Step 2: Start the backend (Terminal A)**
 
