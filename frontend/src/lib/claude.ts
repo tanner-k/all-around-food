@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { RecipeSchema, recipeJsonSchema, type Recipe } from "./recipe-schema";
 import {
@@ -12,11 +13,19 @@ import {
 let _client: Anthropic | null = null;
 function getClient(): Anthropic {
   if (!_client) {
-    if (!process.env.ANTHROPIC_API_KEY) {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) {
       throw new Error(
         "ANTHROPIC_API_KEY is not set. Add it to frontend/.env.local and RESTART the dev server (Next.js loads .env at startup, not on edit)."
       );
     }
+    // Safe diagnostic: fingerprint, never the key itself. Compare against
+    //   printf '%s' "$(grep ^ANTHROPIC_API_KEY frontend/.env.local | cut -d= -f2)" | shasum -a 256
+    // If the fp differs, an OS-level env var is overriding .env.local.
+    const fp = createHash("sha256").update(key).digest("hex").slice(0, 8);
+    console.log(
+      `[claude] ANTHROPIC_API_KEY in use: len=${key.length} fp=${fp}`
+    );
     _client = new Anthropic({
       // Retry on 408/409/429/5xx with exponential backoff.
       // Default is 2; bumping to 4 to ride out transient 502s from Cloudflare.
