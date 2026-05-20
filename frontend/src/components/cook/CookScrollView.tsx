@@ -44,7 +44,7 @@ export function CookScrollView({ recipe }: CookScrollViewProps) {
             <p className="text-sm text-ink leading-relaxed">
               <InlineAmountText
                 instruction={step.instruction}
-                inlineAmounts={step.inline_amounts}
+                ingredients={recipe.ingredients}
               />
             </p>
             {step.duration_min && (

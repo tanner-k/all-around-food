@@ -114,7 +114,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
               <p className="text-sm text-ink leading-relaxed">
                 <InlineAmountText
                   instruction={step.instruction}
-                  inlineAmounts={step.inline_amounts}
+                  ingredients={recipe.ingredients}
                 />
               </p>
             </li>

@@ -1,8 +1,9 @@
-import type { Step } from "@/lib/recipe-schema";
+import type { Ingredient, Step } from "@/lib/recipe-schema";
 import { InlineAmountText } from "@/components/recipe/InlineAmountText";
 
 interface CookStepViewProps {
   steps: Step[];
+  ingredients: Ingredient[];
   currentStep: number;
   onPrev: () => void;
   onNext: () => void;
@@ -11,6 +12,7 @@ interface CookStepViewProps {
 
 export function CookStepView({
   steps,
+  ingredients,
   currentStep,
   onPrev,
   onNext,
@@ -60,7 +62,7 @@ export function CookStepView({
               >
                 <InlineAmountText
                   instruction={step.instruction}
-                  inlineAmounts={step.inline_amounts}
+                  ingredients={ingredients}
                 />
               </p>
               {/* Timer trigger for active step */}

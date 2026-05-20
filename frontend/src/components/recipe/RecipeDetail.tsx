@@ -153,7 +153,7 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
               <p className="text-sm text-ink leading-relaxed">
                 <InlineAmountText
                   instruction={step.instruction}
-                  inlineAmounts={step.inline_amounts}
+                  ingredients={recipe.ingredients}
                 />
               </p>
             </li>

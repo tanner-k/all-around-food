@@ -157,6 +157,7 @@ export function CookMode({ recipe }: CookModeProps) {
         {layout === "step" ? (
           <CookStepView
             steps={recipe.steps}
+            ingredients={recipe.ingredients}
             currentStep={currentStep}
             onPrev={handlePrev}
             onNext={handleNext}
