@@ -101,10 +101,9 @@ export function CookStepView({
         <button
           type="button"
           onClick={onNext}
-          disabled={currentStep >= total - 1}
-          className="flex-1 min-h-14 rounded-xl bg-terra text-white font-semibold text-sm transition-colors hover:bg-[#A55230] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 min-h-14 rounded-xl bg-terra text-white font-semibold text-sm transition-colors hover:bg-[#A55230]"
         >
-          Next →
+          {currentStep >= total - 1 ? "Finish →" : "Next →"}
         </button>
       </div>
     </div>
