@@ -34,8 +34,6 @@
 - [ ] Real E2E smoke test with Playwright (import flow end-to-end in browser)
 - [ ] Deploy backend somewhere reachable from Vercel (staging API)
 - [ ] Planner (weekly meal plan)
-- [ ] Smart shopping list
-- [ ] Pantry inventory
 
 ## Later
 - [ ] Real responsive mobile layout (current is desktop-first)
@@ -44,8 +42,6 @@
 - [ ] Email recipe forwarding
 - [ ] Manual recipe entry form
 - [ ] Planner (weekly meal planning)
-- [ ] Shopping list generation
-- [ ] Pantry inventory
 - [ ] Auth + multi-user
 - [ ] Deploy to production
 

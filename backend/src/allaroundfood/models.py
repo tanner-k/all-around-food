@@ -78,6 +78,48 @@ class Recipe(BaseModel):
     parse_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
+PantryStatus = Literal["in_stock", "low", "out"]
+Aisle = Literal[
+    "Produce",
+    "Dairy",
+    "Meat",
+    "Bakery",
+    "Pantry",
+    "Frozen",
+    "Beverages",
+    "Household",
+    "Other",
+]
+
+
+class PantryItem(BaseModel):
+    """Represents an item in the pantry inventory."""
+
+    id: str
+    name: str
+    status: PantryStatus = "in_stock"
+    aisle: Aisle = "Other"
+    aisle_overridden: bool = False
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ShoppingListItem(BaseModel):
+    """Represents an item on the shopping list."""
+
+    id: str
+    name: str
+    quantity_text: str | None = None
+    aisle: Aisle = "Other"
+    checked: bool = False
+    source: Literal["manual", "recipe", "planner"] = "manual"
+    source_recipe_id: str | None = None
+    pantry_covered: bool = False
+    pantry_low: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class JudgeFieldCheck(BaseModel):
     """Represents a judge's assessment of a specific field."""
 

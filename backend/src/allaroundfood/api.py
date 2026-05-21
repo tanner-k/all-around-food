@@ -2,19 +2,39 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
+from allaroundfood.aisles import AISLE_ORDER, categorize
 from allaroundfood.eval_storage import EvalStore
-from allaroundfood.models import Evaluation, Recipe
+from allaroundfood.models import (
+    Evaluation,
+    PantryItem,
+    PantryStatus,
+    Recipe,
+    ShoppingListItem,
+)
+from allaroundfood.naming import normalize_name
+from allaroundfood.pantry_storage import PantryStore
+from allaroundfood.shopping_logic import (
+    aggregate_recipe_ingredients,
+    build_shopping_list_response,
+    recompute_all_flags,
+)
+from allaroundfood.shopping_storage import ShoppingListStore
 from allaroundfood.storage import RecipeStore
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 RECIPE_STORE_PATH = DATA_DIR / "recipes.parquet"
 EVAL_STORE_PATH = DATA_DIR / "evaluations.parquet"
+PANTRY_STORE_PATH = DATA_DIR / "pantry.parquet"
+SHOPPING_STORE_PATH = DATA_DIR / "shopping_list.parquet"
 
 app = FastAPI(title="All Around Food", version="0.2.0")
 
@@ -35,6 +55,63 @@ def _get_recipe_store_path() -> Path:
 def _get_eval_store_path() -> Path:
     """Get the eval store path (for test injection via monkeypatch)."""
     return EVAL_STORE_PATH
+
+
+def _get_pantry_store_path() -> Path:
+    """Get the pantry store path (for test injection via monkeypatch)."""
+    return PANTRY_STORE_PATH
+
+
+def _get_shopping_store_path() -> Path:
+    """Get the shopping store path (for test injection via monkeypatch)."""
+    return SHOPPING_STORE_PATH
+
+
+def _refresh_shopping_flags() -> None:
+    """Recompute pantry flags across the whole shopping list and persist.
+
+    Called after every pantry write so the shopping list stays in sync with
+    what's on hand.
+    """
+    pantry = PantryStore.load(_get_pantry_store_path()).all()
+    store = ShoppingListStore.load(_get_shopping_store_path())
+    refreshed = recompute_all_flags(store.all(), pantry)
+    rebuilt = ShoppingListStore(_get_shopping_store_path())
+    for item in refreshed:
+        rebuilt = rebuilt.add(item)
+    rebuilt.save()
+
+
+def _aisle_sort_key(item: PantryItem) -> tuple[int, str]:
+    """Sort key ordering pantry items by aisle (AISLE_ORDER) then name."""
+    aisle_index = (
+        AISLE_ORDER.index(item.aisle) if item.aisle in AISLE_ORDER else len(AISLE_ORDER)
+    )
+    return (aisle_index, item.name)
+
+
+class PantryStatusUpdate(BaseModel):
+    """Request body for PATCH /pantry/{id}/status."""
+
+    status: PantryStatus
+
+
+class ReceiptImportRequest(BaseModel):
+    """Request body for POST /pantry/receipt-import."""
+
+    names: list[str]
+
+
+class ShoppingCheckUpdate(BaseModel):
+    """Request body for PATCH /shopping-list/items/{id}/check."""
+
+    checked: bool
+
+
+class GenerateShoppingListRequest(BaseModel):
+    """Request body for POST /shopping-list/generate."""
+
+    recipe_ids: list[str]
 
 
 @app.get("/")
@@ -167,6 +244,391 @@ async def post_recipe_cooked(recipe_id: str) -> Recipe:
     store.save()
 
     return updated_recipe
+
+
+@app.get("/pantry")
+async def get_pantry() -> list[PantryItem]:
+    """Get all pantry items, sorted by aisle then name.
+
+    Returns:
+        List of all pantry items.
+    """
+    store = PantryStore.load(_get_pantry_store_path())
+    items = store.all()
+    items.sort(key=_aisle_sort_key)
+    return items
+
+
+@app.post("/pantry")
+async def post_pantry_item(item: PantryItem) -> PantryItem:
+    """Add a pantry item.
+
+    Normalizes the name, assigns an id when missing, and auto-categorizes
+    the aisle unless the request explicitly overrode it.
+
+    Args:
+        item: Pantry item to add.
+
+    Returns:
+        The saved pantry item.
+
+    Raises:
+        HTTPException: If the item name is empty.
+    """
+    name = normalize_name(item.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="Item name is required")
+
+    now = datetime.now(UTC)
+    aisle = item.aisle if item.aisle_overridden else categorize(name)
+    saved = item.model_copy(
+        update={
+            "id": item.id or str(uuid.uuid4()),
+            "name": name,
+            "aisle": aisle,
+            "created_at": now,
+            "updated_at": now,
+        }
+    )
+
+    store = PantryStore.load(_get_pantry_store_path()).add(saved)
+    store.save()
+    _refresh_shopping_flags()
+    return saved
+
+
+@app.post("/pantry/receipt-import")
+async def post_receipt_import(req: ReceiptImportRequest) -> dict[str, Any]:
+    """Bulk-import items from a parsed receipt into the pantry.
+
+    Each name is normalized and upserted: existing items are refreshed to
+    ``in_stock``; new items are added and auto-categorized.
+
+    Args:
+        req: Request with the list of confirmed item names.
+
+    Returns:
+        Dict with the upserted items and added/updated counts.
+    """
+    store = PantryStore.load(_get_pantry_store_path())
+    now = datetime.now(UTC)
+    result: list[PantryItem] = []
+    added = 0
+    updated = 0
+
+    for raw_name in req.names:
+        name = normalize_name(raw_name)
+        if not name:
+            continue
+        existing = store.get_by_name(name)
+        if existing is None:
+            item = PantryItem(
+                id=str(uuid.uuid4()),
+                name=name,
+                status="in_stock",
+                aisle=categorize(name),
+                created_at=now,
+                updated_at=now,
+            )
+            store = store.add(item)
+            added += 1
+        else:
+            item = existing.model_copy(
+                update={"status": "in_stock", "updated_at": now}
+            )
+            store = store.update(existing.id, item)
+            updated += 1
+        result.append(item)
+
+    store.save()
+    _refresh_shopping_flags()
+    return {"items": result, "added": added, "updated": updated}
+
+
+@app.put("/pantry/{item_id}")
+async def put_pantry_item(item_id: str, item: PantryItem) -> PantryItem:
+    """Update a pantry item by ID.
+
+    If the aisle differs from the stored value, it is marked as overridden
+    so future auto-categorization won't clobber the manual choice.
+
+    Args:
+        item_id: ID of the item to update.
+        item: Updated pantry item data.
+
+    Returns:
+        The updated pantry item.
+
+    Raises:
+        HTTPException: If the item is not found or its name is empty.
+    """
+    store = PantryStore.load(_get_pantry_store_path())
+    existing = store.get(item_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Pantry item not found")
+
+    name = normalize_name(item.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="Item name is required")
+
+    overridden = item.aisle_overridden or item.aisle != existing.aisle
+    updated = item.model_copy(
+        update={
+            "id": item_id,
+            "name": name,
+            "aisle_overridden": overridden,
+            "created_at": existing.created_at,
+            "updated_at": datetime.now(UTC),
+        }
+    )
+    store = store.update(item_id, updated)
+    store.save()
+    _refresh_shopping_flags()
+    return updated
+
+
+@app.patch("/pantry/{item_id}/status")
+async def patch_pantry_status(
+    item_id: str, body: PantryStatusUpdate
+) -> PantryItem:
+    """Update a pantry item's stock status.
+
+    Args:
+        item_id: ID of the item to update.
+        body: Request with the new status.
+
+    Returns:
+        The updated pantry item.
+
+    Raises:
+        HTTPException: If the item is not found.
+    """
+    store = PantryStore.load(_get_pantry_store_path())
+    existing = store.get(item_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Pantry item not found")
+
+    updated = existing.model_copy(
+        update={"status": body.status, "updated_at": datetime.now(UTC)}
+    )
+    store = store.update(item_id, updated)
+    store.save()
+    _refresh_shopping_flags()
+    return updated
+
+
+@app.delete("/pantry/{item_id}")
+async def delete_pantry_item(item_id: str) -> dict[str, str]:
+    """Delete a pantry item by ID.
+
+    Args:
+        item_id: ID of the item to delete.
+
+    Returns:
+        Confirmation dict.
+
+    Raises:
+        HTTPException: If the item is not found.
+    """
+    store = PantryStore.load(_get_pantry_store_path())
+    try:
+        store = store.delete(item_id)
+    except KeyError as e:
+        raise HTTPException(
+            status_code=404, detail="Pantry item not found"
+        ) from e
+    store.save()
+    _refresh_shopping_flags()
+    return {"status": "deleted", "id": item_id}
+
+
+@app.get("/shopping-list")
+async def get_shopping_list(include_covered: bool = False) -> dict[str, Any]:
+    """Get the shopping list grouped by aisle.
+
+    Pantry-covered items are hidden unless ``include_covered`` is true.
+
+    Args:
+        include_covered: When true, include pantry-covered items in groups.
+
+    Returns:
+        Dict with ``groups``, ``total_visible``, ``hidden_pantry_covered``.
+    """
+    store = ShoppingListStore.load(_get_shopping_store_path())
+    return build_shopping_list_response(
+        store.all(), include_covered=include_covered
+    )
+
+
+@app.post("/shopping-list/items")
+async def post_shopping_item(item: ShoppingListItem) -> ShoppingListItem:
+    """Add a manual item to the shopping list.
+
+    Args:
+        item: The shopping-list item to add.
+
+    Returns:
+        The saved item with computed aisle and pantry flags.
+
+    Raises:
+        HTTPException: If the item name is empty.
+    """
+    name = normalize_name(item.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="Item name is required")
+
+    saved = item.model_copy(
+        update={
+            "id": item.id or str(uuid.uuid4()),
+            "name": name,
+            "aisle": categorize(name),
+            "source": "manual",
+            "source_recipe_id": None,
+            "created_at": datetime.now(UTC),
+        }
+    )
+    pantry = PantryStore.load(_get_pantry_store_path()).all()
+    saved = recompute_all_flags([saved], pantry)[0]
+
+    store = ShoppingListStore.load(_get_shopping_store_path()).add(saved)
+    store.save()
+    return saved
+
+
+@app.post("/shopping-list/generate")
+async def post_generate_shopping_list(
+    req: GenerateShoppingListRequest,
+) -> dict[str, Any]:
+    """Generate recipe-sourced shopping-list items from the given recipes.
+
+    Ingredients are deduped and pantry-subtracted. Existing manual items are
+    preserved; previously generated recipe items are replaced.
+
+    Args:
+        req: Request with the recipe IDs to draw from.
+
+    Returns:
+        The regenerated shopping list, grouped by aisle.
+    """
+    recipe_store = RecipeStore.load(_get_recipe_store_path())
+    recipes = [
+        recipe
+        for rid in req.recipe_ids
+        if (recipe := recipe_store.get(rid)) is not None
+    ]
+    pantry = PantryStore.load(_get_pantry_store_path()).all()
+    recipe_items = aggregate_recipe_ingredients(recipes, pantry)
+
+    store = ShoppingListStore.load(
+        _get_shopping_store_path()
+    ).replace_recipe_items(recipe_items)
+    store.save()
+    return build_shopping_list_response(store.all())
+
+
+@app.delete("/shopping-list/checked")
+async def delete_shopping_checked() -> dict[str, Any]:
+    """Remove all checked items from the shopping list.
+
+    Returns:
+        Dict with the number of items removed.
+    """
+    store = ShoppingListStore.load(_get_shopping_store_path())
+    before = len(store.all())
+    store = store.clear_checked()
+    store.save()
+    return {"status": "cleared", "removed": before - len(store.all())}
+
+
+@app.put("/shopping-list/items/{item_id}")
+async def put_shopping_item(
+    item_id: str, item: ShoppingListItem
+) -> ShoppingListItem:
+    """Update a shopping-list item by ID.
+
+    Args:
+        item_id: ID of the item to update.
+        item: Updated item data.
+
+    Returns:
+        The updated item with refreshed pantry flags.
+
+    Raises:
+        HTTPException: If the item is not found or its name is empty.
+    """
+    store = ShoppingListStore.load(_get_shopping_store_path())
+    existing = store.get(item_id)
+    if existing is None:
+        raise HTTPException(
+            status_code=404, detail="Shopping list item not found"
+        )
+
+    name = normalize_name(item.name)
+    if not name:
+        raise HTTPException(status_code=400, detail="Item name is required")
+
+    updated = item.model_copy(
+        update={"id": item_id, "name": name, "created_at": existing.created_at}
+    )
+    pantry = PantryStore.load(_get_pantry_store_path()).all()
+    updated = recompute_all_flags([updated], pantry)[0]
+
+    store = store.update(item_id, updated)
+    store.save()
+    return updated
+
+
+@app.patch("/shopping-list/items/{item_id}/check")
+async def patch_shopping_check(
+    item_id: str, body: ShoppingCheckUpdate
+) -> ShoppingListItem:
+    """Toggle the checked state of a shopping-list item.
+
+    Args:
+        item_id: ID of the item to update.
+        body: Request with the new checked state.
+
+    Returns:
+        The updated item.
+
+    Raises:
+        HTTPException: If the item is not found.
+    """
+    store = ShoppingListStore.load(_get_shopping_store_path())
+    existing = store.get(item_id)
+    if existing is None:
+        raise HTTPException(
+            status_code=404, detail="Shopping list item not found"
+        )
+
+    updated = existing.model_copy(update={"checked": body.checked})
+    store = store.update(item_id, updated)
+    store.save()
+    return updated
+
+
+@app.delete("/shopping-list/items/{item_id}")
+async def delete_shopping_item(item_id: str) -> dict[str, str]:
+    """Delete a shopping-list item by ID.
+
+    Args:
+        item_id: ID of the item to delete.
+
+    Returns:
+        Confirmation dict.
+
+    Raises:
+        HTTPException: If the item is not found.
+    """
+    store = ShoppingListStore.load(_get_shopping_store_path())
+    try:
+        store = store.delete(item_id)
+    except KeyError as e:
+        raise HTTPException(
+            status_code=404, detail="Shopping list item not found"
+        ) from e
+    store.save()
+    return {"status": "deleted", "id": item_id}
 
 
 @app.post("/evaluations")

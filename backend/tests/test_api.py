@@ -13,8 +13,30 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Fixture that provides a TestClient with temporary storage paths."""
     monkeypatch.setattr("allaroundfood.api.RECIPE_STORE_PATH", tmp_path / "r.parquet")
     monkeypatch.setattr("allaroundfood.api.EVAL_STORE_PATH", tmp_path / "e.parquet")
+    monkeypatch.setattr("allaroundfood.api.PANTRY_STORE_PATH", tmp_path / "p.parquet")
+    monkeypatch.setattr(
+        "allaroundfood.api.SHOPPING_STORE_PATH", tmp_path / "s.parquet"
+    )
     from allaroundfood.api import app
     return TestClient(app)
+
+
+def _recipe_payload(
+    recipe_id: str, ingredient_names: list[str]
+) -> dict[str, object]:
+    """Build a minimal recipe POST payload with the given ingredients."""
+    return {
+        "id": recipe_id,
+        "title": f"Recipe {recipe_id}",
+        "ingredients": [
+            {
+                "name": name,
+                "quantity": {"value": 1.0, "unit": "cup", "as_written": "1 cup"},
+            }
+            for name in ingredient_names
+        ],
+        "steps": [{"order": 1, "instruction": "Cook"}],
+    }
 
 
 def test_healthz(client: TestClient) -> None:
@@ -472,3 +494,293 @@ def test_post_cooked_404(client: TestClient) -> None:
     response = client.post("/recipes/nonexistent/cooked")
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
+
+
+# --- Pantry endpoints ---
+
+
+def test_post_pantry_item_then_get(client: TestClient) -> None:
+    """POST a pantry item and GET /pantry returns it."""
+    response = client.post("/pantry", json={"id": "", "name": "Olive Oil"})
+    assert response.status_code == 200
+    item = response.json()
+    assert item["name"] == "olive oil"  # normalized
+    assert item["id"]  # id assigned
+
+    response = client.get("/pantry")
+    assert response.status_code == 200
+    items = response.json()
+    assert len(items) == 1
+    assert items[0]["name"] == "olive oil"
+
+
+def test_post_pantry_auto_categorizes(client: TestClient) -> None:
+    """POST /pantry auto-assigns the aisle from the item name."""
+    response = client.post("/pantry", json={"id": "", "name": "chicken breast"})
+    assert response.status_code == 200
+    assert response.json()["aisle"] == "Meat"
+
+
+def test_post_pantry_empty_name_returns_400(client: TestClient) -> None:
+    """POST /pantry with a blank name returns 400."""
+    response = client.post("/pantry", json={"id": "", "name": "   "})
+    assert response.status_code == 400
+
+
+def test_put_pantry_item(client: TestClient) -> None:
+    """PUT /pantry/{id} updates an existing item."""
+    created = client.post("/pantry", json={"id": "", "name": "salt"}).json()
+    item_id = created["id"]
+
+    created["status"] = "low"
+    response = client.put(f"/pantry/{item_id}", json=created)
+    assert response.status_code == 200
+    assert response.json()["status"] == "low"
+
+
+def test_put_pantry_sets_aisle_overridden(client: TestClient) -> None:
+    """PUT /pantry/{id} with a changed aisle marks it as overridden."""
+    created = client.post("/pantry", json={"id": "", "name": "salt"}).json()
+    assert created["aisle"] == "Pantry"
+
+    created["aisle"] = "Household"
+    response = client.put(f"/pantry/{created['id']}", json=created)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["aisle"] == "Household"
+    assert body["aisle_overridden"] is True
+
+
+def test_put_pantry_404(client: TestClient) -> None:
+    """PUT /pantry/{id} with an unknown id returns 404."""
+    response = client.put(
+        "/pantry/nonexistent", json={"id": "nonexistent", "name": "salt"}
+    )
+    assert response.status_code == 404
+
+
+def test_patch_pantry_status(client: TestClient) -> None:
+    """PATCH /pantry/{id}/status updates the stock status."""
+    created = client.post("/pantry", json={"id": "", "name": "flour"}).json()
+    response = client.patch(
+        f"/pantry/{created['id']}/status", json={"status": "out"}
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "out"
+
+
+def test_patch_pantry_status_404(client: TestClient) -> None:
+    """PATCH /pantry/{id}/status with an unknown id returns 404."""
+    response = client.patch("/pantry/nonexistent/status", json={"status": "out"})
+    assert response.status_code == 404
+
+
+def test_delete_pantry_item(client: TestClient) -> None:
+    """DELETE /pantry/{id} removes the item."""
+    created = client.post("/pantry", json={"id": "", "name": "flour"}).json()
+    response = client.delete(f"/pantry/{created['id']}")
+    assert response.status_code == 200
+
+    assert client.get("/pantry").json() == []
+
+
+def test_delete_pantry_404(client: TestClient) -> None:
+    """DELETE /pantry/{id} with an unknown id returns 404."""
+    response = client.delete("/pantry/nonexistent")
+    assert response.status_code == 404
+
+
+def test_receipt_import_adds_and_updates(client: TestClient) -> None:
+    """POST /pantry/receipt-import adds new items and refreshes existing ones."""
+    # Pre-existing item, marked out
+    created = client.post("/pantry", json={"id": "", "name": "milk"}).json()
+    client.patch(f"/pantry/{created['id']}/status", json={"status": "out"})
+
+    response = client.post(
+        "/pantry/receipt-import", json={"names": ["Milk", "Eggs", "Bread"]}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["added"] == 2  # eggs, bread
+    assert body["updated"] == 1  # milk
+
+    items = {i["name"]: i for i in client.get("/pantry").json()}
+    assert len(items) == 3
+    assert items["milk"]["status"] == "in_stock"  # refreshed
+    assert items["eggs"]["aisle"] == "Dairy"
+
+
+def test_get_pantry_sorted_by_aisle(client: TestClient) -> None:
+    """GET /pantry returns items ordered by aisle then name."""
+    client.post("/pantry", json={"id": "", "name": "milk"})  # Dairy
+    client.post("/pantry", json={"id": "", "name": "apple"})  # Produce
+    client.post("/pantry", json={"id": "", "name": "flour"})  # Pantry
+
+    names = [i["name"] for i in client.get("/pantry").json()]
+    assert names == ["apple", "milk", "flour"]  # Produce, Dairy, Pantry
+
+
+# --- Shopping-list endpoints ---
+
+
+def test_post_shopping_item_then_get(client: TestClient) -> None:
+    """POST a manual item and GET /shopping-list returns it grouped."""
+    response = client.post(
+        "/shopping-list/items", json={"id": "", "name": "Paper Towels"}
+    )
+    assert response.status_code == 200
+    item = response.json()
+    assert item["name"] == "paper towels"
+    assert item["aisle"] == "Household"
+    assert item["source"] == "manual"
+
+    body = client.get("/shopping-list").json()
+    assert body["total_visible"] == 1
+    assert body["groups"][0]["aisle"] == "Household"
+
+
+def test_post_shopping_item_empty_name_400(client: TestClient) -> None:
+    """POST /shopping-list/items with a blank name returns 400."""
+    response = client.post("/shopping-list/items", json={"id": "", "name": " "})
+    assert response.status_code == 400
+
+
+def test_patch_shopping_check(client: TestClient) -> None:
+    """PATCH /shopping-list/items/{id}/check toggles checked state."""
+    created = client.post(
+        "/shopping-list/items", json={"id": "", "name": "milk"}
+    ).json()
+    response = client.patch(
+        f"/shopping-list/items/{created['id']}/check", json={"checked": True}
+    )
+    assert response.status_code == 200
+    assert response.json()["checked"] is True
+
+
+def test_patch_shopping_check_404(client: TestClient) -> None:
+    """PATCH check on an unknown id returns 404."""
+    response = client.patch(
+        "/shopping-list/items/nonexistent/check", json={"checked": True}
+    )
+    assert response.status_code == 404
+
+
+def test_delete_shopping_item(client: TestClient) -> None:
+    """DELETE /shopping-list/items/{id} removes the item."""
+    created = client.post(
+        "/shopping-list/items", json={"id": "", "name": "milk"}
+    ).json()
+    response = client.delete(f"/shopping-list/items/{created['id']}")
+    assert response.status_code == 200
+    assert client.get("/shopping-list").json()["total_visible"] == 0
+
+
+def test_delete_shopping_item_404(client: TestClient) -> None:
+    """DELETE on an unknown shopping item id returns 404."""
+    response = client.delete("/shopping-list/items/nonexistent")
+    assert response.status_code == 404
+
+
+def test_generate_dedupes_shared_ingredient(client: TestClient) -> None:
+    """POST /shopping-list/generate aggregates and dedupes recipe ingredients."""
+    client.post("/recipes", json=_recipe_payload("r-1", ["flour", "sugar"]))
+    client.post("/recipes", json=_recipe_payload("r-2", ["flour", "eggs"]))
+
+    response = client.post(
+        "/shopping-list/generate", json={"recipe_ids": ["r-1", "r-2"]}
+    )
+    assert response.status_code == 200
+    names = [
+        item["name"]
+        for group in response.json()["groups"]
+        for item in group["items"]
+    ]
+    assert sorted(names) == ["eggs", "flour", "sugar"]  # flour deduped
+
+
+def test_generate_preserves_manual_items(client: TestClient) -> None:
+    """Regenerating recipe items keeps existing manual items."""
+    client.post("/shopping-list/items", json={"id": "", "name": "paper towels"})
+    client.post("/recipes", json=_recipe_payload("r-1", ["flour"]))
+
+    client.post("/shopping-list/generate", json={"recipe_ids": ["r-1"]})
+    client.post("/shopping-list/generate", json={"recipe_ids": ["r-1"]})
+
+    names = sorted(
+        item["name"]
+        for group in client.get("/shopping-list").json()["groups"]
+        for item in group["items"]
+    )
+    assert names == ["flour", "paper towels"]  # manual kept, flour not doubled
+
+
+def test_pantry_subtraction_hides_in_stock_items(client: TestClient) -> None:
+    """An in_stock pantry item is hidden from the shopping list."""
+    client.post("/recipes", json=_recipe_payload("r-1", ["flour", "salt"]))
+    # flour is in stock; salt is not in the pantry
+    client.post("/pantry", json={"id": "", "name": "flour"})
+
+    response = client.post(
+        "/shopping-list/generate", json={"recipe_ids": ["r-1"]}
+    )
+    body = response.json()
+    visible_names = [
+        item["name"] for group in body["groups"] for item in group["items"]
+    ]
+    assert visible_names == ["salt"]  # flour hidden (on hand)
+    assert body["hidden_pantry_covered"] == 1
+
+
+def test_pantry_low_item_shown_with_flag(client: TestClient) -> None:
+    """A low pantry item stays visible with pantry_low set."""
+    client.post("/recipes", json=_recipe_payload("r-1", ["flour"]))
+    created = client.post("/pantry", json={"id": "", "name": "flour"}).json()
+    client.patch(f"/pantry/{created['id']}/status", json={"status": "low"})
+
+    body = client.post(
+        "/shopping-list/generate", json={"recipe_ids": ["r-1"]}
+    ).json()
+    flour = body["groups"][0]["items"][0]
+    assert flour["name"] == "flour"
+    assert flour["pantry_low"] is True
+    assert flour["pantry_covered"] is False
+
+
+def test_pantry_status_change_refreshes_shopping_list(client: TestClient) -> None:
+    """Marking a pantry item out re-exposes a previously hidden shopping item."""
+    client.post("/recipes", json=_recipe_payload("r-1", ["flour"]))
+    pantry_item = client.post("/pantry", json={"id": "", "name": "flour"}).json()
+    client.post("/shopping-list/generate", json={"recipe_ids": ["r-1"]})
+
+    # Initially hidden (in stock)
+    assert client.get("/shopping-list").json()["total_visible"] == 0
+
+    # Mark it out — shopping list should now show flour
+    client.patch(f"/pantry/{pantry_item['id']}/status", json={"status": "out"})
+    body = client.get("/shopping-list").json()
+    assert body["total_visible"] == 1
+    assert body["groups"][0]["items"][0]["name"] == "flour"
+
+
+def test_delete_shopping_checked(client: TestClient) -> None:
+    """DELETE /shopping-list/checked removes only checked items."""
+    keep = client.post(
+        "/shopping-list/items", json={"id": "", "name": "milk"}
+    ).json()
+    drop = client.post(
+        "/shopping-list/items", json={"id": "", "name": "eggs"}
+    ).json()
+    client.patch(
+        f"/shopping-list/items/{drop['id']}/check", json={"checked": True}
+    )
+
+    response = client.delete("/shopping-list/checked")
+    assert response.status_code == 200
+    assert response.json()["removed"] == 1
+
+    remaining = [
+        item["id"]
+        for group in client.get("/shopping-list").json()["groups"]
+        for item in group["items"]
+    ]
+    assert remaining == [keep["id"]]

@@ -8,6 +8,11 @@ import {
   judgeVerdictJsonSchema,
   type JudgeVerdict,
 } from "./eval-schema";
+import {
+  ReceiptParseSchema,
+  receiptParseJsonSchema,
+  type ReceiptParse,
+} from "./shopping-schema";
 
 // ── Lazy singleton client ─────────────────────────────────────────────────────
 let _client: Anthropic | null = null;
@@ -65,6 +70,23 @@ const judgeTool: Anthropic.Tool = {
   description: "Submit a graded verdict for the parse quality evaluation",
   input_schema: judgeVerdictJsonSchema as Anthropic.Tool["input_schema"],
 };
+
+// ── Receipt tool definition ───────────────────────────────────────────────────
+const receiptTool: Anthropic.Tool = {
+  name: "extract_receipt",
+  description: "Extract grocery line items from a receipt image",
+  input_schema: receiptParseJsonSchema as Anthropic.Tool["input_schema"],
+};
+
+const RECEIPT_SYSTEM_BASE = `You are an expert at reading grocery store receipts. Extract every purchasable food and grocery item into the exact structured schema provided by the \`extract_receipt\` tool.
+
+CRITICAL RULES:
+1. NEVER omit a key. Use \`null\` for unknown scalars. Every key in the schema must appear in your output.
+2. Include only purchasable products. SKIP subtotals, tax, totals, change, tender/payment lines, loyalty/savings/coupon lines, store address, phone numbers, dates, and cashier info.
+3. Receipts use cryptic register abbreviations. Expand them to a normal grocery name when you are confident (e.g. "GV WHP MILK" → "whole milk", "BNLS CHKN BRST" → "chicken breast"). If unsure, keep the printed text.
+4. Put any printed quantity/weight/count token in \`quantity_text\` (e.g. "2 @ $1.99", "1.34 lb"); otherwise use null.
+5. Set \`store\` to the store name if visible, else null.
+6. Self-rate your parse on a 0.0–1.0 scale in \`parse_confidence\`. Be honest: faded, partial, or blurry receipts should rate lower.`;
 
 // ── sha256Hex ─────────────────────────────────────────────────────────────────
 export async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
@@ -199,6 +221,53 @@ export async function parseRecipeFromUrl(
   ].join("\n\n");
 
   return { recipe, workerPrompt, strippedText };
+}
+
+// ── parseReceiptFromImage ─────────────────────────────────────────────────────
+export async function parseReceiptFromImage(
+  base64: string,
+  mediaType: "image/jpeg" | "image/png" | "image/webp"
+): Promise<ReceiptParse> {
+  const client = getClient();
+
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5",
+    // Long receipts can hold many line items — give the worker headroom.
+    max_tokens: 8192,
+    system: [
+      {
+        type: "text",
+        text: RECEIPT_SYSTEM_BASE,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    tools: [receiptTool],
+    tool_choice: { type: "tool", name: "extract_receipt" },
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "image",
+            source: { type: "base64", media_type: mediaType, data: base64 },
+          },
+          {
+            type: "text",
+            text: "Extract the grocery items from this receipt.",
+          },
+        ],
+      },
+    ],
+  });
+
+  const toolUseBlock = response.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+  );
+  if (!toolUseBlock) {
+    throw new Error("No tool_use block in receipt response");
+  }
+
+  return ReceiptParseSchema.parse(toolUseBlock.input);
 }
 
 // ── gradeRecipeParse ──────────────────────────────────────────────────────────

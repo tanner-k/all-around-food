@@ -3,19 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { MarkOutOfStep } from "./MarkOutOfStep";
 
 interface CookDoneViewProps {
   recipeId: string;
   recipeTitle: string;
   stepCount: number;
+  ingredientNames: string[];
 }
 
 export function CookDoneView({
   recipeId,
   recipeTitle,
   stepCount,
+  ingredientNames,
 }: CookDoneViewProps) {
   const router = useRouter();
+  const [phase, setPhase] = useState<"done" | "stockCheck">("done");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,11 +34,21 @@ export function CookDoneView({
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error ?? "Failed to mark as cooked");
       }
-      router.push(`/cookbook/${recipeId}`);
+      setPhase("stockCheck");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
       setLoading(false);
     }
+  }
+
+  if (phase === "stockCheck") {
+    return (
+      <MarkOutOfStep
+        ingredientNames={ingredientNames}
+        onDone={() => router.push(`/cookbook/${recipeId}`)}
+      />
+    );
   }
 
   return (

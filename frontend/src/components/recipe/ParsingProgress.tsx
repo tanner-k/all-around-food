@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 type LineState = "pending" | "active" | "done";
 
-const STEPS = [
+const DEFAULT_STEPS = [
   "Detecting source…",
   "Reading ingredients…",
   "Reading steps…",
@@ -15,11 +15,16 @@ const STEPS = [
 interface ParsingProgressProps {
   /** When true, immediately advance all remaining lines to done */
   complete?: boolean;
+  /** Override the progress step labels (e.g. for receipt parsing). */
+  steps?: string[];
 }
 
-export function ParsingProgress({ complete = false }: ParsingProgressProps) {
+export function ParsingProgress({
+  complete = false,
+  steps = DEFAULT_STEPS,
+}: ParsingProgressProps) {
   const [states, setStates] = useState<LineState[]>(() =>
-    STEPS.map((_, i) => (i === 0 ? "active" : "pending"))
+    steps.map((_, i) => (i === 0 ? "active" : "pending"))
   );
 
   // Tick each line through pending → active → done on ~1.2s interval
@@ -62,15 +67,15 @@ export function ParsingProgress({ complete = false }: ParsingProgressProps) {
         if (activeIdx !== -1) next[activeIdx] = "done";
         return next;
       });
-      if (++i >= STEPS.length) clearInterval(flush);
+      if (++i >= steps.length) clearInterval(flush);
     }, 120);
 
     return () => clearInterval(flush);
-  }, [complete]);
+  }, [complete, steps]);
 
   return (
     <div className="flex flex-col gap-3 py-4">
-      {STEPS.map((label, idx) => {
+      {steps.map((label, idx) => {
         const state = states[idx];
         return (
           <div key={label} className="flex items-center gap-3 text-sm">

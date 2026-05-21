@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import type { Recipe } from "@/lib/recipe-schema";
 import { CookStepView } from "./CookStepView";
@@ -32,6 +32,10 @@ export function CookMode({ recipe }: CookModeProps) {
   const [timerRunning, setTimerRunning] = useState(false);
 
   const total = recipe.steps.length;
+  const ingredientNames = useMemo(
+    () => recipe.ingredients.map((i) => i.name),
+    [recipe.ingredients]
+  );
 
   function handleLayoutChange(next: Layout) {
     setLayout(next);
@@ -79,6 +83,7 @@ export function CookMode({ recipe }: CookModeProps) {
         recipeId={recipe.id}
         recipeTitle={recipe.title}
         stepCount={total}
+        ingredientNames={ingredientNames}
       />
     );
   }

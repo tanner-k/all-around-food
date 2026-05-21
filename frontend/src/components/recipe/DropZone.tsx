@@ -7,7 +7,10 @@ interface DropZoneProps {
     base64: string,
     mediaType: "image/jpeg" | "image/png" | "image/webp"
   ) => void;
-  onUrl: (url: string) => void;
+  /** Optional — omitted for the receipt variant, which is image-only. */
+  onUrl?: (url: string) => void;
+  /** "recipe" (default) shows URL/coming-soon pills; "receipt" is image-only. */
+  variant?: "recipe" | "receipt";
 }
 
 const SUPPORTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -31,11 +34,16 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export function DropZone({ onImage, onUrl }: DropZoneProps) {
+export function DropZone({
+  onImage,
+  onUrl,
+  variant = "recipe",
+}: DropZoneProps) {
   const [dragging, setDragging] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlValue, setUrlValue] = useState("");
   const urlInputRef = useRef<HTMLInputElement>(null);
+  const isReceipt = variant === "receipt";
 
   // Window-level paste handler
   useEffect(() => {
@@ -56,7 +64,7 @@ export function DropZone({ onImage, onUrl }: DropZoneProps) {
 
       // String — might be URL
       const text = e.clipboardData?.getData("text/plain") ?? "";
-      if (/^https?:\/\//.test(text.trim())) {
+      if (onUrl && /^https?:\/\//.test(text.trim())) {
         onUrl(text.trim());
       }
     }
@@ -88,7 +96,7 @@ export function DropZone({ onImage, onUrl }: DropZoneProps) {
   function handleUrlSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = urlValue.trim();
-    if (trimmed) {
+    if (trimmed && onUrl) {
       onUrl(trimmed);
       setUrlValue("");
       setShowUrlInput(false);
@@ -113,7 +121,9 @@ export function DropZone({ onImage, onUrl }: DropZoneProps) {
       >
         <span className="text-4xl leading-none select-none">⬇</span>
         <p className="font-serif italic text-2xl text-ink">
-          Drop screenshot or paste link
+          {isReceipt
+            ? "Drop receipt photo or paste image"
+            : "Drop screenshot or paste link"}
         </p>
         <p className="text-sm text-ink-mute">⌘V works on every screen</p>
       </div>
@@ -124,7 +134,7 @@ export function DropZone({ onImage, onUrl }: DropZoneProps) {
         <label
           className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra"
         >
-          📷 Screenshot
+          {isReceipt ? "📷 Receipt photo" : "📷 Screenshot"}
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -139,28 +149,32 @@ export function DropZone({ onImage, onUrl }: DropZoneProps) {
           />
         </label>
 
-        {/* URL — active */}
-        <button
-          type="button"
-          onClick={() => {
-            setShowUrlInput((v) => !v);
-            setTimeout(() => urlInputRef.current?.focus(), 50);
-          }}
-          className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra"
-        >
-          🔗 URL
-        </button>
+        {!isReceipt && (
+          <>
+            {/* URL — active */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowUrlInput((v) => !v);
+                setTimeout(() => urlInputRef.current?.focus(), 50);
+              }}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra"
+            >
+              🔗 URL
+            </button>
 
-        {/* Coming soon */}
-        {(["🎬 TikTok", "📧 Email", "✍ Type"] as const).map((label) => (
-          <span
-            key={label}
-            title="Coming soon"
-            className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft opacity-50"
-          >
-            {label}
-          </span>
-        ))}
+            {/* Coming soon */}
+            {(["🎬 TikTok", "📧 Email", "✍ Type"] as const).map((label) => (
+              <span
+                key={label}
+                title="Coming soon"
+                className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft opacity-50"
+              >
+                {label}
+              </span>
+            ))}
+          </>
+        )}
       </div>
 
       {/* Inline URL input */}
