@@ -15,6 +15,11 @@ import {
   type ShoppingListItem,
   type ShoppingListResponse,
 } from "./shopping-schema";
+import {
+  MealPlanSchema,
+  type MealPlan,
+  type PlannedMeal,
+} from "./meal-plan-schema";
 
 async function request(path: string, init?: RequestInit): Promise<unknown> {
   const res = await fetch(path, {
@@ -160,4 +165,22 @@ export async function clearCheckedShoppingItems(): Promise<number> {
     method: "DELETE",
   })) as { removed: number };
   return data.removed;
+}
+
+// ── Meal plans ────────────────────────────────────────────────────────────
+
+export async function getMealPlan(weekOf: string): Promise<MealPlan> {
+  const data = await request(`/api/meal-plans/${weekOf}`);
+  return MealPlanSchema.parse(data);
+}
+
+export async function saveMealPlan(
+  weekOf: string,
+  meals: PlannedMeal[]
+): Promise<MealPlan> {
+  const data = await request(`/api/meal-plans/${weekOf}`, {
+    method: "PUT",
+    body: JSON.stringify({ week_of: weekOf, meals }),
+  });
+  return MealPlanSchema.parse(data);
 }

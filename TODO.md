@@ -33,7 +33,6 @@
 ## Phase D (Next)
 - [ ] Real E2E smoke test with Playwright (import flow end-to-end in browser)
 - [ ] Deploy backend somewhere reachable from Vercel (staging API)
-- [ ] Planner (weekly meal plan)
 
 ## Later
 - [ ] Real responsive mobile layout (current is desktop-first)
@@ -41,7 +40,6 @@
 - [ ] TikTok / video import source
 - [ ] Email recipe forwarding
 - [ ] Manual recipe entry form
-- [ ] Planner (weekly meal planning)
 - [ ] Auth + multi-user
 - [ ] Deploy to production
 

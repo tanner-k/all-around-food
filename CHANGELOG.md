@@ -18,7 +18,8 @@
 - Receipt import — upload a receipt photo, parsed by `claude-haiku-4-5` vision into grocery line items for review, then bulk-added to the pantry as `in_stock`.
 - Smart shopping list at `/shop` — manual entry plus "add from recipes" (aggregates + dedupes recipe ingredients); grouped by aisle; pantry-covered items hidden, low items badged.
 - Post-cook "what did you run out of?" step — after marking a recipe cooked, update the stock status of its pantry-tracked ingredients so the shopping list stays accurate.
-- Backend: `PantryStore` and `ShoppingListStore` (immutable Polars/parquet stores); pantry + shopping-list CRUD endpoints; `POST /shopping-list/generate`; keyword-based aisle categorization (`aisles.py`); name normalization (`naming.py`); pantry-subtraction + recipe-aggregation logic (`shopping_logic.py`).
+- Weekly meal planner at `/plan` — a 7-day grid; assign a recipe to each day's dinner slot (plus an optional lunch) via a recipe picker; "Review shopping →" turns the planned week into the shopping list.
+- Backend: `PantryStore`, `ShoppingListStore`, and `MealPlanStore` (immutable Polars/parquet stores); pantry + shopping-list CRUD endpoints; `GET`/`PUT /meal-plans/{week_of}`; `POST /shopping-list/generate`; keyword-based aisle categorization (`aisles.py`); name normalization (`naming.py`); pantry-subtraction + recipe-aggregation logic (`shopping_logic.py`).
 - `frontend/src/lib/api.ts` — browser-side API client for pantry + shopping endpoints; `backend-proxy.ts` shared proxy helper; `pantry-schema.ts` / `shopping-schema.ts` Zod contracts.
 - New backend tests across the pantry/shopping stores, aisle categorization, name normalization, smart-list logic, and pantry + shopping API endpoints.
 

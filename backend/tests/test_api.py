@@ -17,6 +17,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setattr(
         "allaroundfood.api.SHOPPING_STORE_PATH", tmp_path / "s.parquet"
     )
+    monkeypatch.setattr(
+        "allaroundfood.api.MEAL_PLAN_STORE_PATH", tmp_path / "m.parquet"
+    )
     from allaroundfood.api import app
     return TestClient(app)
 
@@ -784,3 +787,78 @@ def test_delete_shopping_checked(client: TestClient) -> None:
         for item in group["items"]
     ]
     assert remaining == [keep["id"]]
+
+
+# --- Meal-plan endpoints ---
+
+
+def test_get_meal_plan_empty_when_none(client: TestClient) -> None:
+    """GET /meal-plans/{week} returns an empty plan when none is stored."""
+    response = client.get("/meal-plans/2026-05-18")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["week_of"] == "2026-05-18"
+    assert body["meals"] == []
+
+
+def test_put_then_get_meal_plan(client: TestClient) -> None:
+    """PUT a meal plan and GET returns the stored meals."""
+    plan = {
+        "week_of": "2026-05-18",
+        "meals": [
+            {"day_index": 0, "slot": "dinner", "recipe_id": "r-1"},
+            {"day_index": 2, "slot": "lunch", "recipe_id": "r-2"},
+        ],
+    }
+    put = client.put("/meal-plans/2026-05-18", json=plan)
+    assert put.status_code == 200
+    assert len(put.json()["meals"]) == 2
+
+    body = client.get("/meal-plans/2026-05-18").json()
+    assert len(body["meals"]) == 2
+    assert body["meals"][0]["recipe_id"] == "r-1"
+    assert body["meals"][1]["slot"] == "lunch"
+
+
+def test_put_meal_plan_replaces_week(client: TestClient) -> None:
+    """A second PUT for the same week replaces the previous plan."""
+    client.put(
+        "/meal-plans/2026-05-18",
+        json={
+            "week_of": "2026-05-18",
+            "meals": [{"day_index": 0, "slot": "dinner", "recipe_id": "old"}],
+        },
+    )
+    client.put(
+        "/meal-plans/2026-05-18",
+        json={
+            "week_of": "2026-05-18",
+            "meals": [{"day_index": 1, "slot": "dinner", "recipe_id": "new"}],
+        },
+    )
+
+    body = client.get("/meal-plans/2026-05-18").json()
+    assert len(body["meals"]) == 1
+    assert body["meals"][0]["recipe_id"] == "new"
+
+
+def test_put_meal_plan_path_week_wins(client: TestClient) -> None:
+    """The week_of in the path takes precedence over the request body."""
+    response = client.put(
+        "/meal-plans/2026-05-18",
+        json={"week_of": "1999-01-01", "meals": []},
+    )
+    assert response.status_code == 200
+    assert response.json()["week_of"] == "2026-05-18"
+
+
+def test_put_meal_plan_rejects_bad_day_index(client: TestClient) -> None:
+    """A day_index outside 0-6 is rejected by validation."""
+    response = client.put(
+        "/meal-plans/2026-05-18",
+        json={
+            "week_of": "2026-05-18",
+            "meals": [{"day_index": 9, "slot": "dinner", "recipe_id": "r-1"}],
+        },
+    )
+    assert response.status_code == 422

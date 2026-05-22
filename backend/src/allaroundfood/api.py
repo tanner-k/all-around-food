@@ -13,8 +13,10 @@ from pydantic import BaseModel
 
 from allaroundfood.aisles import AISLE_ORDER, categorize
 from allaroundfood.eval_storage import EvalStore
+from allaroundfood.meal_plan_storage import MealPlanStore
 from allaroundfood.models import (
     Evaluation,
+    MealPlan,
     PantryItem,
     PantryStatus,
     Recipe,
@@ -35,6 +37,7 @@ RECIPE_STORE_PATH = DATA_DIR / "recipes.parquet"
 EVAL_STORE_PATH = DATA_DIR / "evaluations.parquet"
 PANTRY_STORE_PATH = DATA_DIR / "pantry.parquet"
 SHOPPING_STORE_PATH = DATA_DIR / "shopping_list.parquet"
+MEAL_PLAN_STORE_PATH = DATA_DIR / "meal_plans.parquet"
 
 app = FastAPI(title="All Around Food", version="0.2.0")
 
@@ -65,6 +68,11 @@ def _get_pantry_store_path() -> Path:
 def _get_shopping_store_path() -> Path:
     """Get the shopping store path (for test injection via monkeypatch)."""
     return SHOPPING_STORE_PATH
+
+
+def _get_meal_plan_store_path() -> Path:
+    """Get the meal-plan store path (for test injection via monkeypatch)."""
+    return MEAL_PLAN_STORE_PATH
 
 
 def _refresh_shopping_flags() -> None:
@@ -629,6 +637,42 @@ async def delete_shopping_item(item_id: str) -> dict[str, str]:
         ) from e
     store.save()
     return {"status": "deleted", "id": item_id}
+
+
+@app.get("/meal-plans/{week_of}")
+async def get_meal_plan(week_of: str) -> MealPlan:
+    """Get the meal plan for a given week.
+
+    Args:
+        week_of: ISO date of the week's Monday.
+
+    Returns:
+        The stored plan, or an empty plan for that week if none exists.
+    """
+    store = MealPlanStore.load(_get_meal_plan_store_path())
+    plan = store.get(week_of)
+    if plan is None:
+        return MealPlan(week_of=week_of, meals=[])
+    return plan
+
+
+@app.put("/meal-plans/{week_of}")
+async def put_meal_plan(week_of: str, plan: MealPlan) -> MealPlan:
+    """Create or replace the meal plan for a week.
+
+    Args:
+        week_of: ISO date of the week's Monday (takes precedence over body).
+        plan: The full meal plan to store.
+
+    Returns:
+        The saved meal plan.
+    """
+    saved = plan.model_copy(
+        update={"week_of": week_of, "updated_at": datetime.now(UTC)}
+    )
+    store = MealPlanStore.load(_get_meal_plan_store_path()).upsert(saved)
+    store.save()
+    return saved
 
 
 @app.post("/evaluations")

@@ -120,6 +120,25 @@ class ShoppingListItem(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
+MealSlot = Literal["lunch", "dinner"]
+
+
+class PlannedMeal(BaseModel):
+    """A single recipe assigned to a day and slot in a weekly plan."""
+
+    day_index: int = Field(ge=0, le=6)  # 0 = Monday .. 6 = Sunday
+    slot: MealSlot
+    recipe_id: str
+
+
+class MealPlan(BaseModel):
+    """A weekly meal plan, identified by the Monday of its week."""
+
+    week_of: str  # ISO date (YYYY-MM-DD) of that week's Monday
+    meals: list[PlannedMeal] = Field(default_factory=list)
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class JudgeFieldCheck(BaseModel):
     """Represents a judge's assessment of a specific field."""
 
