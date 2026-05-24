@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { generateShoppingList, saveMealPlan } from "@/lib/api";
-import type { MealPlan, MealSlot, PlannedMeal } from "@/lib/meal-plan-schema";
+import type { MealPlan, PlannedMeal } from "@/lib/meal-plan-schema";
 import { formatMonthDay, weekDays } from "@/lib/week";
 import { DayColumn } from "./DayColumn";
 import { RecipePickerModal } from "./RecipePickerModal";
@@ -22,22 +22,26 @@ interface PlanViewProps {
 export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
   const router = useRouter();
   const [meals, setMeals] = useState<PlannedMeal[]>(initialPlan.meals);
-  const [picker, setPicker] = useState<{
-    dayIndex: number;
-    slot: MealSlot;
-  } | null>(null);
+  const [picker, setPicker] = useState<{ dayIndex: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
 
   const titleById = new Map(recipes.map((r) => [r.id, r.title]));
   const days = weekDays(weekOf);
 
-  function titleAt(dayIndex: number, slot: MealSlot): string | null {
-    const meal = meals.find(
-      (m) => m.day_index === dayIndex && m.slot === slot
+  function mealsForDay(
+    dayIndex: number
+  ): { title: string; index: number }[] {
+    return meals.flatMap((meal, index) =>
+      meal.day_index === dayIndex
+        ? [
+            {
+              title: titleById.get(meal.recipe_id) ?? "Unknown recipe",
+              index,
+            },
+          ]
+        : []
     );
-    if (!meal) return null;
-    return titleById.get(meal.recipe_id) ?? "Unknown recipe";
   }
 
   async function persist(next: PlannedMeal[]) {
@@ -54,21 +58,16 @@ export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
 
   function handlePick(recipeId: string) {
     if (!picker) return;
-    const { dayIndex, slot } = picker;
     const next: PlannedMeal[] = [
-      ...meals.filter(
-        (m) => !(m.day_index === dayIndex && m.slot === slot)
-      ),
-      { day_index: dayIndex, slot, recipe_id: recipeId },
+      ...meals,
+      { day_index: picker.dayIndex, recipe_id: recipeId },
     ];
     setPicker(null);
     void persist(next);
   }
 
-  function handleRemove(dayIndex: number, slot: MealSlot) {
-    void persist(
-      meals.filter((m) => !(m.day_index === dayIndex && m.slot === slot))
-    );
+  function handleRemove(index: number) {
+    void persist(meals.filter((_, i) => i !== index));
   }
 
   async function handleReviewShopping() {
@@ -91,7 +90,7 @@ export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
     <div className="flex flex-col gap-6">
       <p className="text-sm text-ink-mute">
         Week of {formatMonthDay(weekOf)} · {meals.length}{" "}
-        {meals.length === 1 ? "meal" : "meals"} planned
+        {meals.length === 1 ? "recipe" : "recipes"} planned
       </p>
 
       {error && (
@@ -105,9 +104,8 @@ export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
           <DayColumn
             key={day.index}
             day={day}
-            dinnerTitle={titleAt(day.index, "dinner")}
-            lunchTitle={titleAt(day.index, "lunch")}
-            onAdd={(dayIndex, slot) => setPicker({ dayIndex, slot })}
+            meals={mealsForDay(day.index)}
+            onAdd={(dayIndex) => setPicker({ dayIndex })}
             onRemove={handleRemove}
           />
         ))}
@@ -129,7 +127,6 @@ export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
 
       {picker && (
         <RecipePickerModal
-          slotLabel={picker.slot}
           recipes={recipes}
           onPick={handlePick}
           onClose={() => setPicker(null)}

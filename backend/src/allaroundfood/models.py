@@ -78,6 +78,17 @@ class Recipe(BaseModel):
     parse_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
+class VideoImportResult(BaseModel):
+    """Result of importing a recipe from a social video URL."""
+
+    source_url: str
+    platform: Literal["instagram", "tiktok"]
+    caption: str
+    transcript: str
+    thumbnail_url: str | None = None
+    duration_s: float | None = None
+
+
 PantryStatus = Literal["in_stock", "low", "out"]
 Aisle = Literal[
     "Produce",
@@ -120,14 +131,14 @@ class ShoppingListItem(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-MealSlot = Literal["lunch", "dinner"]
-
-
 class PlannedMeal(BaseModel):
-    """A single recipe assigned to a day and slot in a weekly plan."""
+    """A single recipe assigned to a day in a weekly plan.
+
+    Multiple PlannedMeals may share a ``day_index`` — a day holds however
+    many recipes the cook plans to make, with no meal-type structure.
+    """
 
     day_index: int = Field(ge=0, le=6)  # 0 = Monday .. 6 = Sunday
-    slot: MealSlot
     recipe_id: str
 
 

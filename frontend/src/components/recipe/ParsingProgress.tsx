@@ -12,19 +12,31 @@ const DEFAULT_STEPS = [
   "Final review",
 ];
 
+const VIDEO_STEPS = [
+  "Reading video captions…",
+  "Finding ingredients…",
+  "Sequencing cooking steps…",
+  "Placing amounts inline…",
+  "Final review",
+];
+
 interface ParsingProgressProps {
   /** When true, immediately advance all remaining lines to done */
   complete?: boolean;
+  /** Uses import-specific copy for social video URLs. */
+  source?: "default" | "video_url";
   /** Override the progress step labels (e.g. for receipt parsing). */
   steps?: string[];
 }
 
 export function ParsingProgress({
   complete = false,
-  steps = DEFAULT_STEPS,
+  source = "default",
+  steps,
 }: ParsingProgressProps) {
+  const progressSteps = steps ?? (source === "video_url" ? VIDEO_STEPS : DEFAULT_STEPS);
   const [states, setStates] = useState<LineState[]>(() =>
-    steps.map((_, i) => (i === 0 ? "active" : "pending"))
+    progressSteps.map((_, i) => (i === 0 ? "active" : "pending"))
   );
 
   // Tick each line through pending → active → done on ~1.2s interval
@@ -67,15 +79,15 @@ export function ParsingProgress({
         if (activeIdx !== -1) next[activeIdx] = "done";
         return next;
       });
-      if (++i >= steps.length) clearInterval(flush);
+      if (++i >= progressSteps.length) clearInterval(flush);
     }, 120);
 
     return () => clearInterval(flush);
-  }, [complete, steps]);
+  }, [complete, progressSteps]);
 
   return (
     <div className="flex flex-col gap-3 py-4">
-      {steps.map((label, idx) => {
+      {progressSteps.map((label, idx) => {
         const state = states[idx];
         return (
           <div key={label} className="flex items-center gap-3 text-sm">

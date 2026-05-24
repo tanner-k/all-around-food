@@ -171,6 +171,14 @@ class ShoppingListStore:
         """
         return ShoppingListStore(self._path, self._df.filter(~pl.col("checked")))
 
+    def clear_all(self) -> ShoppingListStore:
+        """Return a NEW, empty store. Does not mutate self.
+
+        Returns:
+            New ShoppingListStore instance with no items.
+        """
+        return ShoppingListStore(self._path)
+
     @staticmethod
     def _row_to_item(row: dict[str, Any]) -> ShoppingListItem:
         """Convert a dataframe row (dict) to a ShoppingListItem instance."""

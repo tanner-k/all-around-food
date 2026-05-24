@@ -38,8 +38,8 @@ def test_round_trip(tmp_path: Path) -> None:
     original = MealPlan(
         week_of="2026-05-18",
         meals=[
-            PlannedMeal(day_index=0, slot="dinner", recipe_id="r-1"),
-            PlannedMeal(day_index=2, slot="lunch", recipe_id="r-2"),
+            PlannedMeal(day_index=0, recipe_id="r-1"),
+            PlannedMeal(day_index=2, recipe_id="r-2"),
         ],
         updated_at=datetime(2026, 5, 18, 9, 0, 0, tzinfo=UTC),
     )
@@ -51,10 +51,29 @@ def test_round_trip(tmp_path: Path) -> None:
     assert loaded[0].model_dump() == original.model_dump()
 
 
+def test_round_trip_multiple_recipes_one_day(tmp_path: Path) -> None:
+    """Several recipes can share a day and survive a save/reload cycle."""
+    db_path = tmp_path / "multi.parquet"
+    original = MealPlan(
+        week_of="2026-05-18",
+        meals=[
+            PlannedMeal(day_index=3, recipe_id="main"),
+            PlannedMeal(day_index=3, recipe_id="side"),
+            PlannedMeal(day_index=3, recipe_id="dessert"),
+        ],
+    )
+
+    MealPlanStore.load(db_path).upsert(original).save()
+    plan = MealPlanStore.load(db_path).get("2026-05-18")
+
+    assert plan is not None
+    assert [m.recipe_id for m in plan.meals] == ["main", "side", "dessert"]
+
+
 def test_get_by_week(tmp_path: Path) -> None:
     """get() returns the plan for a week, or None for an unknown week."""
     store = MealPlanStore.load(tmp_path / "m.parquet").upsert(
-        _plan("2026-05-18", [PlannedMeal(day_index=1, slot="dinner", recipe_id="r-1")])
+        _plan("2026-05-18", [PlannedMeal(day_index=1, recipe_id="r-1")])
     )
 
     found = store.get("2026-05-18")
@@ -67,10 +86,10 @@ def test_get_by_week(tmp_path: Path) -> None:
 def test_upsert_replaces_existing_week(tmp_path: Path) -> None:
     """upsert() replaces the plan for a week instead of duplicating it."""
     store = MealPlanStore.load(tmp_path / "m.parquet").upsert(
-        _plan("2026-05-18", [PlannedMeal(day_index=0, slot="dinner", recipe_id="old")])
+        _plan("2026-05-18", [PlannedMeal(day_index=0, recipe_id="old")])
     )
     store = store.upsert(
-        _plan("2026-05-18", [PlannedMeal(day_index=0, slot="dinner", recipe_id="new")])
+        _plan("2026-05-18", [PlannedMeal(day_index=0, recipe_id="new")])
     )
 
     assert len(store.all()) == 1

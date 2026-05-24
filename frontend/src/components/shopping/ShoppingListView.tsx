@@ -5,8 +5,10 @@ import {
   addShoppingItem,
   checkShoppingItem,
   clearCheckedShoppingItems,
+  completeShoppingList,
   deleteShoppingItem,
   getShoppingList,
+  type ShoppingCompletionResult,
 } from "@/lib/api";
 import type { ShoppingListResponse } from "@/lib/shopping-schema";
 import { AisleSection } from "./AisleSection";
@@ -21,10 +23,17 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
   const [data, setData] = useState<ShoppingListResponse>(initial);
   const [modalOpen, setModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const hasChecked = data.groups.some((g) =>
     g.items.some((i) => i.checked)
   );
+  const hasItems = data.groups.length > 0;
+
+  function describeResult(result: ShoppingCompletionResult): string {
+    const n = result.pantry_added + result.pantry_updated;
+    return `${n} ${n === 1 ? "item" : "items"} added to your pantry.`;
+  }
 
   async function refresh() {
     try {
@@ -87,14 +96,30 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
     }
   }
 
-  async function handleClearChecked() {
+  async function handleMarkBought() {
     setError(null);
+    setNotice(null);
     try {
-      await clearCheckedShoppingItems();
+      const result = await clearCheckedShoppingItems();
+      setNotice(describeResult(result));
       await refresh();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Failed to clear checked items"
+        err instanceof Error ? err.message : "Failed to mark items as bought"
+      );
+    }
+  }
+
+  async function handleComplete() {
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await completeShoppingList();
+      setNotice(describeResult(result));
+      await refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to complete shopping"
       );
     }
   }
@@ -124,6 +149,12 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
         </p>
       )}
 
+      {notice && (
+        <p className="rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">
+          {notice}
+        </p>
+      )}
+
       {/* List */}
       {data.groups.length === 0 ? (
         <div className="rounded-2xl border border-line bg-paper p-12 text-center text-ink-mute">
@@ -146,20 +177,25 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
       {/* Footer */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
         <p className="text-sm text-ink-mute">
-          {data.hidden_pantry_covered > 0
-            ? `${data.hidden_pantry_covered} pantry-covered ${
-                data.hidden_pantry_covered === 1 ? "item" : "items"
-              } hidden.`
-            : "Pantry-covered items are hidden automatically."}
+          Checked items become pantry stock when you mark them bought.
         </p>
         <div className="flex gap-3">
           {hasChecked && (
             <button
               type="button"
-              onClick={handleClearChecked}
+              onClick={handleMarkBought}
               className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2"
             >
-              Clear checked
+              Mark as bought
+            </button>
+          )}
+          {hasItems && (
+            <button
+              type="button"
+              onClick={handleComplete}
+              className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230]"
+            >
+              Complete shopping
             </button>
           )}
           <button

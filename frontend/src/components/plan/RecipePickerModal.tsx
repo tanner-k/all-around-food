@@ -6,14 +6,12 @@ interface RecipeOption {
 }
 
 interface RecipePickerModalProps {
-  slotLabel: string;
   recipes: RecipeOption[];
   onPick: (recipeId: string) => void;
   onClose: () => void;
 }
 
 export function RecipePickerModal({
-  slotLabel,
   recipes,
   onPick,
   onClose,
@@ -28,7 +26,7 @@ export function RecipePickerModal({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="font-serif text-xl text-ink">
-          Pick a <em className="italic text-terra">{slotLabel}</em>
+          Pick a <em className="italic text-terra">recipe</em>
         </h3>
         <p className="mb-4 mt-1 text-sm text-ink-mute">
           Choose a recipe from your cookbook.

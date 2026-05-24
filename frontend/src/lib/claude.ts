@@ -57,6 +57,9 @@ CRITICAL RULES:
 const WORKER_SYSTEM_URL_EXTRA = `
 2. The text was extracted from a webpage. Look for ingredient lists, step lists, nutrition tables.`;
 
+const WORKER_SYSTEM_VIDEO_EXTRA = `
+2. The text was extracted from a short-form recipe video. It may include captions, transcript snippets, creator descriptions, OCR text, hashtags, or comments. Reconstruct the recipe only from the provided text; do not invent missing ingredients or steps.`;
+
 // ── Worker tool definition ────────────────────────────────────────────────────
 const workerTool: Anthropic.Tool = {
   name: "extract_recipe",
@@ -211,6 +214,77 @@ export async function parseRecipeFromUrl(
   );
   if (!toolUseBlock) {
     throw new Error("No tool_use block in URL worker response");
+  }
+
+  const recipe = RecipeSchema.parse(toolUseBlock.input);
+
+  const workerPrompt = [
+    "SYSTEM:\n" + systemText,
+    "USER:\n" + strippedText.slice(0, 500) + "…",
+  ].join("\n\n");
+
+  return { recipe, workerPrompt, strippedText };
+}
+
+// ── parseRecipeFromVideoText ─────────────────────────────────────────────────
+export async function parseRecipeFromVideoText({
+  caption,
+  transcript,
+  sourceUrl,
+}: {
+  caption: string;
+  transcript: string;
+  sourceUrl: string;
+}): Promise<{ recipe: Recipe; workerPrompt: string; strippedText: string }> {
+  const client = getClient();
+
+  if (!caption.trim() && !transcript.trim()) {
+    throw new Error("No video transcript or caption text was available");
+  }
+
+  const strippedText = [
+    `CAPTION:\n${caption.trim() || "(none)"}`,
+    `TRANSCRIPT:\n${transcript.trim() || "(none)"}`,
+  ]
+    .join("\n\n")
+    .replace(/\s+\n/g, "\n")
+    .trim()
+    .slice(0, 30_000);
+
+  const systemText = WORKER_SYSTEM_BASE
+    .replace(
+      "2. The image may contain a title, ingredients, instructions, nutrition info, and notes spread anywhere — TOP to BOTTOM. Scan the entire image.",
+      WORKER_SYSTEM_VIDEO_EXTRA.trim()
+    )
+    .concat(
+      `\n\nSource URL: ${sourceUrl}. Populate \`source_url\` with the URL. Use the platform or creator name for \`source_attribution\` when available.`
+    );
+
+  const response = await client.messages.create({
+    model: "claude-haiku-4-5",
+    max_tokens: 4096,
+    system: [
+      {
+        type: "text",
+        text: systemText,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    tools: [workerTool],
+    tool_choice: { type: "tool", name: "extract_recipe" },
+    messages: [
+      {
+        role: "user",
+        content: strippedText,
+      },
+    ],
+  });
+
+  const toolUseBlock = response.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+  );
+  if (!toolUseBlock) {
+    throw new Error("No tool_use block in video worker response");
   }
 
   const recipe = RecipeSchema.parse(toolUseBlock.input);

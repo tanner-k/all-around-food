@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { isVideoRecipeUrl } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface DropZoneProps {
   onImage: (
@@ -9,6 +10,8 @@ interface DropZoneProps {
   ) => void;
   /** Optional — omitted for the receipt variant, which is image-only. */
   onUrl?: (url: string) => void;
+  /** Optional handler for Instagram/TikTok recipe videos. Falls back to onUrl. */
+  onVideoUrl?: (url: string) => void;
   /** "recipe" (default) shows URL/coming-soon pills; "receipt" is image-only. */
   variant?: "recipe" | "receipt";
 }
@@ -37,6 +40,7 @@ function fileToBase64(file: File): Promise<string> {
 export function DropZone({
   onImage,
   onUrl,
+  onVideoUrl,
   variant = "recipe",
 }: DropZoneProps) {
   const [dragging, setDragging] = useState(false);
@@ -44,6 +48,18 @@ export function DropZone({
   const [urlValue, setUrlValue] = useState("");
   const urlInputRef = useRef<HTMLInputElement>(null);
   const isReceipt = variant === "receipt";
+
+  const submitUrl = useCallback((rawUrl: string) => {
+    const trimmed = rawUrl.trim();
+    if (!trimmed) return;
+
+    if (isVideoRecipeUrl(trimmed)) {
+      (onVideoUrl ?? onUrl)?.(trimmed);
+      return;
+    }
+
+    onUrl?.(trimmed);
+  }, [onUrl, onVideoUrl]);
 
   // Window-level paste handler
   useEffect(() => {
@@ -64,14 +80,14 @@ export function DropZone({
 
       // String — might be URL
       const text = e.clipboardData?.getData("text/plain") ?? "";
-      if (onUrl && /^https?:\/\//.test(text.trim())) {
-        onUrl(text.trim());
+      if ((onUrl || onVideoUrl) && /^https?:\/\//.test(text.trim())) {
+        submitUrl(text);
       }
     }
 
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, [onImage, onUrl]);
+  }, [onImage, onUrl, onVideoUrl, submitUrl]);
 
   // Drag handlers
   function handleDragOver(e: React.DragEvent) {
@@ -95,9 +111,8 @@ export function DropZone({
 
   function handleUrlSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const trimmed = urlValue.trim();
-    if (trimmed && onUrl) {
-      onUrl(trimmed);
+    if (urlValue.trim() && (onUrl || onVideoUrl)) {
+      submitUrl(urlValue);
       setUrlValue("");
       setShowUrlInput(false);
     }
@@ -163,8 +178,19 @@ export function DropZone({
               🔗 URL
             </button>
 
+            <button
+              type="button"
+              onClick={() => {
+                setShowUrlInput((v) => !v);
+                setTimeout(() => urlInputRef.current?.focus(), 50);
+              }}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra"
+            >
+              🎬 TikTok / Instagram
+            </button>
+
             {/* Coming soon */}
-            {(["🎬 TikTok", "📧 Email", "✍ Type"] as const).map((label) => (
+            {(["📧 Email", "✍ Type"] as const).map((label) => (
               <span
                 key={label}
                 title="Coming soon"
@@ -188,7 +214,7 @@ export function DropZone({
             type="url"
             value={urlValue}
             onChange={(e) => setUrlValue(e.target.value)}
-            placeholder="https://..."
+            placeholder="Paste a recipe URL, TikTok, or Instagram Reel"
             className="flex-1 rounded-xl border border-line bg-paper px-4 py-2 text-sm text-ink placeholder:text-ink-mute focus:border-terra focus:outline-none"
           />
           <button

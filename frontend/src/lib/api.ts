@@ -20,6 +20,7 @@ import {
   type MealPlan,
   type PlannedMeal,
 } from "./meal-plan-schema";
+import { RecipeSchema, type Recipe } from "./recipe-schema";
 
 async function request(path: string, init?: RequestInit): Promise<unknown> {
   const res = await fetch(path, {
@@ -34,6 +35,27 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
     throw new Error(message);
   }
   return data;
+}
+
+// ── Recipe import ─────────────────────────────────────────────────────────
+
+const VIDEO_URL_HOST_RE =
+  /(^|\.)((tiktok\.com)|(vm\.tiktok\.com)|(instagram\.com)|(instagr\.am))$/i;
+
+export function isVideoRecipeUrl(url: string): boolean {
+  try {
+    return VIDEO_URL_HOST_RE.test(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
+export async function parseVideoUrl(url: string): Promise<Recipe> {
+  const data = await request("/api/import/parse", {
+    method: "POST",
+    body: JSON.stringify({ kind: "video_url", url }),
+  });
+  return RecipeSchema.parse(data);
 }
 
 // ── Pantry ────────────────────────────────────────────────────────────────
@@ -160,11 +182,22 @@ export async function generateShoppingList(
   return ShoppingListResponseSchema.parse(data);
 }
 
-export async function clearCheckedShoppingItems(): Promise<number> {
-  const data = (await request("/api/shopping-list/checked", {
+export interface ShoppingCompletionResult {
+  removed: number;
+  pantry_added: number;
+  pantry_updated: number;
+}
+
+export async function clearCheckedShoppingItems(): Promise<ShoppingCompletionResult> {
+  return (await request("/api/shopping-list/checked", {
     method: "DELETE",
-  })) as { removed: number };
-  return data.removed;
+  })) as ShoppingCompletionResult;
+}
+
+export async function completeShoppingList(): Promise<ShoppingCompletionResult> {
+  return (await request("/api/shopping-list/complete", {
+    method: "POST",
+  })) as ShoppingCompletionResult;
 }
 
 // ── Meal plans ────────────────────────────────────────────────────────────

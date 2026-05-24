@@ -138,6 +138,19 @@ def test_clear_checked_removes_checked_rows(tmp_path: Path) -> None:
     assert remaining == ["eggs"]
 
 
+def test_clear_all_empties_the_store(tmp_path: Path) -> None:
+    """clear_all() returns a new, empty store without mutating self."""
+    store = (
+        ShoppingListStore.load(tmp_path / "s.parquet")
+        .add(_item("s-1", "milk", checked=True))
+        .add(_item("s-2", "eggs", checked=False))
+    )
+    after = store.clear_all()
+
+    assert after.all() == []
+    assert len(store.all()) == 2  # original untouched
+
+
 def test_backward_compat_missing_columns(tmp_path: Path) -> None:
     """Loading a parquet missing newer columns fills them with defaults."""
     db_path = tmp_path / "old.parquet"

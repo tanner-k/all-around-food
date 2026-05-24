@@ -158,18 +158,18 @@ def test_aggregate_dedupes_identical_quantity() -> None:
 # --- build_shopping_list_response ---
 
 
-def test_response_hides_pantry_covered_items() -> None:
-    """Pantry-covered items are excluded from groups but counted as hidden."""
+def test_response_keeps_pantry_covered_items_visible() -> None:
+    """Pantry-covered items stay on the list so it doubles as a stock check."""
     items = [
         ShoppingListItem(id="s-1", name="milk", aisle="Dairy", pantry_covered=True),
         ShoppingListItem(id="s-2", name="eggs", aisle="Dairy"),
     ]
     response = build_shopping_list_response(items)
 
-    assert response["total_visible"] == 1
-    assert response["hidden_pantry_covered"] == 1
+    assert response["total_visible"] == 2
     assert len(response["groups"]) == 1
-    assert response["groups"][0]["items"][0].name == "eggs"
+    names = {i.name for i in response["groups"][0]["items"]}
+    assert names == {"milk", "eggs"}
 
 
 def test_response_groups_ordered_by_aisle() -> None:
@@ -184,11 +184,13 @@ def test_response_groups_ordered_by_aisle() -> None:
     assert aisles == ["Produce", "Dairy", "Pantry"]
 
 
-def test_response_include_covered_keeps_hidden_items() -> None:
-    """include_covered keeps pantry-covered items in the groups."""
+def test_response_total_visible_counts_every_item() -> None:
+    """total_visible counts all items regardless of pantry state."""
     items = [
         ShoppingListItem(id="s-1", name="milk", aisle="Dairy", pantry_covered=True),
+        ShoppingListItem(id="s-2", name="salt", aisle="Pantry", pantry_low=True),
+        ShoppingListItem(id="s-3", name="eggs", aisle="Dairy"),
     ]
-    response = build_shopping_list_response(items, include_covered=True)
-    assert response["total_visible"] == 1
-    assert response["hidden_pantry_covered"] == 1
+    response = build_shopping_list_response(items)
+    assert response["total_visible"] == 3
+    assert "hidden_pantry_covered" not in response

@@ -5,7 +5,6 @@ import type { ShoppingListResponse } from "@/lib/shopping-schema";
 const EMPTY_LIST: ShoppingListResponse = {
   groups: [],
   total_visible: 0,
-  hidden_pantry_covered: 0,
 };
 
 async function getShoppingList(): Promise<ShoppingListResponse> {
@@ -34,7 +33,7 @@ export default async function ShopPage() {
             What you <em className="italic text-terra">actually</em> need.
           </>
         }
-        description="Grouped by store section. Pantry is subtracted."
+        description="Grouped by store section. Pantry stock is flagged."
       />
 
       <div className="mt-12">

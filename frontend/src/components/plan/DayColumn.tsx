@@ -1,24 +1,21 @@
 "use client";
 
-import type { MealSlot } from "@/lib/meal-plan-schema";
 import type { DayInfo } from "@/lib/week";
-import { MealSlotCard } from "./MealSlotCard";
+import { PlannedRecipeCard } from "./PlannedRecipeCard";
+
+interface DayMeal {
+  title: string;
+  index: number;
+}
 
 interface DayColumnProps {
   day: DayInfo;
-  dinnerTitle: string | null;
-  lunchTitle: string | null;
-  onAdd: (dayIndex: number, slot: MealSlot) => void;
-  onRemove: (dayIndex: number, slot: MealSlot) => void;
+  meals: DayMeal[];
+  onAdd: (dayIndex: number) => void;
+  onRemove: (index: number) => void;
 }
 
-export function DayColumn({
-  day,
-  dinnerTitle,
-  lunchTitle,
-  onAdd,
-  onRemove,
-}: DayColumnProps) {
+export function DayColumn({ day, meals, onAdd, onRemove }: DayColumnProps) {
   return (
     <div
       className={[
@@ -43,31 +40,23 @@ export function DayColumn({
         </span>
       </div>
 
-      {/* Dinner — always present */}
-      <MealSlotCard
-        label="Dinner"
-        recipeTitle={dinnerTitle}
-        onAdd={() => onAdd(day.index, "dinner")}
-        onRemove={() => onRemove(day.index, "dinner")}
-      />
-
-      {/* Lunch — optional */}
-      {lunchTitle !== null ? (
-        <MealSlotCard
-          label="Lunch"
-          recipeTitle={lunchTitle}
-          onAdd={() => onAdd(day.index, "lunch")}
-          onRemove={() => onRemove(day.index, "lunch")}
+      {/* Planned recipes — however many */}
+      {meals.map((meal) => (
+        <PlannedRecipeCard
+          key={meal.index}
+          recipeTitle={meal.title}
+          onRemove={() => onRemove(meal.index)}
         />
-      ) : (
-        <button
-          type="button"
-          onClick={() => onAdd(day.index, "lunch")}
-          className="text-left text-[11px] font-medium text-ink-mute transition-colors hover:text-terra"
-        >
-          + add lunch
-        </button>
-      )}
+      ))}
+
+      {/* Add — always available */}
+      <button
+        type="button"
+        onClick={() => onAdd(day.index)}
+        className="w-full rounded-lg border border-dashed border-line-strong px-2.5 py-2 text-left text-xs font-medium text-ink-mute transition-colors hover:border-terra hover:text-terra"
+      >
+        + Add recipe
+      </button>
     </div>
   );
 }

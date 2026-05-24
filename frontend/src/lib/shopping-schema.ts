@@ -25,7 +25,6 @@ export const AisleGroupSchema = z.object({
 export const ShoppingListResponseSchema = z.object({
   groups: z.array(AisleGroupSchema),
   total_visible: z.number().int(),
-  hidden_pantry_covered: z.number().int(),
 });
 
 // One grocery line item as parsed from a receipt.

@@ -48,6 +48,12 @@ export function ShoppingRow({ item, onCheck, onDelete }: ShoppingRowProps) {
         {item.name}
       </span>
 
+      {item.pantry_covered && (
+        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">
+          in pantry
+        </span>
+      )}
+
       {item.pantry_low && (
         <span className="rounded-full bg-terra-soft px-2 py-0.5 text-[11px] font-medium text-terra">
           low

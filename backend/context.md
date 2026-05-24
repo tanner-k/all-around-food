@@ -14,6 +14,11 @@
 ## Stack
 Python 3.12 + Polars (file-backed; FastAPI planned)
 
+## Runtime requirements
+- `yt-dlp` for fetching supported Instagram/TikTok recipe video media and metadata
+- `ffmpeg` for audio extraction/transcoding before transcription
+- external `whispr` FastAPI service running at `WHISPR_URL` (default `http://localhost:8000`) for speech-to-text; prefer the external service over vendoring Whisper models into this repo
+
 ## Local skills / conventions
 - test-driven-development
 - python-reviewer

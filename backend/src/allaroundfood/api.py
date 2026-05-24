@@ -21,6 +21,7 @@ from allaroundfood.models import (
     PantryStatus,
     Recipe,
     ShoppingListItem,
+    VideoImportResult,
 )
 from allaroundfood.naming import normalize_name
 from allaroundfood.pantry_storage import PantryStore
@@ -31,6 +32,7 @@ from allaroundfood.shopping_logic import (
 )
 from allaroundfood.shopping_storage import ShoppingListStore
 from allaroundfood.storage import RecipeStore
+from allaroundfood.video_import import VideoImportError, fetch_video_text
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 RECIPE_STORE_PATH = DATA_DIR / "recipes.parquet"
@@ -90,6 +92,52 @@ def _refresh_shopping_flags() -> None:
     rebuilt.save()
 
 
+def _stock_pantry(
+    items: list[ShoppingListItem], pantry: PantryStore, now: datetime
+) -> tuple[PantryStore, int, int]:
+    """Upsert purchased shopping items into the pantry as in-stock.
+
+    Existing pantry items (matched by normalized name) are refreshed to
+    ``in_stock``; unknown items are added, reusing the shopping item's aisle.
+
+    Args:
+        items: The purchased shopping-list items.
+        pantry: The current pantry store.
+        now: Timestamp to stamp on the upserted items.
+
+    Returns:
+        Tuple of (new pantry store, count added, count updated).
+    """
+    added = 0
+    updated = 0
+    for item in items:
+        name = normalize_name(item.name)
+        if not name:
+            continue
+        existing = pantry.get_by_name(name)
+        if existing is None:
+            pantry = pantry.add(
+                PantryItem(
+                    id=str(uuid.uuid4()),
+                    name=name,
+                    status="in_stock",
+                    aisle=item.aisle,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            added += 1
+        else:
+            pantry = pantry.update(
+                existing.id,
+                existing.model_copy(
+                    update={"status": "in_stock", "updated_at": now}
+                ),
+            )
+            updated += 1
+    return pantry, added, updated
+
+
 def _aisle_sort_key(item: PantryItem) -> tuple[int, str]:
     """Sort key ordering pantry items by aisle (AISLE_ORDER) then name."""
     aisle_index = (
@@ -120,6 +168,12 @@ class GenerateShoppingListRequest(BaseModel):
     """Request body for POST /shopping-list/generate."""
 
     recipe_ids: list[str]
+
+
+class VideoImportRequest(BaseModel):
+    """Request body for POST /recipes/parse-video."""
+
+    url: str
 
 
 @app.get("/")
@@ -159,6 +213,26 @@ async def post_recipe(recipe: Recipe) -> Recipe:
     store = RecipeStore.load(store_path).add(recipe)
     store.save()
     return recipe
+
+
+@app.post("/recipes/parse-video")
+async def post_parse_video(req: VideoImportRequest) -> VideoImportResult:
+    """Fetch caption and transcript text from an Instagram or TikTok video URL.
+
+    Args:
+        req: Request with the source video URL.
+
+    Returns:
+        Video import result with caption, transcript, and source metadata.
+
+    Raises:
+        HTTPException: If URL validation, download, audio extraction, or
+            transcription fails.
+    """
+    try:
+        return await fetch_video_text(req.url)
+    except VideoImportError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 @app.get("/recipes")
@@ -451,21 +525,16 @@ async def delete_pantry_item(item_id: str) -> dict[str, str]:
 
 
 @app.get("/shopping-list")
-async def get_shopping_list(include_covered: bool = False) -> dict[str, Any]:
+async def get_shopping_list() -> dict[str, Any]:
     """Get the shopping list grouped by aisle.
 
-    Pantry-covered items are hidden unless ``include_covered`` is true.
-
-    Args:
-        include_covered: When true, include pantry-covered items in groups.
+    All items are returned; pantry stock status is carried on each item.
 
     Returns:
-        Dict with ``groups``, ``total_visible``, ``hidden_pantry_covered``.
+        Dict with ``groups`` and ``total_visible``.
     """
     store = ShoppingListStore.load(_get_shopping_store_path())
-    return build_shopping_list_response(
-        store.all(), include_covered=include_covered
-    )
+    return build_shopping_list_response(store.all())
 
 
 @app.post("/shopping-list/items")
@@ -536,16 +605,48 @@ async def post_generate_shopping_list(
 
 @app.delete("/shopping-list/checked")
 async def delete_shopping_checked() -> dict[str, Any]:
-    """Remove all checked items from the shopping list.
+    """Mark checked items as bought: stock them into the pantry, then remove.
 
     Returns:
-        Dict with the number of items removed.
+        Dict with the number removed and pantry add/update counts.
     """
     store = ShoppingListStore.load(_get_shopping_store_path())
-    before = len(store.all())
-    store = store.clear_checked()
-    store.save()
-    return {"status": "cleared", "removed": before - len(store.all())}
+    checked = [item for item in store.all() if item.checked]
+    pantry, added, updated = _stock_pantry(
+        checked, PantryStore.load(_get_pantry_store_path()), datetime.now(UTC)
+    )
+    pantry.save()
+    store.clear_checked().save()
+    _refresh_shopping_flags()
+    return {
+        "status": "cleared",
+        "removed": len(checked),
+        "pantry_added": added,
+        "pantry_updated": updated,
+    }
+
+
+@app.post("/shopping-list/complete")
+async def complete_shopping() -> dict[str, Any]:
+    """Complete the whole list: stock every item into the pantry, then clear.
+
+    Returns:
+        Dict with the number removed and pantry add/update counts.
+    """
+    store = ShoppingListStore.load(_get_shopping_store_path())
+    items = store.all()
+    pantry, added, updated = _stock_pantry(
+        items, PantryStore.load(_get_pantry_store_path()), datetime.now(UTC)
+    )
+    pantry.save()
+    store.clear_all().save()
+    _refresh_shopping_flags()
+    return {
+        "status": "completed",
+        "removed": len(items),
+        "pantry_added": added,
+        "pantry_updated": updated,
+    }
 
 
 @app.put("/shopping-list/items/{item_id}")

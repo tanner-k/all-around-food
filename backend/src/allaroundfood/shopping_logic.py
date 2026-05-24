@@ -21,8 +21,8 @@ def compute_pantry_flags(
 ) -> ShoppingListItem:
     """Return a copy of ``item`` with pantry flags recomputed.
 
-    An ``in_stock`` pantry match marks the item as covered (hidden from the
-    list); a ``low`` match flags it; ``out`` or no match leaves it to buy.
+    An ``in_stock`` pantry match marks the item as covered; a ``low`` match
+    flags it as low; ``out`` or no match leaves it as a plain to-buy item.
 
     Args:
         item: The shopping-list item.
@@ -116,36 +116,26 @@ def aggregate_recipe_ingredients(
 
 
 def build_shopping_list_response(
-    items: list[ShoppingListItem], *, include_covered: bool = False
+    items: list[ShoppingListItem],
 ) -> dict[str, Any]:
     """Build the grouped-by-aisle shopping-list response.
 
-    Pantry-covered items are excluded from the groups unless
-    ``include_covered`` is set, but always counted in
-    ``hidden_pantry_covered``.
+    Every item is included, regardless of pantry state — pantry-covered and
+    low items stay on the list so it doubles as a pantry check (their stock
+    status is surfaced via the ``pantry_covered``/``pantry_low`` flags).
 
     Args:
         items: All shopping-list items.
-        include_covered: When True, keep pantry-covered items in the groups.
 
     Returns:
-        Dict with ``groups``, ``total_visible``, and ``hidden_pantry_covered``.
+        Dict with ``groups`` and ``total_visible``.
     """
-    hidden = sum(1 for item in items if item.pantry_covered)
-    visible = (
-        items if include_covered else [i for i in items if not i.pantry_covered]
-    )
-
     groups: list[dict[str, Any]] = []
     for aisle in AISLE_ORDER:
         aisle_items = sorted(
-            (i for i in visible if i.aisle == aisle), key=lambda i: i.name
+            (i for i in items if i.aisle == aisle), key=lambda i: i.name
         )
         if aisle_items:
             groups.append({"aisle": aisle, "items": aisle_items})
 
-    return {
-        "groups": groups,
-        "total_visible": len(visible),
-        "hidden_pantry_covered": hidden,
-    }
+    return {"groups": groups, "total_visible": len(items)}

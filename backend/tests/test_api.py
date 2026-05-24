@@ -108,6 +108,29 @@ def test_post_recipe_then_get(client: TestClient) -> None:
     assert recipes[0]["id"] == "recipe-1"
 
 
+def test_parse_video_maps_pipeline_errors(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POST /recipes/parse-video returns friendly pipeline errors."""
+    from allaroundfood.video_import import VideoImportError
+
+    async def fake_fetch(url: str) -> None:
+        assert url == "https://example.com/video"
+        raise VideoImportError(
+            "Video import currently supports Instagram and TikTok links only.",
+            status_code=422,
+        )
+
+    monkeypatch.setattr("allaroundfood.api.fetch_video_text", fake_fetch)
+
+    response = client.post(
+        "/recipes/parse-video", json={"url": "https://example.com/video"}
+    )
+
+    assert response.status_code == 422
+    assert "Instagram and TikTok" in response.json()["detail"]
+
+
 def test_get_recipe_by_id(client: TestClient) -> None:
     """POST a recipe and GET /recipes/{recipe_id} returns it."""
     recipe_data = {
@@ -717,21 +740,23 @@ def test_generate_preserves_manual_items(client: TestClient) -> None:
     assert names == ["flour", "paper towels"]  # manual kept, flour not doubled
 
 
-def test_pantry_subtraction_hides_in_stock_items(client: TestClient) -> None:
-    """An in_stock pantry item is hidden from the shopping list."""
+def test_pantry_in_stock_item_stays_visible_flagged(client: TestClient) -> None:
+    """An in_stock pantry item stays on the list, flagged pantry_covered."""
     client.post("/recipes", json=_recipe_payload("r-1", ["flour", "salt"]))
     # flour is in stock; salt is not in the pantry
     client.post("/pantry", json={"id": "", "name": "flour"})
 
-    response = client.post(
+    body = client.post(
         "/shopping-list/generate", json={"recipe_ids": ["r-1"]}
-    )
-    body = response.json()
-    visible_names = [
-        item["name"] for group in body["groups"] for item in group["items"]
-    ]
-    assert visible_names == ["salt"]  # flour hidden (on hand)
-    assert body["hidden_pantry_covered"] == 1
+    ).json()
+    items = {
+        item["name"]: item
+        for group in body["groups"]
+        for item in group["items"]
+    }
+    assert set(items) == {"flour", "salt"}
+    assert items["flour"]["pantry_covered"] is True
+    assert items["salt"]["pantry_covered"] is False
 
 
 def test_pantry_low_item_shown_with_flag(client: TestClient) -> None:
@@ -750,23 +775,24 @@ def test_pantry_low_item_shown_with_flag(client: TestClient) -> None:
 
 
 def test_pantry_status_change_refreshes_shopping_list(client: TestClient) -> None:
-    """Marking a pantry item out re-exposes a previously hidden shopping item."""
+    """Changing pantry status updates the shopping item's pantry_covered flag."""
     client.post("/recipes", json=_recipe_payload("r-1", ["flour"]))
     pantry_item = client.post("/pantry", json={"id": "", "name": "flour"}).json()
     client.post("/shopping-list/generate", json={"recipe_ids": ["r-1"]})
 
-    # Initially hidden (in stock)
-    assert client.get("/shopping-list").json()["total_visible"] == 0
+    # In stock: flour stays on the list, flagged as covered
+    flour = client.get("/shopping-list").json()["groups"][0]["items"][0]
+    assert flour["name"] == "flour"
+    assert flour["pantry_covered"] is True
 
-    # Mark it out — shopping list should now show flour
+    # Mark it out — flour becomes a plain to-buy item
     client.patch(f"/pantry/{pantry_item['id']}/status", json={"status": "out"})
-    body = client.get("/shopping-list").json()
-    assert body["total_visible"] == 1
-    assert body["groups"][0]["items"][0]["name"] == "flour"
+    flour = client.get("/shopping-list").json()["groups"][0]["items"][0]
+    assert flour["pantry_covered"] is False
 
 
 def test_delete_shopping_checked(client: TestClient) -> None:
-    """DELETE /shopping-list/checked removes only checked items."""
+    """DELETE /shopping-list/checked removes checked items and stocks pantry."""
     keep = client.post(
         "/shopping-list/items", json={"id": "", "name": "milk"}
     ).json()
@@ -779,7 +805,9 @@ def test_delete_shopping_checked(client: TestClient) -> None:
 
     response = client.delete("/shopping-list/checked")
     assert response.status_code == 200
-    assert response.json()["removed"] == 1
+    payload = response.json()
+    assert payload["removed"] == 1
+    assert payload["pantry_added"] == 1
 
     remaining = [
         item["id"]
@@ -787,6 +815,50 @@ def test_delete_shopping_checked(client: TestClient) -> None:
         for item in group["items"]
     ]
     assert remaining == [keep["id"]]
+
+    pantry_names = {item["name"] for item in client.get("/pantry").json()}
+    assert "eggs" in pantry_names
+    assert "milk" not in pantry_names  # unchecked item not stocked
+
+
+def test_delete_shopping_checked_refreshes_existing_pantry_item(
+    client: TestClient,
+) -> None:
+    """Buying an item already in the pantry refreshes it to in_stock."""
+    existing = client.post("/pantry", json={"id": "", "name": "butter"}).json()
+    client.patch(f"/pantry/{existing['id']}/status", json={"status": "out"})
+
+    item = client.post(
+        "/shopping-list/items", json={"id": "", "name": "butter"}
+    ).json()
+    client.patch(
+        f"/shopping-list/items/{item['id']}/check", json={"checked": True}
+    )
+
+    payload = client.delete("/shopping-list/checked").json()
+    assert payload["pantry_updated"] == 1
+    assert payload["pantry_added"] == 0
+
+    butter = next(
+        p for p in client.get("/pantry").json() if p["name"] == "butter"
+    )
+    assert butter["status"] == "in_stock"
+
+
+def test_complete_shopping_stocks_pantry_and_clears(client: TestClient) -> None:
+    """POST /shopping-list/complete moves the whole list into the pantry."""
+    client.post("/shopping-list/items", json={"id": "", "name": "milk"})
+    client.post("/shopping-list/items", json={"id": "", "name": "eggs"})
+
+    response = client.post("/shopping-list/complete")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["removed"] == 2
+    assert payload["pantry_added"] == 2
+
+    assert client.get("/shopping-list").json()["total_visible"] == 0
+    pantry_names = {item["name"] for item in client.get("/pantry").json()}
+    assert {"milk", "eggs"} <= pantry_names
 
 
 # --- Meal-plan endpoints ---
@@ -806,8 +878,8 @@ def test_put_then_get_meal_plan(client: TestClient) -> None:
     plan = {
         "week_of": "2026-05-18",
         "meals": [
-            {"day_index": 0, "slot": "dinner", "recipe_id": "r-1"},
-            {"day_index": 2, "slot": "lunch", "recipe_id": "r-2"},
+            {"day_index": 0, "recipe_id": "r-1"},
+            {"day_index": 2, "recipe_id": "r-2"},
         ],
     }
     put = client.put("/meal-plans/2026-05-18", json=plan)
@@ -817,7 +889,27 @@ def test_put_then_get_meal_plan(client: TestClient) -> None:
     body = client.get("/meal-plans/2026-05-18").json()
     assert len(body["meals"]) == 2
     assert body["meals"][0]["recipe_id"] == "r-1"
-    assert body["meals"][1]["slot"] == "lunch"
+    assert body["meals"][1]["recipe_id"] == "r-2"
+
+
+def test_put_meal_plan_allows_multiple_recipes_per_day(
+    client: TestClient,
+) -> None:
+    """A day can hold any number of recipes, including duplicates."""
+    plan = {
+        "week_of": "2026-05-18",
+        "meals": [
+            {"day_index": 4, "recipe_id": "main"},
+            {"day_index": 4, "recipe_id": "dessert"},
+            {"day_index": 4, "recipe_id": "main"},
+        ],
+    }
+    put = client.put("/meal-plans/2026-05-18", json=plan)
+    assert put.status_code == 200
+
+    body = client.get("/meal-plans/2026-05-18").json()
+    day_four = [m["recipe_id"] for m in body["meals"] if m["day_index"] == 4]
+    assert day_four == ["main", "dessert", "main"]
 
 
 def test_put_meal_plan_replaces_week(client: TestClient) -> None:
@@ -826,14 +918,14 @@ def test_put_meal_plan_replaces_week(client: TestClient) -> None:
         "/meal-plans/2026-05-18",
         json={
             "week_of": "2026-05-18",
-            "meals": [{"day_index": 0, "slot": "dinner", "recipe_id": "old"}],
+            "meals": [{"day_index": 0, "recipe_id": "old"}],
         },
     )
     client.put(
         "/meal-plans/2026-05-18",
         json={
             "week_of": "2026-05-18",
-            "meals": [{"day_index": 1, "slot": "dinner", "recipe_id": "new"}],
+            "meals": [{"day_index": 1, "recipe_id": "new"}],
         },
     )
 
@@ -858,7 +950,7 @@ def test_put_meal_plan_rejects_bad_day_index(client: TestClient) -> None:
         "/meal-plans/2026-05-18",
         json={
             "week_of": "2026-05-18",
-            "meals": [{"day_index": 9, "slot": "dinner", "recipe_id": "r-1"}],
+            "meals": [{"day_index": 9, "recipe_id": "r-1"}],
         },
     )
     assert response.status_code == 422
