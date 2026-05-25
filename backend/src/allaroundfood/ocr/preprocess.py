@@ -25,6 +25,11 @@ class PreprocessedReceipt(BaseModel):
         original_path: Path to the original input file.
         page_images: Preprocessed PNG paths (one per page for PDFs).
         is_multipage: True when the input produced more than one image.
+        temp_dir: Set when ``preprocess_receipt`` created an internal temp
+            directory (i.e. no ``output_dir`` was provided). The caller is
+            responsible for cleaning it up via ``shutil.rmtree`` or a
+            ``tempfile.TemporaryDirectory`` context manager. ``None`` when the
+            caller supplied their own ``output_dir``.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -32,6 +37,7 @@ class PreprocessedReceipt(BaseModel):
     original_path: Path
     page_images: list[Path]
     is_multipage: bool
+    temp_dir: Path | None = None
 
 
 def _preprocess_pil_image(img: Image.Image, output_path: Path) -> Path:
@@ -62,21 +68,29 @@ def _preprocess_pil_image(img: Image.Image, output_path: Path) -> Path:
     return output_path
 
 
-def preprocess_receipt(input_path: Path) -> list[Path]:
+def preprocess_receipt(
+    input_path: Path,
+    *,
+    output_dir: Path | None = None,
+) -> PreprocessedReceipt:
     """Preprocess a receipt image or PDF into one or more PNG images.
 
     PDFs are split into one image per page. Images are deskewed (via EXIF
     orientation), converted to grayscale, and contrast-normalized.
 
-    Output images are written into a temporary directory. Callers are
-    responsible for cleanup (or use ``PreprocessedReceipt`` which tracks
-    the paths for later disposal).
-
     Args:
         input_path: Path to the receipt file (.jpg, .jpeg, .png, or .pdf).
+        output_dir: Directory where preprocessed PNGs are written. When
+            provided, the caller owns the directory and is responsible for
+            cleanup. When ``None``, an internal ``tempfile.mkdtemp`` directory
+            is created and its path is returned in
+            ``PreprocessedReceipt.temp_dir`` — the caller must then clean it
+            up (e.g. via ``shutil.rmtree``).
 
     Returns:
-        List of preprocessed PNG file paths.
+        ``PreprocessedReceipt`` containing the page image paths.
+        ``temp_dir`` is ``None`` when *output_dir* was supplied, or the path to
+        the internally-created temp directory otherwise.
 
     Raises:
         ValueError: If the file extension is not supported.
@@ -91,7 +105,13 @@ def preprocess_receipt(input_path: Path) -> list[Path]:
             f"Unsupported file type '{ext}'. Supported: {sorted(_SUPPORTED_EXTENSIONS)}"
         )
 
-    tmp_dir = Path(tempfile.mkdtemp(prefix="ocr_preprocess_"))
+    created_temp_dir: Path | None = None
+    if output_dir is None:
+        created_temp_dir = Path(tempfile.mkdtemp(prefix="ocr_preprocess_"))
+        work_dir = created_temp_dir
+    else:
+        work_dir = output_dir
+
     output_paths: list[Path] = []
 
     if ext == ".pdf":
@@ -99,15 +119,20 @@ def preprocess_receipt(input_path: Path) -> list[Path]:
 
         pages = convert_from_path(str(input_path))
         for page_num, page_img in enumerate(pages, start=1):
-            out = tmp_dir / f"page_{page_num:03d}.png"
+            out = work_dir / f"page_{page_num:03d}.png"
             _preprocess_pil_image(page_img, out)
             output_paths.append(out)
             logger.debug("Preprocessed PDF page %d → %s", page_num, out)
     else:
         img = Image.open(input_path)
-        out = tmp_dir / "page_001.png"
+        out = work_dir / "page_001.png"
         _preprocess_pil_image(img, out)
         output_paths.append(out)
         logger.debug("Preprocessed image %s → %s", input_path, out)
 
-    return output_paths
+    return PreprocessedReceipt(
+        original_path=input_path,
+        page_images=output_paths,
+        is_multipage=len(output_paths) > 1,
+        temp_dir=created_temp_dir,
+    )

@@ -120,7 +120,7 @@ class ReceiptStore:
         )
 
     def _row_to_receipt(self, row: dict[str, Any]) -> Receipt:
-        from datetime import datetime
+        from datetime import UTC, datetime
 
         def _dt(v: Any) -> datetime | None:
             if v is None:
@@ -141,7 +141,7 @@ class ReceiptStore:
             parser_engine=row["parser_engine"],
             llm_model=row["llm_model"],
             parse_confidence=row["parse_confidence"],
-            created_at=_dt(row["created_at"]) or datetime.now(),
+            created_at=_dt(row["created_at"]) or datetime.now(UTC),
             line_items=_json_to_line_items(row["line_items_json"] or "[]"),
         )
 

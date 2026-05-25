@@ -21,26 +21,26 @@ def _make_tiny_png(path: Path) -> None:
 
 
 class TestPreprocessReceipt:
-    def test_png_produces_single_grayscale_image(self) -> None:
+    def test_png_produces_single_grayscale_image(self, tmp_path: Path) -> None:
         """A PNG receipt produces exactly one output image in grayscale mode."""
         tiny = FIXTURE_DIR / "tiny.png"
         _make_tiny_png(tiny)
 
-        results = preprocess_receipt(tiny)
+        result = preprocess_receipt(tiny, output_dir=tmp_path)
 
-        assert len(results) == 1
-        out_img = Image.open(results[0])
+        assert len(result.page_images) == 1
+        out_img = Image.open(result.page_images[0])
         assert out_img.mode == "L"
 
-    def test_output_is_png(self) -> None:
+    def test_output_is_png(self, tmp_path: Path) -> None:
         """Preprocessed output must be a PNG file."""
         tiny = FIXTURE_DIR / "tiny.png"
         _make_tiny_png(tiny)
 
-        results = preprocess_receipt(tiny)
+        result = preprocess_receipt(tiny, output_dir=tmp_path)
 
-        assert results[0].suffix == ".png"
-        img = Image.open(results[0])
+        assert result.page_images[0].suffix == ".png"
+        img = Image.open(result.page_images[0])
         assert img.format == "PNG"
 
     def test_jpeg_preprocesses(self, tmp_path: Path) -> None:
@@ -49,10 +49,12 @@ class TestPreprocessReceipt:
         img = Image.new("RGB", (8, 8), color=(100, 150, 200))
         img.save(jpeg_path, format="JPEG")
 
-        results = preprocess_receipt(jpeg_path)
+        out_dir = tmp_path / "out"
+        out_dir.mkdir()
+        result = preprocess_receipt(jpeg_path, output_dir=out_dir)
 
-        assert len(results) == 1
-        out_img = Image.open(results[0])
+        assert len(result.page_images) == 1
+        out_img = Image.open(result.page_images[0])
         assert out_img.mode == "L"
 
     def test_unsupported_extension_raises(self, tmp_path: Path) -> None:
@@ -61,26 +63,48 @@ class TestPreprocessReceipt:
         bad.write_bytes(b"fake")
 
         with pytest.raises(ValueError, match="Unsupported file type"):
-            preprocess_receipt(bad)
+            preprocess_receipt(bad, output_dir=tmp_path)
 
     def test_missing_file_raises(self, tmp_path: Path) -> None:
         """FileNotFoundError raised when file does not exist."""
         with pytest.raises(FileNotFoundError):
-            preprocess_receipt(tmp_path / "nonexistent.png")
+            preprocess_receipt(tmp_path / "nonexistent.png", output_dir=tmp_path)
 
-    def test_preprocessed_receipt_model(self) -> None:
+    def test_preprocessed_receipt_model(self, tmp_path: Path) -> None:
         """PreprocessedReceipt correctly reports is_multipage."""
         tiny = FIXTURE_DIR / "tiny.png"
         _make_tiny_png(tiny)
 
-        page_images = preprocess_receipt(tiny)
-        receipt = PreprocessedReceipt(
-            original_path=tiny,
-            page_images=page_images,
-            is_multipage=len(page_images) > 1,
-        )
-        assert receipt.is_multipage is False
-        assert len(receipt.page_images) == 1
+        result = preprocess_receipt(tiny, output_dir=tmp_path)
+        assert isinstance(result, PreprocessedReceipt)
+        assert result.is_multipage is False
+        assert len(result.page_images) == 1
+
+    def test_caller_supplied_output_dir_no_temp_dir(self, tmp_path: Path) -> None:
+        """When output_dir is supplied, temp_dir on result is None."""
+        tiny = FIXTURE_DIR / "tiny.png"
+        _make_tiny_png(tiny)
+
+        result = preprocess_receipt(tiny, output_dir=tmp_path)
+
+        assert result.temp_dir is None
+
+    def test_no_output_dir_sets_temp_dir(self) -> None:
+        """When no output_dir given, temp_dir is set and output lives inside it."""
+        import shutil
+
+        tiny = FIXTURE_DIR / "tiny.png"
+        _make_tiny_png(tiny)
+
+        result = preprocess_receipt(tiny)
+        try:
+            assert result.temp_dir is not None
+            assert result.temp_dir.exists()
+            for img_path in result.page_images:
+                assert img_path.parent == result.temp_dir
+        finally:
+            if result.temp_dir is not None:
+                shutil.rmtree(result.temp_dir, ignore_errors=True)
 
 
 try:
@@ -104,9 +128,11 @@ def test_pdf_multipage_produces_two_images(tmp_path: Path) -> None:
     c.showPage()
     c.save()
 
-    results = preprocess_receipt(pdf_path)
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    result = preprocess_receipt(pdf_path, output_dir=out_dir)
 
-    assert len(results) == 2
-    for result in results:
-        out_img = Image.open(result)
+    assert len(result.page_images) == 2
+    for img_path in result.page_images:
+        out_img = Image.open(img_path)
         assert out_img.mode == "L"

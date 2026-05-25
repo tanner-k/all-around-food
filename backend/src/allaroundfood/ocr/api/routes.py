@@ -21,7 +21,7 @@ from allaroundfood.ocr.api.deps import (
 )
 from allaroundfood.ocr.models import Receipt
 from allaroundfood.ocr.parser import ReceiptParseError, ReceiptParser
-from allaroundfood.ocr.preprocess import PreprocessedReceipt, preprocess_receipt
+from allaroundfood.ocr.preprocess import preprocess_receipt
 from allaroundfood.ocr.receipt_store import ReceiptStore
 from allaroundfood.ocr.to_observations import map_receipt_to_observations
 from allaroundfood.pricing.api.envelope import ApiResponse
@@ -110,15 +110,9 @@ async def post_parse_receipt(
         upload_path.write_bytes(contents)
 
         try:
-            page_images = preprocess_receipt(upload_path)
+            preprocessed = preprocess_receipt(upload_path, output_dir=tmp_dir)
         except (ValueError, FileNotFoundError) as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-        preprocessed = PreprocessedReceipt(
-            original_path=upload_path,
-            page_images=page_images,
-            is_multipage=len(page_images) > 1,
-        )
 
         try:
             receipt = parser.parse(preprocessed)

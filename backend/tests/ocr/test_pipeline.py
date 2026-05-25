@@ -13,7 +13,7 @@ from pathlib import Path
 from PIL import Image
 
 from allaroundfood.ocr.parser import ReceiptParser
-from allaroundfood.ocr.preprocess import PreprocessedReceipt, preprocess_receipt
+from allaroundfood.ocr.preprocess import preprocess_receipt
 from allaroundfood.ocr.qwen_loader import FakeQwenVLClient
 from allaroundfood.ocr.to_observations import map_receipt_to_observations
 from allaroundfood.pricing.canonical.embeddings import FakeEmbeddingService
@@ -87,12 +87,7 @@ class TestFullPipeline:
         """Full pipeline: preprocess → parse → map produces observations."""
         # 1. Preprocess
         tiny_png = _make_tiny_png()
-        page_images = preprocess_receipt(tiny_png)
-        preprocessed = PreprocessedReceipt(
-            original_path=tiny_png,
-            page_images=page_images,
-            is_multipage=False,
-        )
+        preprocessed = preprocess_receipt(tiny_png, output_dir=tmp_path)
 
         # 2. Parse via FakeQwenVLClient with canned fixture
         canned_text = CANNED_JSON_PATH.read_text()
@@ -124,12 +119,9 @@ class TestFullPipeline:
     def test_pipeline_with_no_matching_products(self, tmp_path: Path) -> None:
         """When no canonical products exist, map returns an empty list."""
         tiny_png = _make_tiny_png()
-        page_images = preprocess_receipt(tiny_png)
-        preprocessed = PreprocessedReceipt(
-            original_path=tiny_png,
-            page_images=page_images,
-            is_multipage=False,
-        )
+        out_dir = tmp_path / "preprocess_out"
+        out_dir.mkdir()
+        preprocessed = preprocess_receipt(tiny_png, output_dir=out_dir)
 
         canned_text = CANNED_JSON_PATH.read_text()
         client = FakeQwenVLClient(canned={"default": canned_text})

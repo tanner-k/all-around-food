@@ -20,11 +20,16 @@ from allaroundfood.pricing.store.price_observation_store import PriceObservation
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_DATA_DIR = Path(__file__).resolve().parents[7] / "data"
-
 
 def _ocr_data_dir() -> Path:
-    return _DEFAULT_DATA_DIR
+    """Return the OCR data directory resolved from Settings.pricing_data_dir.
+
+    ``settings.pricing_data_dir`` defaults to ``Path("data")`` (relative), so
+    it resolves against the current working directory — typically the repo root
+    when the server is started with ``uv run`` from the backend directory.
+    This avoids hardcoding an absolute path that breaks across machines.
+    """
+    return settings.pricing_data_dir.resolve()
 
 
 def get_receipt_parser() -> ReceiptParser:
@@ -46,9 +51,28 @@ def get_receipt_parser() -> ReceiptParser:
 
 
 def get_canonical_matcher() -> CanonicalMatcher:
-    """Return a CanonicalMatcher using the production canonical product store."""
+    """Return a CanonicalMatcher using the production canonical product store.
+
+    Attempts to use the real EmbeddingService (sentence-transformers). Falls
+    back to FakeEmbeddingService with a warning when the optional dependency is
+    not installed — embedding-based matching is disabled in that case and only
+    GTIN/fuzzy matching will work.
+    """
     store = get_canonical_store()
-    embedding = FakeEmbeddingService()
+    embedding: FakeEmbeddingService
+    try:
+        from allaroundfood.pricing.canonical.embeddings import EmbeddingService
+
+        real_embedding = EmbeddingService(model_name=settings.embedding_model_name)
+        return CanonicalMatcher(real_embedding, store)
+    except ImportError:
+        logger.warning(
+            "%s: sentence-transformers/torch not installed — falling back to "
+            "FakeEmbeddingService. Embedding-based matching disabled; only "
+            "GTIN/fuzzy will work. Install sentence-transformers to enable.",
+            __name__,
+        )
+        embedding = FakeEmbeddingService()
     return CanonicalMatcher(embedding, store)
 
 

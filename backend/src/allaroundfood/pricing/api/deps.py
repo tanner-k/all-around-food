@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from allaroundfood.config import settings
 from allaroundfood.pricing.store.canonical_product_store import CanonicalProductStore
 from allaroundfood.pricing.store.price_observation_store import PriceObservationStore
 from allaroundfood.pricing.store.retailer_sku_store import RetailerSKUStore
@@ -17,12 +18,16 @@ from allaroundfood.pricing.store.store_location_store import StoreLocationStore
 # Data directory
 # ---------------------------------------------------------------------------
 
-_DEFAULT_PRICING_DATA_DIR = Path(__file__).resolve().parents[6] / "data" / "pricing"
-
 
 def _pricing_data_dir() -> Path:
-    """Return the pricing data directory (override for tests via monkeypatch)."""
-    return _DEFAULT_PRICING_DATA_DIR
+    """Return the pricing data directory resolved from Settings.pricing_data_dir.
+
+    ``settings.pricing_data_dir`` defaults to ``Path("data")`` (relative), so
+    it resolves against the current working directory — typically the repo root
+    when the server is started with ``uv run`` from the backend directory.
+    This avoids hardcoding an absolute path that breaks across machines.
+    """
+    return settings.pricing_data_dir.resolve() / "pricing"
 
 
 # ---------------------------------------------------------------------------
