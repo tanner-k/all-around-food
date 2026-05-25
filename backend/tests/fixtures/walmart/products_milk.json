@@ -1,0 +1,49 @@
+{
+  "query": "milk",
+  "payload": {
+    "numItems": 24,
+    "items": [
+      {
+        "usItemId": "10452522",
+        "name": "Great Value Whole Milk, 1 Gallon",
+        "brand": "Great Value",
+        "salePrice": 3.98,
+        "priceInfo": {
+          "currentPrice": {
+            "price": 3.98,
+            "priceString": "$3.98"
+          },
+          "wasPrice": null
+        },
+        "imageInfo": {
+          "thumbnailUrl": "https://i5.walmartimages.com/asr/great-value-milk.jpg"
+        },
+        "weightUnit": "GAL",
+        "shortDescription": "Vitamin D whole milk, 1 gallon",
+        "productUrl": "/ip/Great-Value-Whole-Milk-Gallon/10452522"
+      },
+      {
+        "usItemId": "20983711",
+        "name": "Organic Valley Whole Milk, Half Gallon",
+        "brand": "Organic Valley",
+        "salePrice": 6.48,
+        "priceInfo": {
+          "currentPrice": {
+            "price": 6.48,
+            "priceString": "$6.48"
+          },
+          "wasPrice": {
+            "price": 7.98,
+            "priceString": "$7.98"
+          }
+        },
+        "imageInfo": {
+          "thumbnailUrl": "https://i5.walmartimages.com/asr/organic-valley-milk.jpg"
+        },
+        "weightUnit": "0.5 GAL",
+        "shortDescription": "USDA Organic whole milk",
+        "productUrl": "/ip/Organic-Valley-Whole-Milk-Half-Gallon/20983711"
+      }
+    ]
+  }
+}

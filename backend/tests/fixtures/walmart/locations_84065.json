@@ -1,0 +1,38 @@
+{
+  "payload": {
+    "stores": [
+      {
+        "id": "2648",
+        "displayName": "Walmart Supercenter",
+        "address": {
+          "address": "1365 W Beacon Dr",
+          "city": "Riverton",
+          "state": "UT",
+          "postalCode": "84065"
+        },
+        "geoPoint": {
+          "latitude": 40.520341,
+          "longitude": -111.966789
+        },
+        "distance": 1.2,
+        "services": ["PickupTodayCheckout", "DeliveryCheckout"]
+      },
+      {
+        "id": "2915",
+        "displayName": "Walmart Neighborhood Market",
+        "address": {
+          "address": "11180 S Redwood Rd",
+          "city": "South Jordan",
+          "state": "UT",
+          "postalCode": "84095"
+        },
+        "geoPoint": {
+          "latitude": 40.556102,
+          "longitude": -111.929045
+        },
+        "distance": 3.8,
+        "services": ["DeliveryCheckout"]
+      }
+    ]
+  }
+}
