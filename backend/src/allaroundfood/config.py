@@ -35,5 +35,8 @@ class Settings(BaseSettings):
     # Where pricing Parquet files live
     pricing_data_dir: Path = Path("data")
 
+    # Path to Qwen2-VL GGUF model for OCR pipeline (set QWEN_GGUF_PATH env var)
+    qwen_gguf_path: Path | None = None
+
 
 settings = Settings()
