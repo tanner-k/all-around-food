@@ -86,7 +86,7 @@ class QwenVLClient:
         if self._llama is not None:
             return self._llama
 
-        from llama_cpp import Llama  # type: ignore[import-untyped]
+        from llama_cpp import Llama
 
         kwargs: dict[str, Any] = {
             "model_path": str(self._gguf_path),

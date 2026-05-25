@@ -138,7 +138,7 @@ class ReceiptStore:
             tax_cents=row["tax_cents"],
             total_cents=row["total_cents"],
             raw_text=row["raw_text"],
-            parser_engine=row["parser_engine"],  # type: ignore[arg-type]
+            parser_engine=row["parser_engine"],
             llm_model=row["llm_model"],
             parse_confidence=row["parse_confidence"],
             created_at=_dt(row["created_at"]) or datetime.now(),

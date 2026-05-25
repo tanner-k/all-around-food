@@ -16,7 +16,6 @@ from allaroundfood.ocr.receipt_store import ReceiptStore
 from allaroundfood.pricing.api.deps import get_canonical_store
 from allaroundfood.pricing.canonical.embeddings import FakeEmbeddingService
 from allaroundfood.pricing.canonical.matcher import CanonicalMatcher
-from allaroundfood.pricing.store.canonical_product_store import CanonicalProductStore
 from allaroundfood.pricing.store.price_observation_store import PriceObservationStore
 
 logger = logging.getLogger(__name__)

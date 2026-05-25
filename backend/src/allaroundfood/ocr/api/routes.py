@@ -26,7 +26,6 @@ from allaroundfood.ocr.receipt_store import ReceiptStore
 from allaroundfood.ocr.to_observations import map_receipt_to_observations
 from allaroundfood.pricing.api.envelope import ApiResponse
 from allaroundfood.pricing.canonical.matcher import CanonicalMatcher
-from allaroundfood.pricing.models import PriceObservation
 from allaroundfood.pricing.store.price_observation_store import PriceObservationStore
 
 logger = logging.getLogger(__name__)

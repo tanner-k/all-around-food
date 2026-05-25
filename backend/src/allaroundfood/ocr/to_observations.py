@@ -11,7 +11,7 @@ import logging
 import uuid
 from datetime import datetime
 
-from allaroundfood.ocr.models import Receipt, ReceiptLineItem
+from allaroundfood.ocr.models import Receipt
 from allaroundfood.pricing.canonical.matcher import CanonicalMatcher, MatchQuery
 from allaroundfood.pricing.models import PriceObservation
 

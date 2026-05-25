@@ -10,7 +10,6 @@ import json
 import logging
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 
 from allaroundfood.ocr._prompts import build_parse_messages
@@ -165,7 +164,13 @@ class ReceiptParser:
 def _int_or_none(val: object) -> int | None:
     if val is None:
         return None
-    try:
-        return int(val)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return None
+    if isinstance(val, int):
+        return val
+    if isinstance(val, float):
+        return int(val)
+    if isinstance(val, str):
+        try:
+            return int(val)
+        except ValueError:
+            return None
+    return None

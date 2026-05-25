@@ -95,7 +95,7 @@ def preprocess_receipt(input_path: Path) -> list[Path]:
     output_paths: list[Path] = []
 
     if ext == ".pdf":
-        from pdf2image import convert_from_path  # type: ignore[import-untyped]
+        from pdf2image import convert_from_path
 
         pages = convert_from_path(str(input_path))
         for page_num, page_img in enumerate(pages, start=1):
