@@ -78,7 +78,8 @@ class EmbeddingService:
         Returns:
             Float32 array of shape (384,).
         """
-        return self.embed([text])[0]
+        result: np.ndarray = self.embed([text])[0]
+        return result
 
 
 class FakeEmbeddingService:
