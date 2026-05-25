@@ -13,6 +13,8 @@ dependencies = [
     "pyzipcode>=3.0",
     "tenacity>=9.0",
     "pydantic-settings>=2.6",
+    "playwright>=1.48",
+    "playwright-stealth>=1.0.6",
 ]
 
 [dependency-groups]
