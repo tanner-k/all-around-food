@@ -1,0 +1,78 @@
+{
+  "data": [
+    {
+      "productId": "0001111041700",
+      "aisleLocations": [],
+      "brand": "Kroger",
+      "categories": ["Dairy"],
+      "countryOrigin": "USA",
+      "description": "Kroger Vitamin D Whole Milk",
+      "images": [],
+      "items": [
+        {
+          "itemId": "0001111041700",
+          "favorite": false,
+          "fulfillment": {
+            "curbside": true,
+            "delivery": true,
+            "inStore": true,
+            "shipToHome": false
+          },
+          "price": {
+            "regular": 4.99,
+            "promo": 0.0
+          },
+          "size": "1 gal",
+          "soldBy": "UNIT"
+        }
+      ],
+      "itemInformation": {
+        "depth": "",
+        "height": "",
+        "width": ""
+      },
+      "temperature": {
+        "indicator": "Refrigerated",
+        "heatSensitive": true
+      },
+      "upc": "0001111041700"
+    },
+    {
+      "productId": "0001111090311",
+      "aisleLocations": [],
+      "brand": "Organic Valley",
+      "categories": ["Dairy", "Organic"],
+      "countryOrigin": "USA",
+      "description": "Organic Valley Whole Milk Organic",
+      "images": [],
+      "items": [
+        {
+          "itemId": "0001111090311",
+          "favorite": false,
+          "fulfillment": {
+            "curbside": true,
+            "delivery": true,
+            "inStore": true,
+            "shipToHome": false
+          },
+          "price": {
+            "regular": 7.49,
+            "promo": 5.99
+          },
+          "size": "0.5 gal",
+          "soldBy": "UNIT"
+        }
+      ],
+      "itemInformation": {
+        "depth": "",
+        "height": "",
+        "width": ""
+      },
+      "temperature": {
+        "indicator": "Refrigerated",
+        "heatSensitive": true
+      },
+      "upc": "0001111090311"
+    }
+  ]
+}
