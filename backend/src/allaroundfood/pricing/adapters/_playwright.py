@@ -137,38 +137,42 @@ class PlaywrightRunner:
             try:
                 async with async_playwright() as pw:
                     browser = await pw.chromium.launch(headless=effective_headless)
-                    context = await browser.new_context()
+                    try:
+                        context = await browser.new_context()
+                        try:
+                            if cookies:
+                                from urllib.parse import urlparse
 
-                    if cookies:
-                        from urllib.parse import urlparse
+                                parsed = urlparse(url)
+                                domain = parsed.hostname or ""
+                                await context.add_cookies(
+                                    [
+                                        {
+                                            "name": name,
+                                            "value": value,
+                                            "domain": domain,
+                                            "path": "/",
+                                        }
+                                        for name, value in cookies.items()
+                                    ]
+                                )
 
-                        parsed = urlparse(url)
-                        domain = parsed.hostname or ""
-                        await context.add_cookies(
-                            [
-                                {
-                                    "name": name,
-                                    "value": value,
-                                    "domain": domain,
-                                    "path": "/",
-                                }
-                                for name, value in cookies.items()
-                            ]
-                        )
+                            page = await context.new_page()
+                            await stealth_async(page)
 
-                    page = await context.new_page()
-                    await stealth_async(page)
+                            if headers:
+                                await page.set_extra_http_headers(headers)
 
-                    if headers:
-                        await page.set_extra_http_headers(headers)
+                            response = await page.goto(url, timeout=timeout_ms)
 
-                    response = await page.goto(url, timeout=timeout_ms)
+                            if response is None:
+                                raise PlaywrightFallbackError(url, RuntimeError("No response"))
 
-                    if response is None:
-                        raise PlaywrightFallbackError(url, RuntimeError("No response"))
-
-                    body = await response.body()
-                    await browser.close()
+                            body = await response.body()
+                        finally:
+                            await context.close()
+                    finally:
+                        await browser.close()
 
                     try:
                         return json.loads(body)  # type: ignore[no-any-return]

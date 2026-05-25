@@ -127,9 +127,12 @@ async def test_search_products_detects_promo(monkeypatch: pytest.MonkeyPatch) ->
             quotes = await adapter.search_products("instacart-smiths", "milk")
 
     # Second product: promo=true, price=3.99, original=4.99
+    # Convention: price_cents = sale price customer pays; promo_price_cents = same sale price.
     promo_quote = quotes[1]
     assert promo_quote.was_on_promo is True
-    assert promo_quote.promo_price_cents == 399
+    assert promo_quote.price_cents == 399  # customer pays sale price
+    assert promo_quote.promo_price_cents == 399  # equals price_cents when on promo
+    assert promo_quote.raw["original_price_cents"] == 499  # original stored in raw
 
 
 @pytest.mark.asyncio

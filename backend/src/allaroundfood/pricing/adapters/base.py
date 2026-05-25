@@ -22,9 +22,9 @@ class PriceQuote(BaseModel):
     title: str
     brand: str | None
     size_raw: str | None
-    price_cents: int
+    price_cents: int  # Current price the customer pays (sale price if on promo).
     was_on_promo: bool
-    promo_price_cents: int | None
+    promo_price_cents: int | None  # Equals price_cents when was_on_promo=True; None otherwise.
     url: str | None
     raw: dict[str, Any]
 
@@ -47,7 +47,7 @@ class RetailerAdapter(Protocol):
 
     async def search_products(
         self,
-        location_id: str,
+        store_location_id: str,
         term: str,
         limit: int = 20,
     ) -> list[PriceQuote]:

@@ -175,14 +175,14 @@ class KrogerAdapter:
     )
     async def search_products(
         self,
-        location_id: str,
+        store_location_id: str,
         term: str,
         limit: int = 20,
     ) -> list[PriceQuote]:
         """Search for products at a specific Kroger store location.
 
         Args:
-            location_id: Kroger store location ID.
+            store_location_id: Kroger store location ID.
             term: Search query string.
             limit: Maximum results to return (default 20).
 
@@ -198,7 +198,7 @@ class KrogerAdapter:
             _PRODUCTS_URL,
             headers=headers,
             params={
-                "filter.locationId": location_id,
+                "filter.locationId": store_location_id,
                 "filter.term": term,
                 "filter.limit": str(limit),
             },
@@ -206,7 +206,7 @@ class KrogerAdapter:
         response.raise_for_status()
         payload: dict[str, Any] = response.json()
         return [
-            self._parse_product(location_id, item)
+            self._parse_product(store_location_id, item)
             for item in payload.get("data", [])
         ]
 

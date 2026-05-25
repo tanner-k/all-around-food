@@ -342,24 +342,28 @@ class InstacartAdapter:
         original_str = pricing.get("original_price")
         is_promo = bool(pricing.get("promo", False))
 
-        price_cents = round(float(price_str) * 100)
+        sale_price_cents = round(float(price_str) * 100)
         original_price_cents = (
             round(float(original_str) * 100) if original_str else None
         )
 
-        # Promo when the item is flagged AND has a higher original price
+        # Promo when the item is flagged AND has a higher original price.
+        # Convention: price_cents = current price customer pays (= sale price on promo).
+        # promo_price_cents = sale price when was_on_promo=True; None otherwise.
         was_on_promo = is_promo and (
-            original_price_cents is not None and original_price_cents > price_cents
+            original_price_cents is not None and original_price_cents > sale_price_cents
         )
-        promo_price_cents = price_cents if was_on_promo else None
-        display_price_cents = (
-            original_price_cents if was_on_promo and original_price_cents else price_cents
-        )
+        price_cents = sale_price_cents  # customer always pays the sale price
+        promo_price_cents = sale_price_cents if was_on_promo else None
 
         page_path = data.get("product_page_path")
         url = f"https://www.instacart.com{page_path}" if page_path else None
 
         source_retailer: str = data.get("source_retailer", "")
+
+        raw_extra: dict[str, Any] = {"source_retailer": source_retailer}
+        if was_on_promo and original_price_cents is not None:
+            raw_extra["original_price_cents"] = original_price_cents
 
         return PriceQuote(
             retailer="instacart",
@@ -369,9 +373,9 @@ class InstacartAdapter:
             title=data.get("name", ""),
             brand=data.get("brand_name") or None,
             size_raw=data.get("size") or None,
-            price_cents=display_price_cents,
+            price_cents=price_cents,
             was_on_promo=was_on_promo,
             promo_price_cents=promo_price_cents,
             url=url,
-            raw={**data, "source_retailer": source_retailer},
+            raw={**data, **raw_extra},
         )
