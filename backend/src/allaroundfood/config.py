@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Kill-switch: set True to disable all unofficial scraping adapters
     disable_unofficial_ingestion: bool = False
 
+    # Embedding model for canonical product matching
+    embedding_model_name: str = "BAAI/bge-small-en-v1.5"
+
     # Where pricing Parquet files live
     pricing_data_dir: Path = Path("data")
 

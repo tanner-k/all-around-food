@@ -15,6 +15,10 @@ dependencies = [
     "pydantic-settings>=2.6",
     "playwright>=1.48",
     "playwright-stealth>=1.0.6",
+    "sentence-transformers>=3.3",
+    "torch>=2.5",
+    "numpy>=2.1",
+    "rapidfuzz>=3.10",
 ]
 
 [dependency-groups]
@@ -50,4 +54,5 @@ files = ["src/allaroundfood"]
 [tool.pytest.ini_options]
 markers = [
     "network: tests that call external network services or local out-of-process services",
+    "slow: tests that are slow (e.g. download a real ML model); skipped by default",
 ]
