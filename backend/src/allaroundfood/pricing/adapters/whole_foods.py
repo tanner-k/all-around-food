@@ -218,8 +218,14 @@ class WholeFoodsAdapter:
         """
         client = await self._client()
         # TODO(reverse-engineer): replace with actual GraphQL query string.
+        _gql = (
+            "query StoreSearch($zip: String!, $radius: Int!) {"
+            " storeSearch(zip: $zip, radius: $radius) {"
+            " stores { id name address { street city state postalCode }"
+            " coordinates { lat lng } phone } } }"
+        )
         graphql_body: dict[str, Any] = {
-            "query": "query StoreSearch($zip: String!, $radius: Int!) { storeSearch(zip: $zip, radius: $radius) { stores { id name address { street city state postalCode } coordinates { lat lng } phone } } }",
+            "query": _gql,
             "variables": {"zip": zip_code, "radius": radius_miles},
         }
         try:

@@ -21,11 +21,9 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any
 
 from allaroundfood.config import Settings
-
-F = TypeVar("F", bound=Callable[..., Any])
 
 
 class UnofficialIngestionDisabledError(RuntimeError):
@@ -36,7 +34,7 @@ class UnofficialIngestionDisabledError(RuntimeError):
     """
 
 
-def unofficial_only(fn: F) -> F:
+def unofficial_only[F: Callable[..., Any]](fn: F) -> F:
     """Decorator that raises ``UnofficialIngestionDisabledError`` when the kill-switch is on.
 
     Apply to an adapter's ``__init__`` method.  The check runs once, at

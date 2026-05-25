@@ -120,9 +120,7 @@ class PlaywrightRunner:
         # Import here to keep module importable even when playwright is not
         # installed.  Callers that land here must have playwright installed.
         try:
-            from playwright.async_api import (  # type: ignore[import-untyped]
-                async_playwright,
-            )
+            from playwright.async_api import async_playwright
             from playwright_stealth import stealth_async  # type: ignore[import-untyped]
         except ImportError as exc:
             raise PlaywrightFallbackError(
