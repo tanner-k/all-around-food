@@ -69,6 +69,16 @@ class CanonicalMatcher:
         self._threshold = threshold
         self._fuzzy_threshold = fuzzy_threshold
 
+    @property
+    def threshold(self) -> float:
+        """Minimum cosine similarity for an embedding match."""
+        return self._threshold
+
+    @property
+    def fuzzy_threshold(self) -> int:
+        """Minimum token_set_ratio for a fuzzy match."""
+        return self._fuzzy_threshold
+
     def match(self, query: MatchQuery) -> MatchResult | None:
         """Attempt to match query against the canonical product store.
 
