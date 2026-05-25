@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from allaroundfood.aisles import AISLE_ORDER, categorize
 from allaroundfood.eval_storage import EvalStore
+from allaroundfood.ocr.api import router as ocr_router
 from allaroundfood.pricing.api import router as pricing_router
 from allaroundfood.meal_plan_storage import MealPlanStore
 from allaroundfood.models import (
@@ -45,6 +46,7 @@ MEAL_PLAN_STORE_PATH = DATA_DIR / "meal_plans.parquet"
 app = FastAPI(title="All Around Food", version="0.2.0")
 
 app.include_router(pricing_router)
+app.include_router(ocr_router)
 
 app.add_middleware(
     CORSMiddleware,
