@@ -126,3 +126,37 @@ class RetailerSKUStore:
             if row["id"] == sku_id:
                 return self._row_to_model(row)
         return None
+
+    def update(self, id: str, sku: RetailerSKU) -> RetailerSKUStore:
+        """Return a NEW store with the matching row replaced. Does not mutate self.
+
+        Args:
+            id: The ID of the SKU to replace.
+            sku: The updated RetailerSKU object.
+
+        Returns:
+            New RetailerSKUStore with the SKU updated.
+
+        Raises:
+            KeyError: If no SKU with id is found.
+        """
+        if self.get(id) is None:
+            raise KeyError(id)
+
+        new_df = self._df.filter(pl.col("id") != id)
+        new_row = pl.DataFrame(
+            {
+                "id": [sku.id],
+                "canonical_product_id": [sku.canonical_product_id],
+                "retailer": [sku.retailer],
+                "retailer_sku": [sku.retailer_sku],
+                "url": [sku.url],
+                "title_raw": [sku.title_raw],
+                "size_raw": [sku.size_raw],
+                "last_seen_at": pl.Series([sku.last_seen_at], dtype=pl.Datetime("us", "UTC")),
+                "match_method": [sku.match_method],
+                "match_confidence": [sku.match_confidence],
+                "retailer_meta": [json.dumps(sku.retailer_meta)],
+            }
+        )
+        return RetailerSKUStore(self._path, pl.concat([new_df, new_row]))

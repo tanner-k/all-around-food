@@ -138,3 +138,42 @@ class PriceObservationStore:
             if row["id"] == observation_id:
                 return self._row_to_model(row)
         return None
+
+    def update(self, id: str, observation: PriceObservation) -> PriceObservationStore:
+        """Return a NEW store with the matching row replaced. Does not mutate self.
+
+        Args:
+            id: The ID of the observation to replace.
+            observation: The updated PriceObservation object.
+
+        Returns:
+            New PriceObservationStore with the observation updated.
+
+        Raises:
+            KeyError: If no observation with id is found.
+        """
+        if self.get(id) is None:
+            raise KeyError(id)
+
+        new_df = self._df.filter(pl.col("id") != id)
+        new_row = pl.DataFrame(
+            {
+                "id": pl.Series([observation.id], dtype=pl.String),
+                "retailer": pl.Series([observation.retailer], dtype=pl.String),
+                "store_location_id": pl.Series([observation.store_location_id], dtype=pl.String),
+                "retailer_sku_id": pl.Series([observation.retailer_sku_id], dtype=pl.String),
+                "canonical_product_id": pl.Series(
+                    [observation.canonical_product_id], dtype=pl.String
+                ),
+                "price_cents": pl.Series([observation.price_cents], dtype=pl.Int64),
+                "unit_price_cents": pl.Series([observation.unit_price_cents], dtype=pl.Int64),
+                "was_on_promo": pl.Series([observation.was_on_promo], dtype=pl.Boolean),
+                "promo_text": pl.Series([observation.promo_text], dtype=pl.String),
+                "promo_price_cents": pl.Series([observation.promo_price_cents], dtype=pl.Int64),
+                "currency": pl.Series([observation.currency], dtype=pl.String),
+                "observed_at": pl.Series([observation.observed_at], dtype=pl.Datetime("us", "UTC")),
+                "source_tier": pl.Series([observation.source_tier], dtype=pl.String),
+                "raw_response_hash": pl.Series([observation.raw_response_hash], dtype=pl.String),
+            }
+        )
+        return PriceObservationStore(self._path, pl.concat([new_df, new_row]))

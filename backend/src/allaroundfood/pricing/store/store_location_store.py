@@ -123,3 +123,36 @@ class StoreLocationStore:
             if row["id"] == location_id:
                 return self._row_to_model(row)
         return None
+
+    def update(self, id: str, location: StoreLocation) -> StoreLocationStore:
+        """Return a NEW store with the matching row replaced. Does not mutate self.
+
+        Args:
+            id: The ID of the location to replace.
+            location: The updated StoreLocation object.
+
+        Returns:
+            New StoreLocationStore with the location updated.
+
+        Raises:
+            KeyError: If no location with id is found.
+        """
+        if self.get(id) is None:
+            raise KeyError(id)
+
+        new_df = self._df.filter(pl.col("id") != id)
+        new_row = pl.DataFrame(
+            {
+                "id": [location.id],
+                "retailer": [location.retailer],
+                "store_id": [location.store_id],
+                "name": [location.name],
+                "address": [location.address],
+                "zip": [location.zip],
+                "lat": [location.lat],
+                "lon": [location.lon],
+                "fulfillment_zone": [location.fulfillment_zone],
+                "metadata": [json.dumps(location.metadata)],
+            }
+        )
+        return StoreLocationStore(self._path, pl.concat([new_df, new_row]))

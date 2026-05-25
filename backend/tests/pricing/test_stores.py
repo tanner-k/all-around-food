@@ -123,6 +123,55 @@ class TestStoreLocationStore:
         assert s1.get("loc-1") == loc
         assert s1.get("nonexistent") is None
 
+    def test_update_changes_row_content(self, tmp_path: Path) -> None:
+        p = tmp_path / "store_locations.parquet"
+        loc = _store_location()
+        s1 = StoreLocationStore.load(p).add(loc)
+        updated_loc = StoreLocation(
+            id="loc-1",
+            retailer="kroger",
+            store_id="K1",
+            name="Kroger Updated",
+            address="456 New St",
+            zip="84065",
+            lat=40.52,
+            lon=-111.94,
+            fulfillment_zone=None,
+            metadata={},
+        )
+        s2 = s1.update("loc-1", updated_loc)
+        assert s2.get("loc-1") == updated_loc
+
+    def test_update_returns_new_instance(self, tmp_path: Path) -> None:
+        p = tmp_path / "store_locations.parquet"
+        loc = _store_location()
+        s1 = StoreLocationStore.load(p).add(loc)
+        updated_loc = StoreLocation(
+            id="loc-1", retailer="kroger", store_id="K1", name="Kroger Updated",
+            address="123 Main St", zip="84065", lat=40.52, lon=-111.94,
+            fulfillment_zone=None, metadata={},
+        )
+        s2 = s1.update("loc-1", updated_loc)
+        assert s2 is not s1
+
+    def test_update_original_unchanged(self, tmp_path: Path) -> None:
+        p = tmp_path / "store_locations.parquet"
+        loc = _store_location()
+        s1 = StoreLocationStore.load(p).add(loc)
+        updated_loc = StoreLocation(
+            id="loc-1", retailer="kroger", store_id="K1", name="Kroger Updated",
+            address="123 Main St", zip="84065", lat=40.52, lon=-111.94,
+            fulfillment_zone=None, metadata={},
+        )
+        s1.update("loc-1", updated_loc)
+        assert s1.get("loc-1") == loc
+
+    def test_update_missing_id_raises_key_error(self, tmp_path: Path) -> None:
+        p = tmp_path / "store_locations.parquet"
+        s0 = StoreLocationStore.load(p)
+        with pytest.raises(KeyError):
+            s0.update("nonexistent", _store_location())
+
     def test_multiple_items(self, tmp_path: Path) -> None:
         p = tmp_path / "store_locations.parquet"
         store = StoreLocationStore.load(p)
@@ -206,6 +255,64 @@ class TestCanonicalProductStore:
         assert s1.get("prod-1") == prod
         assert s1.get("nope") is None
 
+    def test_update_changes_row_content(self, tmp_path: Path) -> None:
+        from datetime import UTC, datetime
+
+        p = tmp_path / "canonical_products.parquet"
+        prod = _canonical_product()
+        s1 = CanonicalProductStore.load(p).add(prod)
+        now = datetime(2025, 6, 1, tzinfo=UTC)
+        updated = CanonicalProduct(
+            id="prod-1", gtin="00012345678905", brand="BrandY", name="Product Updated",
+            size_value=2.0, size_unit="gal", category="dairy", attributes={},
+            embedding=None, created_at=now, updated_at=now,
+        )
+        s2 = s1.update("prod-1", updated)
+        assert s2.get("prod-1") == updated
+
+    def test_update_returns_new_instance(self, tmp_path: Path) -> None:
+        from datetime import UTC, datetime
+
+        p = tmp_path / "canonical_products.parquet"
+        prod = _canonical_product()
+        s1 = CanonicalProductStore.load(p).add(prod)
+        now = datetime(2025, 6, 1, tzinfo=UTC)
+        updated = CanonicalProduct(
+            id="prod-1", gtin="00012345678905", brand="BrandY", name="Product Updated",
+            size_value=2.0, size_unit="gal", category="dairy", attributes={},
+            embedding=None, created_at=now, updated_at=now,
+        )
+        s2 = s1.update("prod-1", updated)
+        assert s2 is not s1
+
+    def test_update_original_unchanged(self, tmp_path: Path) -> None:
+        from datetime import UTC, datetime
+
+        p = tmp_path / "canonical_products.parquet"
+        prod = _canonical_product()
+        s1 = CanonicalProductStore.load(p).add(prod)
+        now = datetime(2025, 6, 1, tzinfo=UTC)
+        updated = CanonicalProduct(
+            id="prod-1", gtin="00012345678905", brand="BrandY", name="Product Updated",
+            size_value=2.0, size_unit="gal", category="dairy", attributes={},
+            embedding=None, created_at=now, updated_at=now,
+        )
+        s1.update("prod-1", updated)
+        assert s1.get("prod-1") == prod
+
+    def test_update_missing_id_raises_key_error(self, tmp_path: Path) -> None:
+        from datetime import UTC, datetime
+
+        p = tmp_path / "canonical_products.parquet"
+        s0 = CanonicalProductStore.load(p)
+        now = datetime(2025, 6, 1, tzinfo=UTC)
+        prod = CanonicalProduct(
+            id="nope", gtin="x", brand="x", name="x", size_value=1.0, size_unit="x",
+            category="x", attributes={}, embedding=None, created_at=now, updated_at=now,
+        )
+        with pytest.raises(KeyError):
+            s0.update("nope", prod)
+
 
 # ---------------------------------------------------------------------------
 # RetailerSKUStore
@@ -247,6 +354,54 @@ class TestRetailerSKUStore:
         s1 = RetailerSKUStore.load(p).add(_retailer_sku())
         assert s1.get("sku-1") is not None
         assert s1.get("nope") is None
+
+    def test_update_changes_row_content(self, tmp_path: Path) -> None:
+        p = tmp_path / "retailer_skus.parquet"
+        sku = _retailer_sku()
+        s1 = RetailerSKUStore.load(p).add(sku)
+        updated = RetailerSKU(
+            id="sku-1", canonical_product_id="prod-1", retailer="kroger",
+            retailer_sku="SKU1-NEW", url="https://kroger.com/p/new",
+            title_raw="Kroger Milk Updated", size_raw="2 gal",
+            last_seen_at=datetime(2025, 6, 1, tzinfo=UTC),
+            match_method="manual", match_confidence=0.9, retailer_meta={},
+        )
+        s2 = s1.update("sku-1", updated)
+        assert s2.get("sku-1") == updated
+
+    def test_update_returns_new_instance(self, tmp_path: Path) -> None:
+        p = tmp_path / "retailer_skus.parquet"
+        sku = _retailer_sku()
+        s1 = RetailerSKUStore.load(p).add(sku)
+        updated = RetailerSKU(
+            id="sku-1", canonical_product_id="prod-1", retailer="kroger",
+            retailer_sku="SKU1-NEW", url="https://kroger.com/p/new",
+            title_raw="Kroger Milk Updated", size_raw="2 gal",
+            last_seen_at=datetime(2025, 6, 1, tzinfo=UTC),
+            match_method="manual", match_confidence=0.9, retailer_meta={},
+        )
+        s2 = s1.update("sku-1", updated)
+        assert s2 is not s1
+
+    def test_update_original_unchanged(self, tmp_path: Path) -> None:
+        p = tmp_path / "retailer_skus.parquet"
+        sku = _retailer_sku()
+        s1 = RetailerSKUStore.load(p).add(sku)
+        updated = RetailerSKU(
+            id="sku-1", canonical_product_id="prod-1", retailer="kroger",
+            retailer_sku="SKU1-NEW", url="https://kroger.com/p/new",
+            title_raw="Kroger Milk Updated", size_raw="2 gal",
+            last_seen_at=datetime(2025, 6, 1, tzinfo=UTC),
+            match_method="manual", match_confidence=0.9, retailer_meta={},
+        )
+        s1.update("sku-1", updated)
+        assert s1.get("sku-1") == sku
+
+    def test_update_missing_id_raises_key_error(self, tmp_path: Path) -> None:
+        p = tmp_path / "retailer_skus.parquet"
+        s0 = RetailerSKUStore.load(p)
+        with pytest.raises(KeyError):
+            s0.update("nonexistent", _retailer_sku())
 
 
 # ---------------------------------------------------------------------------
@@ -315,3 +470,51 @@ class TestPriceObservationStore:
         s1 = PriceObservationStore.load(p).add(_price_observation())
         assert s1.get("obs-1") is not None
         assert s1.get("nope") is None
+
+    def test_update_changes_row_content(self, tmp_path: Path) -> None:
+        p = tmp_path / "price_observations.parquet"
+        obs = _price_observation()
+        s1 = PriceObservationStore.load(p).add(obs)
+        updated = PriceObservation(
+            id="obs-1", retailer="kroger", store_location_id="loc-1",
+            retailer_sku_id="sku-1", canonical_product_id="prod-1",
+            price_cents=599, unit_price_cents=None, was_on_promo=False,
+            observed_at=datetime(2025, 6, 1, tzinfo=UTC),
+            source_tier="api", raw_response_hash="hash_updated",
+        )
+        s2 = s1.update("obs-1", updated)
+        assert s2.get("obs-1") == updated
+
+    def test_update_returns_new_instance(self, tmp_path: Path) -> None:
+        p = tmp_path / "price_observations.parquet"
+        obs = _price_observation()
+        s1 = PriceObservationStore.load(p).add(obs)
+        updated = PriceObservation(
+            id="obs-1", retailer="kroger", store_location_id="loc-1",
+            retailer_sku_id="sku-1", canonical_product_id="prod-1",
+            price_cents=599, unit_price_cents=None, was_on_promo=False,
+            observed_at=datetime(2025, 6, 1, tzinfo=UTC),
+            source_tier="api", raw_response_hash="hash_updated",
+        )
+        s2 = s1.update("obs-1", updated)
+        assert s2 is not s1
+
+    def test_update_original_unchanged(self, tmp_path: Path) -> None:
+        p = tmp_path / "price_observations.parquet"
+        obs = _price_observation()
+        s1 = PriceObservationStore.load(p).add(obs)
+        updated = PriceObservation(
+            id="obs-1", retailer="kroger", store_location_id="loc-1",
+            retailer_sku_id="sku-1", canonical_product_id="prod-1",
+            price_cents=599, unit_price_cents=None, was_on_promo=False,
+            observed_at=datetime(2025, 6, 1, tzinfo=UTC),
+            source_tier="api", raw_response_hash="hash_updated",
+        )
+        s1.update("obs-1", updated)
+        assert s1.get("obs-1") == obs
+
+    def test_update_missing_id_raises_key_error(self, tmp_path: Path) -> None:
+        p = tmp_path / "price_observations.parquet"
+        s0 = PriceObservationStore.load(p)
+        with pytest.raises(KeyError):
+            s0.update("nonexistent", _price_observation())

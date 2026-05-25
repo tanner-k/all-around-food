@@ -134,3 +134,40 @@ class CanonicalProductStore:
             if row["id"] == product_id:
                 return self._row_to_model(row)
         return None
+
+    def update(self, id: str, product: CanonicalProduct) -> CanonicalProductStore:
+        """Return a NEW store with the matching row replaced. Does not mutate self.
+
+        Args:
+            id: The ID of the product to replace.
+            product: The updated CanonicalProduct object.
+
+        Returns:
+            New CanonicalProductStore with the product updated.
+
+        Raises:
+            KeyError: If no product with id is found.
+        """
+        if self.get(id) is None:
+            raise KeyError(id)
+
+        new_df = self._df.filter(pl.col("id") != id)
+        embedding_val: list[float] | None = (
+            [float(v) for v in product.embedding] if product.embedding is not None else None
+        )
+        new_row = pl.DataFrame(
+            {
+                "id": pl.Series([product.id], dtype=pl.String),
+                "gtin": pl.Series([product.gtin], dtype=pl.String),
+                "brand": pl.Series([product.brand], dtype=pl.String),
+                "name": pl.Series([product.name], dtype=pl.String),
+                "size_value": pl.Series([product.size_value], dtype=pl.Float64),
+                "size_unit": pl.Series([product.size_unit], dtype=pl.String),
+                "category": pl.Series([product.category], dtype=pl.String),
+                "attributes": pl.Series([json.dumps(product.attributes)], dtype=pl.String),
+                "embedding": pl.Series([embedding_val], dtype=pl.List(pl.Float32)),
+                "created_at": pl.Series([product.created_at], dtype=pl.Datetime("us", "UTC")),
+                "updated_at": pl.Series([product.updated_at], dtype=pl.Datetime("us", "UTC")),
+            }
+        )
+        return CanonicalProductStore(self._path, pl.concat([new_df, new_row]))
