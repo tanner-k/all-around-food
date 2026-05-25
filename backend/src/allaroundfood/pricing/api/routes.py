@@ -6,8 +6,6 @@ supply in-memory stores via app.dependency_overrides.
 
 from __future__ import annotations
 
-import re
-
 import polars as pl
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -23,6 +21,7 @@ from allaroundfood.pricing.api.deps import (
 )
 from allaroundfood.pricing.api.envelope import ApiResponse
 from allaroundfood.pricing.api.schemas import (
+    _ZIP_RE,
     BasketRankingResponse,
     BasketRequest,
     CanonicalProductSummary,
@@ -33,8 +32,6 @@ from allaroundfood.pricing.api.schemas import (
 from allaroundfood.pricing.store.canonical_product_store import CanonicalProductStore
 from allaroundfood.pricing.store.price_observation_store import PriceObservationStore
 from allaroundfood.pricing.store.store_location_store import StoreLocationStore
-
-_ZIP_RE = re.compile(r"^\d{5}$")
 
 router = APIRouter(prefix="/pricing", tags=["pricing"])
 
@@ -81,7 +78,7 @@ def _canonical_to_df(canonical_store: CanonicalProductStore) -> pl.DataFrame:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/search", response_model=ApiResponse)
+@router.get("/search", response_model=ApiResponse[list[CanonicalProductSummary]])
 async def search_products(
     q: str = Query(..., min_length=1, description="Substring to match on name or brand"),
     zip: str | None = Query(  # noqa: A002
@@ -91,7 +88,7 @@ async def search_products(
     canonical_store: CanonicalProductStore = Depends(get_canonical_store),
     obs_store: PriceObservationStore = Depends(get_observation_store),
     location_store: StoreLocationStore = Depends(get_location_store),
-) -> ApiResponse:
+) -> ApiResponse[list[CanonicalProductSummary]]:
     """Search canonical products by name/brand substring.
 
     Args:
@@ -137,8 +134,8 @@ async def search_products(
 
     q_lower = q.lower()
     matches = canonical_df.filter(
-        pl.col("name").str.to_lowercase().str.contains(q_lower)
-        | pl.col("brand").str.to_lowercase().str.contains(q_lower)
+        pl.col("name").str.to_lowercase().str.contains(q_lower, literal=True)
+        | pl.col("brand").str.to_lowercase().str.contains(q_lower, literal=True)
     ).head(50)
 
     results: list[CanonicalProductSummary] = [
@@ -160,7 +157,7 @@ async def search_products(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/compare", response_model=ApiResponse)
+@router.get("/compare", response_model=ApiResponse[list[RetailerRankingResponse]])
 async def compare_prices(
     canonical_id: str = Query(..., description="Canonical product ID"),
     zip: str | None = Query(  # noqa: A002
@@ -168,7 +165,7 @@ async def compare_prices(
     ),
     obs_store: PriceObservationStore = Depends(get_observation_store),
     location_store: StoreLocationStore = Depends(get_location_store),
-) -> ApiResponse:
+) -> ApiResponse[list[RetailerRankingResponse]]:
     """Compare retailer prices for a canonical product, optionally filtered by ZIP.
 
     Args:
@@ -214,7 +211,7 @@ async def compare_prices(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/history", response_model=ApiResponse)
+@router.get("/history", response_model=ApiResponse[list[PricePoint]])
 async def get_price_history(
     canonical_id: str = Query(..., description="Canonical product ID"),
     zip: str | None = Query(  # noqa: A002
@@ -228,7 +225,7 @@ async def get_price_history(
     ),
     obs_store: PriceObservationStore = Depends(get_observation_store),
     location_store: StoreLocationStore = Depends(get_location_store),
-) -> ApiResponse:
+) -> ApiResponse[list[PricePoint]]:
     """Return historical price points for a canonical product.
 
     Args:
@@ -281,7 +278,7 @@ async def get_price_history(
 # ---------------------------------------------------------------------------
 
 
-@router.get("/promotions", response_model=ApiResponse)
+@router.get("/promotions", response_model=ApiResponse[list[PromoFlagResponse]])
 async def get_promotions(
     days: int = Query(
         default=14,
@@ -290,7 +287,7 @@ async def get_promotions(
         description="Detection window in days (recent observations to scan)",
     ),
     obs_store: PriceObservationStore = Depends(get_observation_store),
-) -> ApiResponse:
+) -> ApiResponse[list[PromoFlagResponse]]:
     """Detect promotional price drops over a recent window.
 
     Args:
@@ -323,12 +320,12 @@ async def get_promotions(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/basket", response_model=ApiResponse)
+@router.post("/basket", response_model=ApiResponse[list[BasketRankingResponse]])
 async def post_basket(
     body: BasketRequest,
     obs_store: PriceObservationStore = Depends(get_observation_store),
     location_store: StoreLocationStore = Depends(get_location_store),
-) -> ApiResponse:
+) -> ApiResponse[list[BasketRankingResponse]]:
     """Compute per-retailer basket totals for a list of canonical products.
 
     Args:

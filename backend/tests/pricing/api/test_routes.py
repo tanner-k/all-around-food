@@ -321,6 +321,28 @@ class TestSearchEndpoint:
         resp = client.get("/pricing/search")
         assert resp.status_code == 422
 
+    def test_search_regex_special_chars_do_not_crash(self, client: TestClient) -> None:
+        """Regex metacharacters in q must not cause a 500 (literal=True guard).
+
+        Prior to the fix, polars str.contains treated q as a regex pattern;
+        metacharacters like * and ( caused an internal error and a 500 response.
+        With literal=True, they are matched as plain substrings and produce a 200.
+        """
+        # These metacharacters are NOT present in any seeded product name/brand,
+        # so results must be empty (not a crash).
+        for q in ["*", "(milk)"]:
+            resp = client.get(f"/pricing/search?q={q}")
+            assert resp.status_code == 200, f"Expected 200 for q={q!r}, got {resp.status_code}"
+            body = resp.json()
+            assert body["success"] is True
+            assert body["data"] == [], f"Expected empty results for q={q!r}"
+
+        # "+" IS a literal substring of "Unsalted Butter"; confirm it returns
+        # results safely rather than crashing.
+        resp = client.get("/pricing/search?q=%2B")
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+
 
 # ---------------------------------------------------------------------------
 # GET /pricing/compare tests
