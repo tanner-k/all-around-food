@@ -55,7 +55,7 @@ export function CookDoneView({
     <div className="flex flex-col items-center justify-center gap-8 py-12 px-4 text-center max-w-md mx-auto">
       {/* Heading */}
       <div>
-        <h1 className="font-serif text-5xl leading-tight tracking-tight text-ink">
+        <h1 className="font-serif text-3xl md:text-5xl leading-tight tracking-tight text-ink">
           Nicely{" "}
           <em className="italic text-terra">done.</em>
         </h1>
