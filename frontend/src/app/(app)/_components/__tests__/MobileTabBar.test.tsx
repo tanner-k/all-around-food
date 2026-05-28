@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MobileTabBar } from "../MobileTabBar";
 
@@ -9,6 +9,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("MobileTabBar", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("renders four tabs when pathname is /cookbook", () => {
     mockUsePathname.mockReturnValue("/cookbook");
     render(<MobileTabBar />);

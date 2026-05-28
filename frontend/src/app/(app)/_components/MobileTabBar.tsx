@@ -24,7 +24,7 @@ export function MobileTabBar() {
       aria-label="Mobile navigation"
       className="fixed bottom-0 inset-x-0 z-50 md:hidden border-t border-line bg-paper/80 backdrop-blur pb-[env(safe-area-inset-bottom)]"
     >
-      <ul role="tablist" className="grid grid-cols-4">
+      <ul className="grid grid-cols-4">
         {TABS.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (
