@@ -181,13 +181,13 @@ function EvalExpandedDetail({ ev }: { ev: Evaluation }) {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-paper border-b border-line">
-                  <th className="text-left px-3 py-2 text-ink-mute font-semibold">
+                  <th scope="col" className="text-left px-3 py-2 text-ink-mute font-semibold">
                     Field
                   </th>
-                  <th className="text-left px-3 py-2 text-ink-mute font-semibold">
+                  <th scope="col" className="text-left px-3 py-2 text-ink-mute font-semibold">
                     Issue
                   </th>
-                  <th className="text-left px-3 py-2 text-ink-mute font-semibold">
+                  <th scope="col" className="text-left px-3 py-2 text-ink-mute font-semibold">
                     Detail
                   </th>
                 </tr>

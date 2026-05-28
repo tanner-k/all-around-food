@@ -34,7 +34,6 @@ interface RowData {
 function PriceCompareRow({ row, isCheapest }: RowData) {
   return (
     <tr
-      key={`${row.retailer}-${row.store_location_id}`}
       className="border-b border-line last:border-b-0 hover:bg-terra/5 transition-colors"
     >
       <td className="px-4 py-3 text-ink-mute">{row.rank}</td>
