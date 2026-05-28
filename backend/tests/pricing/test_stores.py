@@ -18,7 +18,6 @@ from allaroundfood.pricing.store.price_observation_store import PriceObservation
 from allaroundfood.pricing.store.retailer_sku_store import RetailerSKUStore
 from allaroundfood.pricing.store.store_location_store import StoreLocationStore
 
-
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------

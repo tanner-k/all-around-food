@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -13,8 +16,6 @@ from pydantic import BaseModel
 
 from allaroundfood.aisles import AISLE_ORDER, categorize
 from allaroundfood.eval_storage import EvalStore
-from allaroundfood.ocr.api import router as ocr_router
-from allaroundfood.pricing.api import router as pricing_router
 from allaroundfood.meal_plan_storage import MealPlanStore
 from allaroundfood.models import (
     Evaluation,
@@ -26,7 +27,9 @@ from allaroundfood.models import (
     VideoImportResult,
 )
 from allaroundfood.naming import normalize_name
+from allaroundfood.ocr.api import router as ocr_router
 from allaroundfood.pantry_storage import PantryStore
+from allaroundfood.pricing.api import router as pricing_router
 from allaroundfood.shopping_logic import (
     aggregate_recipe_ingredients,
     build_shopping_list_response,
@@ -34,7 +37,13 @@ from allaroundfood.shopping_logic import (
 )
 from allaroundfood.shopping_storage import ShoppingListStore
 from allaroundfood.storage import RecipeStore
-from allaroundfood.video_import import VideoImportError, fetch_video_text
+from allaroundfood.video_import import (
+    VideoImportError,
+    check_video_import_binaries,
+    fetch_video_text,
+)
+
+logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 RECIPE_STORE_PATH = DATA_DIR / "recipes.parquet"
@@ -43,7 +52,31 @@ PANTRY_STORE_PATH = DATA_DIR / "pantry.parquet"
 SHOPPING_STORE_PATH = DATA_DIR / "shopping_list.parquet"
 MEAL_PLAN_STORE_PATH = DATA_DIR / "meal_plans.parquet"
 
-app = FastAPI(title="All Around Food", version="0.2.0")
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Run startup checks for the FastAPI app.
+
+    Implements the follow-up from ADR 0002: warn if yt-dlp or ffmpeg are
+    not resolvable on PATH before the first /recipes/parse-video call.
+    """
+    status = check_video_import_binaries()
+    if status.missing:
+        logger.warning(
+            "Video import binaries missing on PATH: %s. "
+            "Set YTDLP_BIN/FFMPEG_BIN or activate the backend venv before "
+            "calling /recipes/parse-video.",
+            ", ".join(status.missing),
+        )
+    else:
+        logger.info(
+            "Video import binaries resolved: yt-dlp=%s ffmpeg=%s",
+            status.ytdlp,
+            status.ffmpeg,
+        )
+    yield
+
+
+app = FastAPI(title="All Around Food", version="0.2.0", lifespan=_lifespan)
 
 app.include_router(pricing_router)
 app.include_router(ocr_router)

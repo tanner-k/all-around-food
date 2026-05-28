@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import polars as pl
-import pytest
 
 from allaroundfood.pricing.analytics.retailer_ranking import (
     BasketRanking,
@@ -17,7 +16,7 @@ from allaroundfood.pricing.analytics.retailer_ranking import (
 from allaroundfood.pricing.models import StoreLocation
 from allaroundfood.pricing.store.store_location_store import StoreLocationStore
 
-UTC = timezone.utc
+UTC = UTC
 T0 = datetime(2024, 1, 1, tzinfo=UTC)
 T1 = datetime(2024, 1, 2, tzinfo=UTC)
 T2 = datetime(2024, 1, 3, tzinfo=UTC)

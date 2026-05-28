@@ -8,7 +8,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-import numpy as np
 import pytest
 
 from allaroundfood.pricing.canonical.embeddings import FakeEmbeddingService

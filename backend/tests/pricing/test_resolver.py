@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
 from allaroundfood.pricing.locations.resolver import UnknownZipError, ZipCentroid, resolve_zip
 
@@ -23,7 +24,7 @@ class TestResolveZip:
 
     def test_result_is_frozen(self) -> None:
         result = resolve_zip("84065")
-        with pytest.raises(Exception):  # ValidationError from Pydantic frozen model
+        with pytest.raises(ValidationError):
             result.zip = "00000"  # type: ignore[misc]
 
     def test_valid_zip_10001(self) -> None:

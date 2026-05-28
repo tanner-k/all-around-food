@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict
 
@@ -27,6 +27,7 @@ class PriceQuote(BaseModel):
     promo_price_cents: int | None  # Equals price_cents when was_on_promo=True; None otherwise.
     url: str | None
     raw: dict[str, Any]
+    source_tier: Literal["api", "json", "browser", "ocr", "manual"] | None = None
 
 
 @runtime_checkable

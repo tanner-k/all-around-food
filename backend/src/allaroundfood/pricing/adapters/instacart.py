@@ -110,9 +110,15 @@ import logging
 from typing import Any
 
 import httpx
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from allaroundfood.pricing.adapters._guard import unofficial_only
+from allaroundfood.pricing.adapters._resilience import (
+    record_fallback_attempt,
+    record_fallback_result,
+    record_json_failure,
+    record_json_success,
+    retry_json,
+)
 from allaroundfood.pricing.adapters.base import PriceQuote
 from allaroundfood.pricing.models import StoreLocation
 
@@ -121,8 +127,6 @@ logger = logging.getLogger(__name__)
 _INSTACART_BASE = "https://www.instacart.com"
 _RETAILERS_URL = f"{_INSTACART_BASE}/api/v2/stores"
 _SEARCH_URL = f"{_INSTACART_BASE}/api/v2/search_v3/search"
-
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 _DEFAULT_HEADERS: dict[str, str] = {
     "Accept": "application/json",
@@ -133,12 +137,6 @@ _DEFAULT_HEADERS: dict[str, str] = {
     ),
     # TODO(reverse-engineer): add X-CSRFToken once live value is captured.
 }
-
-
-def _is_retryable(exc: BaseException) -> bool:
-    if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code in _RETRYABLE_STATUS
-    return False
 
 
 class InstacartAdapter:
@@ -185,12 +183,6 @@ class InstacartAdapter:
         """
         return ""
 
-    @retry(
-        retry=retry_if_exception(_is_retryable),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
-        reraise=True,
-    )
     async def find_locations_by_zip(
         self,
         zip_code: str,
@@ -211,20 +203,54 @@ class InstacartAdapter:
         Returns:
             List of StoreLocation objects (one per retailer storefront).
         """
-        client = await self._client()
         try:
-            response = await client.get(
-                _RETAILERS_URL,
-                params={"postal_code": zip_code, "radius": str(radius_miles)},
-                headers=_DEFAULT_HEADERS,
-            )
-            response.raise_for_status()
-            payload: dict[str, Any] = response.json()
-            retailers: list[dict[str, Any]] = payload.get("retailers", [])
-            return [self._parse_location(r) for r in retailers]
+            locations = await self._json_find_locations_by_zip(zip_code, radius_miles)
         except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-            logger.warning("Instacart JSON locations failed (%s); trying Playwright", exc)
-            return await self._locations_via_playwright(zip_code, radius_miles)
+            record_json_failure(logger, "instacart", "find_locations_by_zip", exc)
+            record_fallback_attempt(logger, "instacart", "find_locations_by_zip", exc)
+            try:
+                locations = await self._locations_via_playwright(zip_code, radius_miles)
+            except Exception as fallback_exc:
+                record_fallback_result(
+                    logger,
+                    "instacart",
+                    "find_locations_by_zip",
+                    "fallback_failure",
+                    exc=fallback_exc,
+                )
+                raise
+            record_fallback_result(
+                logger,
+                "instacart",
+                "find_locations_by_zip",
+                "fallback_success",
+                result_count=len(locations),
+            )
+            return locations
+        record_json_success(
+            logger,
+            "instacart",
+            "find_locations_by_zip",
+            result_count=len(locations),
+        )
+        return locations
+
+    @retry_json("instacart", "find_locations_by_zip", logger)
+    async def _json_find_locations_by_zip(
+        self,
+        zip_code: str,
+        radius_miles: int,
+    ) -> list[StoreLocation]:
+        client = await self._client()
+        response = await client.get(
+            _RETAILERS_URL,
+            params={"postal_code": zip_code, "radius": str(radius_miles)},
+            headers=_DEFAULT_HEADERS,
+        )
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+        retailers: list[dict[str, Any]] = payload.get("retailers", [])
+        return [self._parse_location(r) for r in retailers]
 
     async def _locations_via_playwright(
         self,
@@ -270,12 +296,6 @@ class InstacartAdapter:
             metadata={"retailer_id": retailer_id, "logo_url": data.get("logo_url", "")},
         )
 
-    @retry(
-        retry=retry_if_exception(_is_retryable),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
-        reraise=True,
-    )
     async def search_products(
         self,
         store_location_id: str,
@@ -297,25 +317,58 @@ class InstacartAdapter:
         Returns:
             List of PriceQuote objects.
         """
+        try:
+            quotes = await self._json_search_products(store_location_id, term, limit)
+        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+            record_json_failure(logger, "instacart", "search_products", exc)
+            record_fallback_attempt(logger, "instacart", "search_products", exc)
+            try:
+                quotes = await self._search_via_playwright(store_location_id, term, limit)
+            except Exception as fallback_exc:
+                record_fallback_result(
+                    logger,
+                    "instacart",
+                    "search_products",
+                    "fallback_failure",
+                    exc=fallback_exc,
+                )
+                raise
+            record_fallback_result(
+                logger,
+                "instacart",
+                "search_products",
+                "fallback_success",
+                result_count=len(quotes),
+            )
+            return quotes
+        record_json_success(
+            logger,
+            "instacart",
+            "search_products",
+            result_count=len(quotes),
+        )
+        return quotes
+
+    @retry_json("instacart", "search_products", logger)
+    async def _json_search_products(
+        self,
+        store_location_id: str,
+        term: str,
+        limit: int,
+    ) -> list[PriceQuote]:
         slug = store_location_id.removeprefix("instacart-")
         client = await self._client()
-        try:
-            response = await client.get(
-                _SEARCH_URL,
-                params={"query": term, "source": slug, "num_results": str(limit)},
-                headers=_DEFAULT_HEADERS,
-            )
-            response.raise_for_status()
-            payload: dict[str, Any] = response.json()
-            products: list[dict[str, Any]] = (
-                payload.get("data", {})
-                .get("productsForSearch", {})
-                .get("products", [])
-            )
-            return [self._parse_product(store_location_id, p) for p in products]
-        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-            logger.warning("Instacart JSON search failed (%s); trying Playwright", exc)
-            return await self._search_via_playwright(store_location_id, term, limit)
+        response = await client.get(
+            _SEARCH_URL,
+            params={"query": term, "source": slug, "num_results": str(limit)},
+            headers=_DEFAULT_HEADERS,
+        )
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+        products: list[dict[str, Any]] = (
+            payload.get("data", {}).get("productsForSearch", {}).get("products", [])
+        )
+        return [self._parse_product(store_location_id, p) for p in products]
 
     async def _search_via_playwright(
         self,
@@ -343,9 +396,7 @@ class InstacartAdapter:
         is_promo = bool(pricing.get("promo", False))
 
         sale_price_cents = round(float(price_str) * 100)
-        original_price_cents = (
-            round(float(original_str) * 100) if original_str else None
-        )
+        original_price_cents = round(float(original_str) * 100) if original_str else None
 
         # Promo when the item is flagged AND has a higher original price.
         # Convention: price_cents = current price customer pays (= sale price on promo).
@@ -378,4 +429,5 @@ class InstacartAdapter:
             promo_price_cents=promo_price_cents,
             url=url,
             raw={**data, **raw_extra},
+            source_tier="json",
         )

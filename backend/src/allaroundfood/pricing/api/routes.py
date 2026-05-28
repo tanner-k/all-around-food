@@ -107,7 +107,7 @@ async def search_products(
     if zip is not None and not _ZIP_RE.match(zip):
         raise HTTPException(
             status_code=400,
-            detail="zip must be a 5-digit US ZIP code (e.g. '90210')",
+            detail="zip must be a 5-digit US ZIP code",
         )
 
     canonical_df = _canonical_to_df(canonical_store)

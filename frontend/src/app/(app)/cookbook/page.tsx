@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { SectionHeader } from "@/components/SectionHeader";
+import { BACKEND_URL } from "@/lib/backend-url";
 import type { Recipe } from "@/lib/recipe-schema";
 
 async function getRecipes(): Promise<Recipe[]> {
   try {
     const res = await fetch(
-      `${process.env.BACKEND_URL ?? "http://localhost:8000"}/recipes`,
+      `${BACKEND_URL}/recipes`,
       { cache: "no-store" }
     );
     if (!res.ok) return [];

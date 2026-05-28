@@ -1,5 +1,6 @@
 import { SectionHeader } from "@/components/SectionHeader";
 import { ShoppingListView } from "@/components/shopping/ShoppingListView";
+import { BACKEND_URL } from "@/lib/backend-url";
 import type { ShoppingListResponse } from "@/lib/shopping-schema";
 
 const EMPTY_LIST: ShoppingListResponse = {
@@ -10,7 +11,7 @@ const EMPTY_LIST: ShoppingListResponse = {
 async function getShoppingList(): Promise<ShoppingListResponse> {
   try {
     const res = await fetch(
-      `${process.env.BACKEND_URL ?? "http://localhost:8000"}/shopping-list`,
+      `${BACKEND_URL}/shopping-list`,
       { cache: "no-store" }
     );
     if (!res.ok) return EMPTY_LIST;

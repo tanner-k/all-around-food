@@ -186,7 +186,13 @@ class IngestionPipeline:
             skus_upserted += 1
 
             # Determine source_tier
-            source_tier: Any = "api" if quote.retailer == _KROGER_RETAILER else "json"
+            source_tier: Any = (
+                quote.source_tier
+                if quote.source_tier is not None
+                else "api"
+                if quote.retailer == _KROGER_RETAILER
+                else "json"
+            )
 
             # Raw response hash
             raw_hash = hashlib.sha256(

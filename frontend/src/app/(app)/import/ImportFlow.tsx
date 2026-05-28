@@ -7,6 +7,24 @@ import { ParsingProgress } from "@/components/recipe/ParsingProgress";
 import { RecipeReview } from "@/components/recipe/RecipeReview";
 import { SavedConfirmation } from "@/components/recipe/SavedConfirmation";
 
+/**
+ * Build a user-facing message from /api/import/parse error JSON.
+ *
+ * The route returns `{ error, source, detail }` where `error` carries the
+ * sanitized hint and `detail` carries the actual upstream message
+ * (e.g. "The transcription service is unavailable right now."). Show both
+ * so the toast tells the user WHAT broke and WHERE.
+ */
+function formatParseError(payload: {
+  error?: string;
+  detail?: string;
+}): string {
+  const error = payload.error ?? "Parse failed";
+  const detail = payload.detail;
+  if (!detail || detail === error) return error;
+  return `${error}\n\n${detail}`;
+}
+
 type State =
   | { kind: "idle" }
   | { kind: "parsing"; complete: boolean; source: "default" | "video_url" }
@@ -30,7 +48,7 @@ export function ImportFlow() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(err.error ?? "Parse failed");
+        throw new Error(formatParseError(err));
       }
       const recipe: Recipe = await res.json();
       setState({ kind: "parsing", complete: true, source: "default" });
@@ -54,7 +72,7 @@ export function ImportFlow() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(err.error ?? "Parse failed");
+        throw new Error(formatParseError(err));
       }
       const recipe: Recipe = await res.json();
       setState({ kind: "parsing", complete: true, source: "default" });
@@ -76,7 +94,7 @@ export function ImportFlow() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(err.error ?? "Parse failed");
+        throw new Error(formatParseError(err));
       }
       const recipe: Recipe = await res.json();
       setState({ kind: "parsing", complete: true, source: "video_url" });

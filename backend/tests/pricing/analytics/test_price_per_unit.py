@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import polars as pl
 import pytest
@@ -14,7 +14,7 @@ from allaroundfood.pricing.analytics.price_per_unit import (
     normalize_size,
 )
 
-UTC = timezone.utc
+UTC = UTC
 
 
 # ---------------------------------------------------------------------------

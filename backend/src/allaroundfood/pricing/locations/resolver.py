@@ -33,7 +33,7 @@ def resolve_zip(zip_code: str) -> ZipCentroid:
     """Resolve a US ZIP code to a geographic centroid.
 
     Args:
-        zip_code: A US ZIP code string (e.g. "84065").
+        zip_code: A 5-digit US ZIP code string.
 
     Returns:
         ZipCentroid with lat/lon and optional city/state.

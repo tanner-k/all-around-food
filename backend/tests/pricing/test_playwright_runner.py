@@ -18,7 +18,6 @@ from allaroundfood.pricing.adapters._playwright import (
     PlaywrightRunner,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helper: detect whether Playwright browsers are installed
 # ---------------------------------------------------------------------------

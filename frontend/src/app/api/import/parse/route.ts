@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { BACKEND_URL } from "@/lib/backend-url";
 import {
   parseRecipeFromImage,
   parseRecipeFromUrl,
@@ -8,6 +9,26 @@ import {
   sha256Hex,
 } from "@/lib/claude";
 import { EvaluationSchema, type Evaluation } from "@/lib/eval-schema";
+
+type ParseErrorSource = "backend" | "claude" | "unknown";
+
+class ParseError extends Error {
+  readonly source: ParseErrorSource;
+  readonly status: number;
+  readonly detail: string;
+
+  constructor(opts: {
+    source: ParseErrorSource;
+    status: number;
+    message: string;
+    detail?: string;
+  }) {
+    super(opts.message);
+    this.source = opts.source;
+    this.status = opts.status;
+    this.detail = opts.detail ?? opts.message;
+  }
+}
 
 const VIDEO_URL_HOST_RE =
   /(^|\.)((tiktok\.com)|(vm\.tiktok\.com)|(instagram\.com)|(instagr\.am))$/i;
@@ -42,16 +63,84 @@ function isVideoUrl(url: string): boolean {
   }
 }
 
+async function wrapClaude<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    // Anthropic SDK throws APIError with `.status`; everything else gets
+    // tagged as claude/500 so the UI can distinguish from backend failures.
+    const e = err as { status?: number; message?: string };
+    throw new ParseError({
+      source: "claude",
+      status: typeof e?.status === "number" ? e.status : 500,
+      message: e?.message ?? "Claude call failed",
+      detail: e?.message ?? String(err),
+    });
+  }
+}
+
+function toParseError(err: unknown): ParseError {
+  if (err instanceof ParseError) return err;
+  const e = err as { status?: number; message?: string };
+  return new ParseError({
+    source: "unknown",
+    status: typeof e?.status === "number" ? e.status : 500,
+    message: e?.message ?? "Recipe parsing failed",
+    detail: e?.message ?? String(err),
+  });
+}
+
+function hintFor(err: ParseError): string {
+  if (err.source === "claude") {
+    if (err.status === 401) {
+      return " — Claude auth failed. Confirm ANTHROPIC_API_KEY_PARSING in frontend/.env.local AND restart `pnpm dev` (Next.js only loads .env at startup).";
+    }
+    if (err.status === 429) {
+      return " — Claude rate limited. Wait a moment and try again.";
+    }
+    if (err.status >= 500 && err.status < 600) {
+      return " — upstream Anthropic API error. Try again in a moment.";
+    }
+    return "";
+  }
+  if (err.source === "backend") {
+    if (err.status === 503) {
+      return " — backend unreachable. Confirm the all-around-food FastAPI is running and BACKEND_URL in frontend/.env.local points at it.";
+    }
+    if (err.status === 502) {
+      return " — upstream service used by the backend failed (e.g. whispr transcription). Check the backend logs.";
+    }
+    if (err.status === 504) {
+      return " — backend timed out. Try a shorter video or raise VIDEO_IMPORT_TIMEOUT_S.";
+    }
+    if (err.status === 422) {
+      return " — video could not be parsed (private, expired, or missing recipe text).";
+    }
+    return " — backend error.";
+  }
+  return "";
+}
+
 async function fetchVideoText(url: string): Promise<{
   caption: string;
   transcript: string;
 }> {
-  const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
-  const res = await fetch(`${backendUrl}/recipes/parse-video`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_URL}/recipes/parse-video`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+  } catch (err) {
+    // Network-level failure — backend unreachable, DNS error, etc.
+    throw new ParseError({
+      source: "backend",
+      status: 503,
+      message: `Backend unreachable at ${BACKEND_URL}`,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   if (!res.ok) {
     const payload = await res.json().catch(() => null);
@@ -59,9 +148,12 @@ async function fetchVideoText(url: string): Promise<{
       typeof payload?.detail === "string"
         ? payload.detail
         : `Video extraction failed (${res.status})`;
-    const error = new Error(detail) as Error & { status?: number };
-    error.status = res.status;
-    throw error;
+    throw new ParseError({
+      source: "backend",
+      status: res.status,
+      message: detail,
+      detail,
+    });
   }
 
   const data = await res.json();
@@ -70,7 +162,11 @@ async function fetchVideoText(url: string): Promise<{
     typeof data?.transcript === "string" ? data.transcript : "";
 
   if (!caption.trim() && !transcript.trim()) {
-    throw new Error("Video extraction returned no transcript or caption text");
+    throw new ParseError({
+      source: "backend",
+      status: 422,
+      message: "Video extraction returned no transcript or caption text",
+    });
   }
 
   return { caption, transcript };
@@ -100,47 +196,47 @@ export async function POST(req: NextRequest) {
 
   try {
     if (validBody.kind === "image") {
-      const result = await parseRecipeFromImage(
-        validBody.data,
-        validBody.mediaType
+      const result = await wrapClaude(
+        () => parseRecipeFromImage(validBody.data, validBody.mediaType)
       );
       recipe = result.recipe;
       workerPrompt = result.workerPrompt;
     } else if (validBody.kind === "video_url" || isVideoUrl(validBody.url)) {
       const videoText = await fetchVideoText(validBody.url);
-      const result = await parseRecipeFromVideoText({
-        ...videoText,
-        sourceUrl: validBody.url,
-      });
+      const result = await wrapClaude(() =>
+        parseRecipeFromVideoText({
+          ...videoText,
+          sourceUrl: validBody.url,
+        })
+      );
       recipe = result.recipe;
       workerPrompt = result.workerPrompt;
       strippedText = result.strippedText;
     } else {
-      const result = await parseRecipeFromUrl(validBody.url);
+      const result = await wrapClaude(() => parseRecipeFromUrl(validBody.url));
       recipe = result.recipe;
       workerPrompt = result.workerPrompt;
       strippedText = result.strippedText;
     }
   } catch (err) {
-    console.error("[parse] worker failed:", err);
-    // Surface the real upstream error to the UI so it's diagnosable.
-    const e = err as { status?: number; message?: string };
-    const status = e?.status ?? 500;
-    let hint = "";
-    if (status === 401) {
-      hint =
-        " — auth failed. Confirm ANTHROPIC_API_KEY_PARSING in frontend/.env.local AND restart `pnpm dev` (Next.js only loads .env at startup).";
-    } else if (status === 429) {
-      hint = " — rate limited. Wait a moment and try again.";
-    } else if (status >= 500 && status < 600) {
-      hint = " — upstream Anthropic API error; retried 4x. Try again in a moment.";
-    }
+    const parseErr = toParseError(err);
+    console.error(
+      `[parse] worker failed [source=${parseErr.source} status=${parseErr.status}]:`,
+      parseErr.detail
+    );
+    const hint = hintFor(parseErr);
     return NextResponse.json(
       {
-        error: `Recipe parsing failed (${status})${hint}`,
-        detail: e?.message ?? String(err),
+        error: `Recipe parsing failed (${parseErr.status})${hint}`,
+        source: parseErr.source,
+        detail: parseErr.detail,
       },
-      { status: status >= 400 && status < 500 ? status : 502 }
+      {
+        status:
+          parseErr.status >= 400 && parseErr.status < 500
+            ? parseErr.status
+            : 502,
+      }
     );
   }
 
@@ -193,8 +289,7 @@ export async function POST(req: NextRequest) {
         raw_judge_output: rawJudgeOutput,
       });
 
-      const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
-      const res = await fetch(`${backendUrl}/evaluations`, {
+      const res = await fetch(`${BACKEND_URL}/evaluations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(evaluation),

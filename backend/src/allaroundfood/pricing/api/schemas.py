@@ -18,7 +18,7 @@ def _validate_zip(v: str | None) -> str | None:
     if v is None:
         return v
     if not _ZIP_RE.match(v):
-        raise ValueError("zip must be a 5-digit US ZIP code (e.g. '90210')")
+        raise ValueError("zip must be a 5-digit US ZIP code")
     return v
 
 

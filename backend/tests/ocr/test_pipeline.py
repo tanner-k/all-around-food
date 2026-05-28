@@ -6,7 +6,6 @@ No real model, no real file I/O beyond the tiny PNG fixture.
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
 

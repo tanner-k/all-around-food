@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,6 +18,8 @@ from urllib.parse import urlparse
 import httpx
 
 from allaroundfood.models import VideoImportResult
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_VIDEO_HOSTS = {
     "instagram.com",
@@ -36,6 +40,34 @@ class VideoImportError(Exception):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+
+
+@dataclass(frozen=True)
+class VideoImportBinaryStatus:
+    """Resolved absolute paths for the external binaries the importer relies on."""
+
+    ytdlp: str | None
+    ffmpeg: str | None
+
+    @property
+    def missing(self) -> tuple[str, ...]:
+        """Return the friendly names of any binaries that could not be resolved."""
+        return tuple(
+            name
+            for name, path in (("yt-dlp", self.ytdlp), ("ffmpeg", self.ffmpeg))
+            if path is None
+        )
+
+
+def check_video_import_binaries(
+    settings: VideoImportSettings | None = None,
+) -> VideoImportBinaryStatus:
+    """Resolve the configured yt-dlp and ffmpeg binaries via shutil.which."""
+    active = settings or VideoImportSettings.from_env()
+    return VideoImportBinaryStatus(
+        ytdlp=shutil.which(active.ytdlp_bin),
+        ffmpeg=shutil.which(active.ffmpeg_bin),
+    )
 
 
 @dataclass(frozen=True)
@@ -269,8 +301,14 @@ def _run_command(
         ) from exc
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or "").strip()
-        message = f"{failed} {detail}" if detail else failed
-        raise VideoImportError(message, status_code=422) from exc
+        if detail:
+            logger.warning(
+                "video import subprocess failed: %s exit=%s detail=%s",
+                cmd[0],
+                exc.returncode,
+                detail,
+            )
+        raise VideoImportError(failed, status_code=422) from exc
 
 
 def _find_downloaded_video(tmp_path: Path) -> Path | None:

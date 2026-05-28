@@ -111,9 +111,15 @@ import logging
 from typing import Any
 
 import httpx
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from allaroundfood.pricing.adapters._guard import unofficial_only
+from allaroundfood.pricing.adapters._resilience import (
+    record_fallback_attempt,
+    record_fallback_result,
+    record_json_failure,
+    record_json_success,
+    retry_json,
+)
 from allaroundfood.pricing.adapters.base import PriceQuote
 from allaroundfood.pricing.models import StoreLocation
 
@@ -123,8 +129,6 @@ _WFM_BASE = "https://www.wholefoodsmarket.com"
 _AMAZON_BASE = "https://www.amazon.com"
 _STORE_GRAPHQL_URL = f"{_WFM_BASE}/api/graphql"
 _PRODUCT_SEARCH_URL = f"{_AMAZON_BASE}/s/query"
-
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 # Default headers mimicking an Amazon browser session.
 # TODO(reverse-engineer): update lc-main, session-token, ubid-main from a live capture.
@@ -140,12 +144,6 @@ _DEFAULT_HEADERS: dict[str, str] = {
     # "session-token": "<session token>",
     # "ubid-main": "<ubid value>",
 }
-
-
-def _is_retryable(exc: BaseException) -> bool:
-    if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code in _RETRYABLE_STATUS
-    return False
 
 
 class WholeFoodsAdapter:
@@ -193,12 +191,6 @@ class WholeFoodsAdapter:
         """
         return ""
 
-    @retry(
-        retry=retry_if_exception(_is_retryable),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
-        reraise=True,
-    )
     async def find_locations_by_zip(
         self,
         zip_code: str,
@@ -216,6 +208,44 @@ class WholeFoodsAdapter:
         Returns:
             List of StoreLocation objects.
         """
+        try:
+            locations = await self._json_find_locations_by_zip(zip_code, radius_miles)
+        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+            record_json_failure(logger, "wholefoods", "find_locations_by_zip", exc)
+            record_fallback_attempt(logger, "wholefoods", "find_locations_by_zip", exc)
+            try:
+                locations = await self._locations_via_playwright(zip_code, radius_miles)
+            except Exception as fallback_exc:
+                record_fallback_result(
+                    logger,
+                    "wholefoods",
+                    "find_locations_by_zip",
+                    "fallback_failure",
+                    exc=fallback_exc,
+                )
+                raise
+            record_fallback_result(
+                logger,
+                "wholefoods",
+                "find_locations_by_zip",
+                "fallback_success",
+                result_count=len(locations),
+            )
+            return locations
+        record_json_success(
+            logger,
+            "wholefoods",
+            "find_locations_by_zip",
+            result_count=len(locations),
+        )
+        return locations
+
+    @retry_json("wholefoods", "find_locations_by_zip", logger)
+    async def _json_find_locations_by_zip(
+        self,
+        zip_code: str,
+        radius_miles: int,
+    ) -> list[StoreLocation]:
         client = await self._client()
         # TODO(reverse-engineer): replace with actual GraphQL query string.
         _gql = (
@@ -228,23 +258,17 @@ class WholeFoodsAdapter:
             "query": _gql,
             "variables": {"zip": zip_code, "radius": radius_miles},
         }
-        try:
-            response = await client.post(
-                _STORE_GRAPHQL_URL,
-                json=graphql_body,
-                headers={**_DEFAULT_HEADERS, "Content-Type": "application/json"},
-            )
-            response.raise_for_status()
-            payload: dict[str, Any] = response.json()
-            stores: list[dict[str, Any]] = (
-                payload.get("data", {})
-                .get("storeSearch", {})
-                .get("stores", [])
-            )
-            return [self._parse_location(s) for s in stores]
-        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-            logger.warning("Whole Foods JSON locations failed (%s); trying Playwright", exc)
-            return await self._locations_via_playwright(zip_code, radius_miles)
+        response = await client.post(
+            _STORE_GRAPHQL_URL,
+            json=graphql_body,
+            headers={**_DEFAULT_HEADERS, "Content-Type": "application/json"},
+        )
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+        stores: list[dict[str, Any]] = (
+            payload.get("data", {}).get("storeSearch", {}).get("stores", [])
+        )
+        return [self._parse_location(s) for s in stores]
 
     async def _locations_via_playwright(
         self,
@@ -288,12 +312,6 @@ class WholeFoodsAdapter:
             metadata={"phone": data.get("phone", "")},
         )
 
-    @retry(
-        retry=retry_if_exception(_is_retryable),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
-        reraise=True,
-    )
     async def search_products(
         self,
         store_location_id: str,
@@ -313,28 +331,61 @@ class WholeFoodsAdapter:
         Returns:
             List of PriceQuote objects.
         """
-        client = await self._client()
         try:
-            response = await client.get(
-                f"{_AMAZON_BASE}/s",
-                params={
-                    "k": term,
-                    "i": "wholefoods",
-                    # TODO(reverse-engineer): confirm correct grocery node ID
-                    "n": "16310101",
-                    "ps": str(limit),
-                },
-                headers=_DEFAULT_HEADERS,
-            )
-            response.raise_for_status()
-            payload: dict[str, Any] = response.json()
-            items: list[dict[str, Any]] = (
-                payload.get("searchResult", {}).get("items", [])
-            )
-            return [self._parse_product(store_location_id, item) for item in items]
+            quotes = await self._json_search_products(store_location_id, term, limit)
         except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-            logger.warning("Whole Foods JSON search failed (%s); trying Playwright", exc)
-            return await self._search_via_playwright(store_location_id, term, limit)
+            record_json_failure(logger, "wholefoods", "search_products", exc)
+            record_fallback_attempt(logger, "wholefoods", "search_products", exc)
+            try:
+                quotes = await self._search_via_playwright(store_location_id, term, limit)
+            except Exception as fallback_exc:
+                record_fallback_result(
+                    logger,
+                    "wholefoods",
+                    "search_products",
+                    "fallback_failure",
+                    exc=fallback_exc,
+                )
+                raise
+            record_fallback_result(
+                logger,
+                "wholefoods",
+                "search_products",
+                "fallback_success",
+                result_count=len(quotes),
+            )
+            return quotes
+        record_json_success(
+            logger,
+            "wholefoods",
+            "search_products",
+            result_count=len(quotes),
+        )
+        return quotes
+
+    @retry_json("wholefoods", "search_products", logger)
+    async def _json_search_products(
+        self,
+        store_location_id: str,
+        term: str,
+        limit: int,
+    ) -> list[PriceQuote]:
+        client = await self._client()
+        response = await client.get(
+            f"{_AMAZON_BASE}/s",
+            params={
+                "k": term,
+                "i": "wholefoods",
+                # TODO(reverse-engineer): confirm correct grocery node ID
+                "n": "16310101",
+                "ps": str(limit),
+            },
+            headers=_DEFAULT_HEADERS,
+        )
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+        items: list[dict[str, Any]] = payload.get("searchResult", {}).get("items", [])
+        return [self._parse_product(store_location_id, item) for item in items]
 
     async def _search_via_playwright(
         self,
@@ -383,4 +434,5 @@ class WholeFoodsAdapter:
             promo_price_cents=promo_price_cents,
             url=url,
             raw=data,
+            source_tier="json",
         )

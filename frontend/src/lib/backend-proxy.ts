@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
+import { BACKEND_URL } from "@/lib/backend-url";
 
 /**
  * Proxy a request to the FastAPI backend, forwarding the status code and JSON

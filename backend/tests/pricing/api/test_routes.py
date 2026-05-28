@@ -8,7 +8,7 @@ Dependency overrides supply in-memory stores with a seeded dataset of:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -31,7 +31,7 @@ from allaroundfood.pricing.store.price_observation_store import PriceObservation
 from allaroundfood.pricing.store.retailer_sku_store import RetailerSKUStore
 from allaroundfood.pricing.store.store_location_store import StoreLocationStore
 
-UTC = timezone.utc
+UTC = UTC
 NOW = datetime(2024, 6, 15, tzinfo=UTC)
 
 # ---------------------------------------------------------------------------

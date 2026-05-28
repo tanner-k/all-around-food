@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import polars as pl
-import pytest
 
 from allaroundfood.pricing.analytics.history import (
     PromoFlag,
@@ -13,7 +12,7 @@ from allaroundfood.pricing.analytics.history import (
     price_history,
 )
 
-UTC = timezone.utc
+UTC = UTC
 
 BASE = datetime(2024, 6, 1, tzinfo=UTC)
 

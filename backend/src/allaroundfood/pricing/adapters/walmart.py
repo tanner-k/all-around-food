@@ -94,9 +94,15 @@ import logging
 from typing import Any
 
 import httpx
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from allaroundfood.pricing.adapters._guard import unofficial_only
+from allaroundfood.pricing.adapters._resilience import (
+    record_fallback_attempt,
+    record_fallback_result,
+    record_json_failure,
+    record_json_success,
+    retry_json,
+)
 from allaroundfood.pricing.adapters.base import PriceQuote
 from allaroundfood.pricing.models import StoreLocation
 
@@ -105,8 +111,6 @@ logger = logging.getLogger(__name__)
 _WALMART_BASE = "https://www.walmart.com"
 _STORE_FINDER_URL = f"{_WALMART_BASE}/store/finder/view/ajax"
 _SEARCH_URL = f"{_WALMART_BASE}/search/api"
-
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
 
 # Default headers that mimic a real browser session.
 # TODO(reverse-engineer): update with headers observed from a live capture.
@@ -119,12 +123,6 @@ _DEFAULT_HEADERS: dict[str, str] = {
     ),
     "wm_svc.name": "walmart-fusion",
 }
-
-
-def _is_retryable(exc: BaseException) -> bool:
-    if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code in _RETRYABLE_STATUS
-    return False
 
 
 class WalmartAdapter:
@@ -166,12 +164,6 @@ class WalmartAdapter:
         """
         return ""
 
-    @retry(
-        retry=retry_if_exception(_is_retryable),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
-        reraise=True,
-    )
     async def find_locations_by_zip(
         self,
         zip_code: str,
@@ -192,26 +184,58 @@ class WalmartAdapter:
         Raises:
             httpx.HTTPStatusError: On non-retryable HTTP errors (JSON path).
         """
-        client = await self._client()
         try:
-            response = await client.get(
-                _STORE_FINDER_URL,
-                params={
-                    "stype": "geoCode",
-                    "distance": str(radius_miles),
-                    "zipCode": zip_code,
-                },
-                headers=_DEFAULT_HEADERS,
-            )
-            response.raise_for_status()
-            payload: dict[str, Any] = response.json()
-            stores: list[dict[str, Any]] = (
-                payload.get("payload", {}).get("stores", [])
-            )
-            return [self._parse_location(s) for s in stores]
+            locations = await self._json_find_locations_by_zip(zip_code, radius_miles)
         except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-            logger.warning("Walmart JSON locations failed (%s); trying Playwright", exc)
-            return await self._locations_via_playwright(zip_code, radius_miles)
+            record_json_failure(logger, "walmart", "find_locations_by_zip", exc)
+            record_fallback_attempt(logger, "walmart", "find_locations_by_zip", exc)
+            try:
+                locations = await self._locations_via_playwright(zip_code, radius_miles)
+            except Exception as fallback_exc:
+                record_fallback_result(
+                    logger,
+                    "walmart",
+                    "find_locations_by_zip",
+                    "fallback_failure",
+                    exc=fallback_exc,
+                )
+                raise
+            record_fallback_result(
+                logger,
+                "walmart",
+                "find_locations_by_zip",
+                "fallback_success",
+                result_count=len(locations),
+            )
+            return locations
+        record_json_success(
+            logger,
+            "walmart",
+            "find_locations_by_zip",
+            result_count=len(locations),
+        )
+        return locations
+
+    @retry_json("walmart", "find_locations_by_zip", logger)
+    async def _json_find_locations_by_zip(
+        self,
+        zip_code: str,
+        radius_miles: int,
+    ) -> list[StoreLocation]:
+        client = await self._client()
+        response = await client.get(
+            _STORE_FINDER_URL,
+            params={
+                "stype": "geoCode",
+                "distance": str(radius_miles),
+                "zipCode": zip_code,
+            },
+            headers=_DEFAULT_HEADERS,
+        )
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+        stores: list[dict[str, Any]] = payload.get("payload", {}).get("stores", [])
+        return [self._parse_location(s) for s in stores]
 
     async def _locations_via_playwright(
         self,
@@ -256,12 +280,6 @@ class WalmartAdapter:
             metadata={},
         )
 
-    @retry(
-        retry=retry_if_exception(_is_retryable),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
-        reraise=True,
-    )
     async def search_products(
         self,
         store_location_id: str,
@@ -281,26 +299,57 @@ class WalmartAdapter:
         Returns:
             List of PriceQuote objects.
         """
-        # Strip the "walmart-" prefix if present (internal IDs include it)
-        raw_id = (
-            store_location_id.removeprefix("walmart-")
-        )
-        client = await self._client()
         try:
-            response = await client.get(
-                _SEARCH_URL,
-                params={"query": term, "stores": raw_id, "ps": str(limit)},
-                headers=_DEFAULT_HEADERS,
-            )
-            response.raise_for_status()
-            payload: dict[str, Any] = response.json()
-            items: list[dict[str, Any]] = (
-                payload.get("payload", {}).get("items", [])
-            )
-            return [self._parse_product(store_location_id, item) for item in items]
+            quotes = await self._json_search_products(store_location_id, term, limit)
         except (httpx.HTTPStatusError, httpx.RequestError) as exc:
-            logger.warning("Walmart JSON search failed (%s); trying Playwright", exc)
-            return await self._search_via_playwright(store_location_id, term, limit)
+            record_json_failure(logger, "walmart", "search_products", exc)
+            record_fallback_attempt(logger, "walmart", "search_products", exc)
+            try:
+                quotes = await self._search_via_playwright(store_location_id, term, limit)
+            except Exception as fallback_exc:
+                record_fallback_result(
+                    logger,
+                    "walmart",
+                    "search_products",
+                    "fallback_failure",
+                    exc=fallback_exc,
+                )
+                raise
+            record_fallback_result(
+                logger,
+                "walmart",
+                "search_products",
+                "fallback_success",
+                result_count=len(quotes),
+            )
+            return quotes
+        record_json_success(
+            logger,
+            "walmart",
+            "search_products",
+            result_count=len(quotes),
+        )
+        return quotes
+
+    @retry_json("walmart", "search_products", logger)
+    async def _json_search_products(
+        self,
+        store_location_id: str,
+        term: str,
+        limit: int,
+    ) -> list[PriceQuote]:
+        # Strip the "walmart-" prefix if present (internal IDs include it)
+        raw_id = store_location_id.removeprefix("walmart-")
+        client = await self._client()
+        response = await client.get(
+            _SEARCH_URL,
+            params={"query": term, "stores": raw_id, "ps": str(limit)},
+            headers=_DEFAULT_HEADERS,
+        )
+        response.raise_for_status()
+        payload: dict[str, Any] = response.json()
+        items: list[dict[str, Any]] = payload.get("payload", {}).get("items", [])
+        return [self._parse_product(store_location_id, item) for item in items]
 
     async def _search_via_playwright(
         self,
@@ -344,9 +393,8 @@ class WalmartAdapter:
             was_on_promo=was_on_promo,
             promo_price_cents=promo_price_cents,
             url=(
-                f"https://www.walmart.com{data['productUrl']}"
-                if data.get("productUrl")
-                else None
+                f"https://www.walmart.com{data['productUrl']}" if data.get("productUrl") else None
             ),
             raw=data,
+            source_tier="json",
         )

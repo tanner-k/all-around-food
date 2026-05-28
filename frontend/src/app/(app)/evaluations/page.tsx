@@ -1,8 +1,7 @@
 import { SectionHeader } from "@/components/SectionHeader";
 import { EvalTable } from "@/components/eval/EvalTable";
+import { BACKEND_URL } from "@/lib/backend-url";
 import type { Evaluation } from "@/lib/eval-schema";
-
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 interface EvalStats {
   count: number;

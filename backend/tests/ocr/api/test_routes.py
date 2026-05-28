@@ -19,14 +19,13 @@ from allaroundfood.ocr.api.deps import (
     get_receipt_store,
 )
 from allaroundfood.ocr.parser import ReceiptParser
+from allaroundfood.ocr.qwen_loader import FakeQwenVLClient
 from allaroundfood.ocr.receipt_store import ReceiptStore
 from allaroundfood.pricing.canonical.embeddings import FakeEmbeddingService
 from allaroundfood.pricing.canonical.matcher import CanonicalMatcher
 from allaroundfood.pricing.models import CanonicalProduct
 from allaroundfood.pricing.store.canonical_product_store import CanonicalProductStore
 from allaroundfood.pricing.store.price_observation_store import PriceObservationStore
-from allaroundfood.ocr.qwen_loader import FakeQwenVLClient
-
 
 FIXTURE_DIR = Path(__file__).parent.parent.parent / "fixtures" / "ocr"
 

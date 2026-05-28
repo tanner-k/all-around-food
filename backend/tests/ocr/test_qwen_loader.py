@@ -15,7 +15,6 @@ from allaroundfood.ocr.qwen_loader import (
     encode_image_to_data_url,
 )
 
-
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "ocr"
 
 

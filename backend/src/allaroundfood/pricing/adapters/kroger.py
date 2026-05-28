@@ -11,8 +11,12 @@ import time
 from typing import Any
 
 import httpx
-from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
+from allaroundfood.pricing.adapters._resilience import (
+    record_json_failure,
+    record_json_success,
+    retry_json,
+)
 from allaroundfood.pricing.adapters.base import PriceQuote
 from allaroundfood.pricing.models import StoreLocation
 
@@ -22,16 +26,6 @@ _KROGER_BASE = "https://api.kroger.com/v1"
 _TOKEN_URL = f"{_KROGER_BASE}/connect/oauth2/token"
 _LOCATIONS_URL = f"{_KROGER_BASE}/locations"
 _PRODUCTS_URL = f"{_KROGER_BASE}/products"
-
-# Tenacity retry predicate — retry on 5xx and 429
-_RETRYABLE_STATUS = {429, 500, 502, 503, 504}
-
-
-def _is_retryable(exc: BaseException) -> bool:
-    """Return True if the exception should trigger a retry."""
-    if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code in _RETRYABLE_STATUS
-    return False
 
 
 class KrogerAdapter:
@@ -102,12 +96,6 @@ class KrogerAdapter:
         token = await self.get_access_token()
         return {"Authorization": f"Bearer {token}"}
 
-    @retry(
-        retry=retry_if_exception(_is_retryable),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
-        reraise=True,
-    )
     async def find_locations_by_zip(
         self,
         zip_code: str,
@@ -125,6 +113,25 @@ class KrogerAdapter:
         Raises:
             httpx.HTTPStatusError: On non-retryable HTTP errors.
         """
+        try:
+            locations = await self._json_find_locations_by_zip(zip_code, radius_miles)
+        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+            record_json_failure(logger, "kroger", "find_locations_by_zip", exc)
+            raise
+        record_json_success(
+            logger,
+            "kroger",
+            "find_locations_by_zip",
+            result_count=len(locations),
+        )
+        return locations
+
+    @retry_json("kroger", "find_locations_by_zip", logger)
+    async def _json_find_locations_by_zip(
+        self,
+        zip_code: str,
+        radius_miles: int,
+    ) -> list[StoreLocation]:
         client = await self._client()
         headers = await self._auth_headers()
         response = await client.get(
@@ -167,12 +174,6 @@ class KrogerAdapter:
             metadata={},
         )
 
-    @retry(
-        retry=retry_if_exception(_is_retryable),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.1, min=0.1, max=2),
-        reraise=True,
-    )
     async def search_products(
         self,
         store_location_id: str,
@@ -192,6 +193,26 @@ class KrogerAdapter:
         Raises:
             httpx.HTTPStatusError: On non-retryable HTTP errors.
         """
+        try:
+            quotes = await self._json_search_products(store_location_id, term, limit)
+        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+            record_json_failure(logger, "kroger", "search_products", exc)
+            raise
+        record_json_success(
+            logger,
+            "kroger",
+            "search_products",
+            result_count=len(quotes),
+        )
+        return quotes
+
+    @retry_json("kroger", "search_products", logger)
+    async def _json_search_products(
+        self,
+        store_location_id: str,
+        term: str,
+        limit: int,
+    ) -> list[PriceQuote]:
         client = await self._client()
         headers = await self._auth_headers()
         response = await client.get(
@@ -205,10 +226,7 @@ class KrogerAdapter:
         )
         response.raise_for_status()
         payload: dict[str, Any] = response.json()
-        return [
-            self._parse_product(store_location_id, item)
-            for item in payload.get("data", [])
-        ]
+        return [self._parse_product(store_location_id, item) for item in payload.get("data", [])]
 
     @staticmethod
     def _parse_product(location_id: str, data: dict[str, Any]) -> PriceQuote:
@@ -235,4 +253,5 @@ class KrogerAdapter:
             promo_price_cents=promo_price_cents,
             url=None,
             raw=data,
+            source_tier="api",
         )

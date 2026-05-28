@@ -3,13 +3,12 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { PriceCompareTable } from "@/components/prices/PriceCompareTable";
 import { PriceHistoryChart } from "@/components/prices/PriceHistoryChart";
 import { ZipSelector } from "@/components/prices/ZipSelector";
+import { BACKEND_URL } from "@/lib/backend-url";
 import type {
   CanonicalProductSummary,
   PricePoint,
   RetailerRanking,
 } from "@/lib/pricing-schema";
-
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 // ---------------------------------------------------------------------------
 // Server-side fetch helpers (direct to backend, no proxy needed for SSR)

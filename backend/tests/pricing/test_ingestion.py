@@ -89,7 +89,12 @@ def _make_pipeline(
     threshold: float = 0.85,
     fuzzy_threshold: int = 90,
 ) -> IngestionPipeline:
-    matcher = CanonicalMatcher(svc, canonical_store, threshold=threshold, fuzzy_threshold=fuzzy_threshold)
+    matcher = CanonicalMatcher(
+        svc,
+        canonical_store,
+        threshold=threshold,
+        fuzzy_threshold=fuzzy_threshold,
+    )
     return IngestionPipeline(
         matcher=matcher,
         embedding=svc,
@@ -121,7 +126,14 @@ def seeded_canonical() -> CanonicalProductStore:
 @pytest.fixture()
 def gtin_canonical() -> CanonicalProductStore:
     store = CanonicalProductStore(_CANON_PATH)
-    store = store.add(_make_canon("g1", "Cheerios Cereal 18 oz", brand="General Mills", gtin="099999999999"))
+    store = store.add(
+        _make_canon(
+            "g1",
+            "Cheerios Cereal 18 oz",
+            brand="General Mills",
+            gtin="099999999999",
+        )
+    )
     return store
 
 
@@ -191,7 +203,14 @@ def test_kroger_source_tier_is_api(
     seeded_canonical: CanonicalProductStore,
 ) -> None:
     svc = FakeEmbeddingService()
-    quotes = [_make_quote("Whole Milk 1 Gallon", retailer="kroger", brand="Great Value", sku="sku-milk-k")]
+    quotes = [
+        _make_quote(
+            "Whole Milk 1 Gallon",
+            retailer="kroger",
+            brand="Great Value",
+            sku="sku-milk-k",
+        )
+    ]
     pipeline = _make_pipeline(svc, seeded_canonical)
     _, _, _, new_obs = pipeline.ingest("kroger", _STORE_LOC_ID, quotes)
     assert new_obs.all()[0].source_tier == "api"
@@ -201,7 +220,14 @@ def test_non_kroger_source_tier_is_json(
     seeded_canonical: CanonicalProductStore,
 ) -> None:
     svc = FakeEmbeddingService()
-    quotes = [_make_quote("Whole Milk 1 Gallon", retailer="walmart", brand="Great Value", sku="sku-milk-w")]
+    quotes = [
+        _make_quote(
+            "Whole Milk 1 Gallon",
+            retailer="walmart",
+            brand="Great Value",
+            sku="sku-milk-w",
+        )
+    ]
     pipeline = _make_pipeline(svc, seeded_canonical)
     _, _, _, new_obs = pipeline.ingest("walmart", _STORE_LOC_ID, quotes)
     assert new_obs.all()[0].source_tier == "json"
