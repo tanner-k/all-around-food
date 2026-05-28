@@ -117,7 +117,7 @@ export default async function PricesPage({ searchParams }: PageProps) {
 
       <div className="mt-12 space-y-8">
         {/* Controls row */}
-        <div className="flex flex-wrap items-end gap-4">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 sm:gap-4">
           <Suspense>
             <ZipSelector currentZip={zip} />
           </Suspense>
@@ -207,7 +207,7 @@ function ProductSearch({
   // Client interactivity is handled via URL params; the search form submits
   // as a plain HTML form (GET) so it works without JS as well.
   return (
-    <form method="GET" className="flex gap-2">
+    <form method="GET" className="flex gap-2 w-full sm:w-auto">
       {currentZip && (
         <input type="hidden" name="zip" value={currentZip} />
       )}
@@ -216,11 +216,11 @@ function ProductSearch({
         name="q"
         defaultValue={currentQ}
         placeholder="Search products…"
-        className="w-56 rounded-xl border border-line bg-paper px-4 py-2 text-sm text-ink placeholder:text-ink-mute focus:border-terra focus:outline-none"
+        className="w-full sm:w-56 rounded-xl border border-line bg-paper px-4 py-2 text-sm text-ink placeholder:text-ink-mute focus:border-terra focus:outline-none"
       />
       <button
         type="submit"
-        className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230]"
+        className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] min-h-11 whitespace-nowrap"
       >
         Search
       </button>

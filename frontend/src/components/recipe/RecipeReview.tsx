@@ -41,10 +41,10 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
               onChange={(e) =>
                 setRecipe((r) => ({ ...r, title: e.target.value }))
               }
-              className="font-serif text-4xl text-ink bg-transparent border-b border-terra focus:outline-none w-full"
+              className="font-serif text-2xl md:text-4xl text-ink bg-transparent border-b border-terra focus:outline-none w-full"
             />
           ) : (
-            <h2 className="font-serif text-4xl text-ink leading-tight">
+            <h2 className="font-serif text-2xl md:text-4xl text-ink leading-tight">
               {recipe.title}
             </h2>
           )}
@@ -137,18 +137,18 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
       )}
 
       {/* Action buttons */}
-      <div className="flex justify-end gap-3 pt-2">
+      <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
         <button
           type="button"
           onClick={() => setEditing((v) => !v)}
-          className="rounded-full border border-line bg-paper px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2"
+          className="rounded-full border border-line bg-paper px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10"
         >
           {editing ? "Done" : "Edit"}
         </button>
         <button
           type="button"
           onClick={() => onSave(recipe)}
-          className="rounded-full bg-terra px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230]"
+          className="rounded-full bg-terra px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] min-h-11"
         >
           Save
         </button>

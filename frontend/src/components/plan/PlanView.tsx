@@ -111,7 +111,7 @@ export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 border-t border-line pt-5">
         <p className="text-sm text-ink-mute">
           Plan your week, then turn it into a shopping list.
         </p>
@@ -119,7 +119,7 @@ export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
           type="button"
           onClick={handleReviewShopping}
           disabled={meals.length === 0 || reviewing}
-          className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] disabled:opacity-50"
+          className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] disabled:opacity-50 min-h-11"
         >
           {reviewing ? "Building list…" : "Review shopping →"}
         </button>
