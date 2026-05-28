@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { formatTime } from "@/lib/format-time";
 
 interface CookTimerProps {
   secondsLeft: number;
@@ -8,12 +9,6 @@ interface CookTimerProps {
   onTick: (secondsLeft: number) => void;
   onPause: () => void;
   onReset: () => void;
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(Math.abs(seconds) / 60);
-  const s = Math.abs(seconds) % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export function CookTimer({

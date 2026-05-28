@@ -10,6 +10,7 @@ import { CookTimer } from "./CookTimer";
 import { CookDoneView } from "./CookDoneView";
 import { IngredientsSheet } from "./IngredientsSheet";
 import { TimerSheet } from "./TimerSheet";
+import { formatTime } from "@/lib/format-time";
 
 type Layout = "step" | "scroll";
 
@@ -18,12 +19,6 @@ interface CookModeProps {
 }
 
 const LAYOUT_KEY = "aaf:cookLayout";
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(Math.abs(seconds) / 60);
-  const s = Math.abs(seconds) % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-}
 
 export function CookMode({ recipe }: CookModeProps) {
   const [currentStep, setCurrentStep] = useState(0);
@@ -161,25 +156,24 @@ export function CookMode({ recipe }: CookModeProps) {
             <button
               type="button"
               onClick={() => timerSeconds >= 0 && setTimerSheetOpen(true)}
+              disabled={timerSeconds < 0}
               className={[
                 "min-h-14 rounded-xl font-semibold text-sm flex items-center justify-center transition-transform active:scale-[0.98]",
                 timerSeconds >= 0 && timerRunning
                   ? "bg-terra text-white hover:bg-[#A55230] active:bg-[#A55230]"
                   : timerSeconds >= 0
                   ? "bg-terra-soft text-terra border border-terra-soft hover:bg-terra/20 active:bg-terra/20"
-                  : "border border-line bg-paper text-ink-soft cursor-default",
+                  : "border border-line bg-paper text-ink-soft opacity-40 cursor-not-allowed",
               ].join(" ")}
               aria-label={timerSeconds >= 0 ? "Open timer" : "Timer (not set)"}
-              aria-disabled={timerSeconds < 0}
             >
               {timerSeconds >= 0 ? formatTime(timerSeconds) : "Timer"}
             </button>
 
-            {/* Next */}
+            {/* Next / Finish */}
             <button
               type="button"
               onClick={handleNext}
-              aria-disabled={currentStep >= total - 1 && done}
               className="min-h-14 rounded-xl bg-terra text-white font-semibold text-sm flex items-center justify-center transition-transform active:scale-[0.98] hover:bg-[#A55230] active:bg-[#A55230]"
             >
               {currentStep >= total - 1 ? "Finish →" : "Next →"}

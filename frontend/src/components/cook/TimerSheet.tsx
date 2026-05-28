@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { X, Play, Pause, RotateCcw } from "lucide-react";
+import { trapTabKey } from "@/lib/focus-trap";
+import { formatTime } from "@/lib/format-time";
 
 interface TimerSheetProps {
   open: boolean;
@@ -10,12 +12,6 @@ interface TimerSheetProps {
   onPauseToggle: () => void;
   onReset: () => void;
   onClose: () => void;
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(Math.abs(seconds) / 60);
-  const s = Math.abs(seconds) % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
 export function TimerSheet({
@@ -27,13 +23,19 @@ export function TimerSheet({
   onClose,
 }: TimerSheetProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (open) {
       previousFocusRef.current = document.activeElement as HTMLElement;
       const id = setTimeout(() => closeButtonRef.current?.focus(), 50);
-      return () => clearTimeout(id);
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        clearTimeout(id);
+        document.body.style.overflow = prevOverflow;
+      };
     } else {
       previousFocusRef.current?.focus();
     }
@@ -54,10 +56,12 @@ export function TimerSheet({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label="Timer"
       className="fixed inset-0 z-50 bg-paper flex flex-col"
+      onKeyDown={(e) => trapTabKey(e, dialogRef.current)}
     >
       {/* Close button */}
       <div className="flex justify-end px-4 pt-4">

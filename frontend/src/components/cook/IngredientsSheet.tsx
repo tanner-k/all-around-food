@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { X, List } from "lucide-react";
 import type { Ingredient } from "@/lib/recipe-schema";
+import { trapTabKey } from "@/lib/focus-trap";
 
 interface IngredientsSheetProps {
   open: boolean;
@@ -34,6 +35,7 @@ export function IngredientsSheet({
   onClose,
 }: IngredientsSheetProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -41,7 +43,12 @@ export function IngredientsSheet({
       previousFocusRef.current = document.activeElement as HTMLElement;
       // Small delay to let the sheet render before focusing
       const id = setTimeout(() => closeButtonRef.current?.focus(), 50);
-      return () => clearTimeout(id);
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        clearTimeout(id);
+        document.body.style.overflow = prevOverflow;
+      };
     } else {
       previousFocusRef.current?.focus();
     }
@@ -68,10 +75,12 @@ export function IngredientsSheet({
       />
       {/* Sheet */}
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Ingredients"
         className="fixed bottom-0 left-0 right-0 z-50 h-[60vh] rounded-t-2xl bg-paper border-t border-line flex flex-col"
+        onKeyDown={(e) => trapTabKey(e, dialogRef.current)}
       >
         {/* Drag handle */}
         <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
