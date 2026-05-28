@@ -61,7 +61,7 @@ export function CookTimer({
         <button
           type="button"
           onClick={running ? onPause : () => onTick(secondsLeft)}
-          className="text-ink-mute hover:text-ink text-xs px-1"
+          className="min-h-8 px-2 text-sm text-ink-mute hover:text-ink active:text-ink rounded transition-colors"
           aria-label={running ? "Pause timer" : "Resume timer"}
         >
           {running ? "⏸" : "▶"}
@@ -70,7 +70,7 @@ export function CookTimer({
       <button
         type="button"
         onClick={onReset}
-        className="text-ink-mute hover:text-ink text-xs px-1"
+        className="min-h-8 px-2 text-sm text-ink-mute hover:text-ink active:text-ink rounded transition-colors"
         aria-label="Reset timer"
       >
         ✕

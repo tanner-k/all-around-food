@@ -75,13 +75,13 @@ export function CookDoneView({
           type="button"
           onClick={handleMarkCooked}
           disabled={loading}
-          className="w-full min-h-14 rounded-xl bg-terra text-white font-semibold text-base transition-colors hover:bg-[#A55230] disabled:opacity-60"
+          className="w-full min-h-14 rounded-xl bg-terra text-white font-semibold text-base transition-colors hover:bg-[#A55230] active:bg-[#A55230] disabled:opacity-60"
         >
           {loading ? "Saving…" : "Mark as cooked"}
         </button>
         <Link
           href={`/cookbook/${recipeId}`}
-          className="w-full min-h-14 rounded-xl border border-line bg-paper text-ink font-semibold text-base flex items-center justify-center transition-colors hover:bg-paper-2"
+          className="w-full min-h-14 rounded-xl border border-line bg-paper text-ink font-semibold text-base flex items-center justify-center transition-colors hover:bg-paper-2 active:bg-paper-2"
         >
           Back to recipe
         </Link>

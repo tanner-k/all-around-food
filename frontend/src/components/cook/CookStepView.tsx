@@ -1,6 +1,7 @@
 import type { Ingredient, Step } from '@/lib/recipe-schema';
 import { InlineAmountText } from '@/components/recipe/InlineAmountText';
 import { CookIngredientPanel } from './CookIngredientPanel';
+import { IngredientsSheetTrigger } from './IngredientsSheet';
 
 interface CookStepViewProps {
   steps: Step[];
@@ -9,6 +10,9 @@ interface CookStepViewProps {
   onPrev: () => void;
   onNext: () => void;
   onStartTimer: (minutes: number) => void;
+  /** When true, hides inline nav buttons and shows the sheet trigger pill */
+  mobileLayout?: boolean;
+  onShowIngredients?: () => void;
 }
 
 export function CookStepView({
@@ -18,6 +22,8 @@ export function CookStepView({
   onPrev,
   onNext,
   onStartTimer,
+  mobileLayout = false,
+  onShowIngredients,
 }: CookStepViewProps) {
   const total = steps.length;
 
@@ -28,11 +34,20 @@ export function CookStepView({
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 flex-1">
-      {/* Mobile: ingredient accordion above the steps */}
-      <CookIngredientPanel ingredients={ingredients} variant="mobile" />
+      {/* Mobile: ingredient accordion above the steps — hidden when mobileLayout (use sheet instead) */}
+      {!mobileLayout && (
+        <CookIngredientPanel ingredients={ingredients} variant="mobile" />
+      )}
 
       {/* Main column: steps + navigation */}
-      <div className="flex flex-col gap-4 flex-1">
+      <div className="flex flex-col gap-4 flex-1 px-4 pt-4 md:px-0 md:pt-0">
+        {/* Sheet trigger pill — mobile only */}
+        {mobileLayout && onShowIngredients && (
+          <div className="flex justify-end">
+            <IngredientsSheetTrigger onClick={onShowIngredients} />
+          </div>
+        )}
+
         {/* Steps */}
         <div className="flex flex-col gap-3 flex-1">
           {visibleIndexes.map((idx) => {
@@ -73,7 +88,7 @@ export function CookStepView({
                   <button
                     type="button"
                     onClick={() => onStartTimer(step.duration_min!)}
-                    className="mt-3 text-xs text-terra border border-terra-soft bg-terra-soft rounded-full px-3 py-1 hover:bg-terra hover:text-white transition-colors"
+                    className="mt-3 text-xs text-terra border border-terra-soft bg-terra-soft rounded-full px-3 py-1 hover:bg-terra hover:text-white active:bg-terra active:text-white transition-colors"
                   >
                     ⏲ Start {step.duration_min} min timer
                   </button>
@@ -87,24 +102,26 @@ export function CookStepView({
           })}
         </div>
 
-        {/* Navigation buttons — large tap targets, bottom-anchored */}
-        <div className="flex gap-3 mt-auto pt-2">
-          <button
-            type="button"
-            onClick={onPrev}
-            disabled={currentStep === 0}
-            className="flex-1 min-h-14 rounded-xl border border-line bg-paper text-ink font-semibold text-sm transition-colors hover:bg-paper-2 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            ‹ Back
-          </button>
-          <button
-            type="button"
-            onClick={onNext}
-            className="flex-1 min-h-14 rounded-xl bg-terra text-white font-semibold text-sm transition-colors hover:bg-[#A55230]"
-          >
-            {currentStep >= total - 1 ? 'Finish →' : 'Next →'}
-          </button>
-        </div>
+        {/* Navigation buttons — hidden on mobile (bottom bar handles nav) */}
+        {!mobileLayout && (
+          <div className="flex gap-3 mt-auto pt-2">
+            <button
+              type="button"
+              onClick={onPrev}
+              disabled={currentStep === 0}
+              className="flex-1 min-h-14 rounded-xl border border-line bg-paper text-ink font-semibold text-sm transition-colors hover:bg-paper-2 active:bg-paper-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              ‹ Back
+            </button>
+            <button
+              type="button"
+              onClick={onNext}
+              className="flex-1 min-h-14 rounded-xl bg-terra text-white font-semibold text-sm transition-colors hover:bg-[#A55230] active:bg-[#A55230]"
+            >
+              {currentStep >= total - 1 ? 'Finish →' : 'Next →'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Desktop: sticky ingredient sidebar */}
