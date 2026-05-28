@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import { RecipeEditForm } from "@/components/recipe/RecipeEditForm";
+import { BACKEND_URL } from "@/lib/backend-url";
 import type { Recipe } from "@/lib/recipe-schema";
-
-const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 interface PageProps {
   params: Promise<{ id: string }>;

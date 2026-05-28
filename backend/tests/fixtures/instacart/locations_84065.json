@@ -1,0 +1,34 @@
+{
+  "retailers": [
+    {
+      "id": "smiths",
+      "name": "Smith's Food & Drug",
+      "slug": "smiths",
+      "retailer_id": 155,
+      "logo_url": "https://d2lnr5mha7bycj.cloudfront.net/retailer/smiths-logo.png",
+      "nearest_store": {
+        "address": "11180 S Redwood Rd",
+        "city": "South Jordan",
+        "state": "UT",
+        "zip": "84095",
+        "lat": 40.5561,
+        "lng": -111.9290
+      }
+    },
+    {
+      "id": "costco",
+      "name": "Costco",
+      "slug": "costco",
+      "retailer_id": 28,
+      "logo_url": "https://d2lnr5mha7bycj.cloudfront.net/retailer/costco-logo.png",
+      "nearest_store": {
+        "address": "1818 W Pkwy Blvd",
+        "city": "West Valley City",
+        "state": "UT",
+        "zip": "84119",
+        "lat": 40.6896,
+        "lng": -111.9389
+      }
+    }
+  ]
+}

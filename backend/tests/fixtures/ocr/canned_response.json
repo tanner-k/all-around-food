@@ -1,0 +1,34 @@
+{
+  "retailer_guess": "Green Grocer",
+  "purchased_at": "2024-06-01T09:15:00",
+  "subtotal_cents": 627,
+  "tax_cents": 50,
+  "total_cents": 677,
+  "parse_confidence": 0.95,
+  "line_items": [
+    {
+      "line_no": 1,
+      "raw_text": "Organic Bananas 1lb $1.29",
+      "parsed_name": "Organic Bananas",
+      "parsed_qty": 1.0,
+      "parsed_unit": "lb",
+      "price_cents": 129
+    },
+    {
+      "line_no": 2,
+      "raw_text": "Almond Milk 64oz $3.99",
+      "parsed_name": "Almond Milk",
+      "parsed_qty": null,
+      "parsed_unit": "oz",
+      "price_cents": 399
+    },
+    {
+      "line_no": 3,
+      "raw_text": "Large Eggs 12ct $0.99",
+      "parsed_name": "Large Eggs",
+      "parsed_qty": 12.0,
+      "parsed_unit": "ct",
+      "price_cents": 99
+    }
+  ]
+}

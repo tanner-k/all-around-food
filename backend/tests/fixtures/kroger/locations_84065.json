@@ -1,0 +1,40 @@
+{
+  "data": [
+    {
+      "locationId": "02100440",
+      "name": "Riverton Marketplace Kroger",
+      "address": {
+        "addressLine1": "12441 S Pasture Rd",
+        "city": "Riverton",
+        "state": "UT",
+        "zipCode": "84065",
+        "county": "Salt Lake"
+      },
+      "geolocation": {
+        "latitude": 40.503746,
+        "longitude": -111.963270
+      },
+      "fulfillment": {
+        "zones": ["DELIVERY", "PICKUP"]
+      }
+    },
+    {
+      "locationId": "02100441",
+      "name": "South Jordan Kroger",
+      "address": {
+        "addressLine1": "11308 S River Heights Dr",
+        "city": "South Jordan",
+        "state": "UT",
+        "zipCode": "84095",
+        "county": "Salt Lake"
+      },
+      "geolocation": {
+        "latitude": 40.556123,
+        "longitude": -111.929456
+      },
+      "fulfillment": {
+        "zones": []
+      }
+    }
+  ]
+}

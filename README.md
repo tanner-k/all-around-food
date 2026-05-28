@@ -18,6 +18,7 @@ pnpm install && cd backend && uv sync
 **Prerequisites:**
 - Node 22, pnpm, Python 3.12, uv
 - An Anthropic API key (get one at https://console.anthropic.com)
+- Poppler for receipt PDF OCR (`brew install poppler` on macOS)
 
 **Step 1: Configure environment**
 
@@ -42,6 +43,22 @@ uv run python -m allaroundfood
 ```
 
 FastAPI will start on http://localhost:8000. Check health: `curl http://localhost:8000/healthz`
+
+> **Port collision with `whispr`:** the [whispr](../../whispr) transcription
+> service also defaults to `:8000`. If you're testing the Instagram/TikTok
+> video importer, run one of them on a different port:
+>
+> ```bash
+> # Option A — keep whispr on :8000, move this backend to :8001
+> PORT=8001 uv run python -m allaroundfood
+> # then set BACKEND_URL=http://localhost:8001 in frontend/.env.local and
+> # restart `pnpm dev` (Next.js only reads .env at startup)
+>
+> # Option B — move whispr to e.g. :8088, keep this backend on :8000
+> WHISPR_URL=http://localhost:8088 uv run python -m allaroundfood
+> ```
+>
+> The startup log will warn if `yt-dlp` or `ffmpeg` aren't resolvable on PATH.
 
 **Step 3: Start the frontend (Terminal B)**
 
@@ -71,6 +88,18 @@ Next.js will start on http://localhost:3000.
 If `pnpm install` warns about build scripts, run:
 ```bash
 pnpm approve-builds
+```
+
+For pricing adapter Playwright fallbacks, install Chromium once:
+```bash
+cd backend
+uv run playwright install chromium
+```
+
+For real offline receipt OCR, download the local Qwen2-VL GGUF model and export its path:
+```bash
+bash scripts/download_qwen.sh
+export QWEN_GGUF_PATH="$HOME/.cache/allaroundfood/qwen2-vl-7b-instruct-q4_k_m.gguf"
 ```
 
 ## Develop

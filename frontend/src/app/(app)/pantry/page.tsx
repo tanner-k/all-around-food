@@ -1,11 +1,12 @@
 import { SectionHeader } from "@/components/SectionHeader";
 import { PantryView } from "@/components/pantry/PantryView";
+import { BACKEND_URL } from "@/lib/backend-url";
 import type { PantryItem } from "@/lib/pantry-schema";
 
 async function getPantryItems(): Promise<PantryItem[]> {
   try {
     const res = await fetch(
-      `${process.env.BACKEND_URL ?? "http://localhost:8000"}/pantry`,
+      `${BACKEND_URL}/pantry`,
       { cache: "no-store" }
     );
     if (!res.ok) return [];

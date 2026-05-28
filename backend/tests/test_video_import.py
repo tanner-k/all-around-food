@@ -11,9 +11,11 @@ import httpx
 import pytest
 
 from allaroundfood.video_import import (
+    VideoImportBinaryStatus,
     VideoImportError,
     VideoImportSettings,
     _fetch_video_text_sync,
+    check_video_import_binaries,
     validate_video_url,
 )
 
@@ -467,6 +469,82 @@ def test_fetch_video_text_reports_whispr_timeout(
 
     assert "Transcription took too long" in exc.value.message
     assert exc.value.status_code == 504
+
+
+def test_fetch_video_text_sanitizes_ytdlp_stderr(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """yt-dlp failure stderr never leaks into the user-facing error message."""
+    leaky_stderr = (
+        "WARNING: [Instagram] ZZZ: Instagram API is not granting access\n"
+        "ERROR: [Instagram] ZZZ: Instagram sent an empty media response. "
+        "See https://github.com/yt-dlp/yt-dlp/wiki/FAQ\n"
+        "Confirm you are on the latest version using yt-dlp -U"
+    )
+
+    def fake_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        raise subprocess.CalledProcessError(
+            returncode=1,
+            cmd=["yt-dlp"],
+            stderr=leaky_stderr,
+        )
+
+    monkeypatch.setattr("allaroundfood.video_import.subprocess.run", fake_run)
+
+    with (
+        caplog.at_level("WARNING", logger="allaroundfood.video_import"),
+        pytest.raises(VideoImportError) as exc,
+    ):
+        _fetch_video_text_sync(
+            "https://www.instagram.com/reel/abc",
+            VideoImportSettings(timeout_s=30),
+        )
+
+    message = exc.value.message
+    for fragment in ("WARNING:", "ERROR:", "yt-dlp -U", "github.com"):
+        assert fragment not in message, (
+            f"User-facing error leaked stderr fragment {fragment!r}: {message!r}"
+        )
+    assert exc.value.status_code == 422
+
+    logged = "\n".join(record.getMessage() for record in caplog.records)
+    assert "yt-dlp -U" in logged, "raw yt-dlp stderr should still be logged server-side"
+
+
+def test_check_video_import_binaries_resolves_both(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When yt-dlp and ffmpeg are on PATH, the status reports their absolute paths."""
+
+    def fake_which(name: str) -> str | None:
+        return {"yt-dlp": "/opt/bin/yt-dlp", "ffmpeg": "/opt/bin/ffmpeg"}.get(name)
+
+    monkeypatch.setattr("allaroundfood.video_import.shutil.which", fake_which)
+
+    status = check_video_import_binaries(VideoImportSettings())
+
+    assert isinstance(status, VideoImportBinaryStatus)
+    assert status.ytdlp == "/opt/bin/yt-dlp"
+    assert status.ffmpeg == "/opt/bin/ffmpeg"
+    assert status.missing == ()
+
+
+def test_check_video_import_binaries_reports_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing binaries are surfaced in the `missing` tuple."""
+
+    monkeypatch.setattr(
+        "allaroundfood.video_import.shutil.which",
+        lambda name: None,
+    )
+
+    status = check_video_import_binaries(VideoImportSettings())
+
+    assert status.ytdlp is None
+    assert status.ffmpeg is None
+    assert set(status.missing) == {"yt-dlp", "ffmpeg"}
 
 
 @pytest.mark.network

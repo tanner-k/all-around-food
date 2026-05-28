@@ -1,0 +1,40 @@
+{
+  "data": {
+    "productsForSearch": {
+      "products": [
+        {
+          "id": "item_1234567",
+          "name": "Lucerne Whole Milk, 1 Gallon",
+          "brand_name": "Lucerne",
+          "size": "1 gal",
+          "pricing": {
+            "price": "4.49",
+            "original_price": null,
+            "promo": false,
+            "promo_description": null
+          },
+          "image_url": "https://d2lnr5mha7bycj.cloudfront.net/product/lucerne-milk.jpg",
+          "product_page_path": "/store/smiths/products/1234567",
+          "retailer_reference_code": "item_1234567",
+          "source_retailer": "smiths"
+        },
+        {
+          "id": "item_7654321",
+          "name": "Horizon Organic Whole Milk, Half Gallon",
+          "brand_name": "Horizon Organic",
+          "size": "0.5 gal",
+          "pricing": {
+            "price": "3.99",
+            "original_price": "4.99",
+            "promo": true,
+            "promo_description": "Sale"
+          },
+          "image_url": "https://d2lnr5mha7bycj.cloudfront.net/product/horizon-milk.jpg",
+          "product_page_path": "/store/smiths/products/7654321",
+          "retailer_reference_code": "item_7654321",
+          "source_retailer": "smiths"
+        }
+      ]
+    }
+  }
+}
