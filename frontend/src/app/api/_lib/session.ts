@@ -1,9 +1,10 @@
-// TODO(T3-integration): replace body with the real Auth.js session lookup:
-//   import { auth } from "@/auth"; const s = await auth(); return s?.user?.id ?? null;
-// Until auth is wired, return a fixed dev user id so user-scoped handlers compile & run.
+import { auth } from "@/auth";
 
-export const DEV_USER_ID = "00000000-0000-0000-0000-000000000000";
-
+/**
+ * Returns the authenticated user's id, or null when there is no valid session.
+ * User-scoped route handlers must treat null as 401.
+ */
 export async function getCurrentUserId(): Promise<string | null> {
-  return DEV_USER_ID;
+  const session = await auth();
+  return session?.user?.id ?? null;
 }
