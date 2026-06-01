@@ -17,5 +17,13 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  // No webServer configured — start `pnpm dev` manually or in CI setup
+  webServer: {
+    // Start the Next.js dev server before running E2E tests.
+    // In CI, set the DATABASE_URL + ANTHROPIC_API_KEY env vars — the tests
+    // mock all /api/** routes so no real DB or AI key is exercised.
+    command: "pnpm dev",
+    url: "http://localhost:3000",
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+  },
 });

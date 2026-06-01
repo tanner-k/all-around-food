@@ -8,7 +8,6 @@
 - [ ] Init Next.js 15 + Tailwind v4 + design tokens from docs/design/Cookbook App Flow.html
 - [ ] Build top nav + 5 empty routes (Plan, Cookbook, Shop, Pantry, Import)
 - [ ] Stub Polars storage layer with immutable RecipeStore
-- [ ] Add one E2E smoke test (frontend renders + backend round-trips a recipe)
 
 ## Later
 - [ ] (nothing scheduled yet)
