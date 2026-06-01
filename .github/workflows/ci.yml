@@ -8,22 +8,24 @@ on:
 
 jobs:
   frontend:
-    name: Frontend · pnpm lint · pnpm build
+    name: Frontend · lint · build · test · db check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Install pnpm BEFORE setup-node so its pnpm cache can resolve the store.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'pnpm'
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: latest
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install dependencies
         if: hashFiles('frontend/package.json') != ''
@@ -36,6 +38,14 @@ jobs:
       - name: Build
         if: hashFiles('frontend/package.json') != ''
         run: cd frontend && pnpm build
+
+      - name: Test
+        if: hashFiles('frontend/package.json') != ''
+        run: cd frontend && pnpm test
+
+      - name: Drizzle migration check
+        if: hashFiles('frontend/package.json') != ''
+        run: cd frontend && pnpm db:check
 
   backend:
     name: Backend · ruff · mypy · pytest

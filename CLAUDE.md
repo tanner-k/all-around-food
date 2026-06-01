@@ -82,7 +82,7 @@ Deployment is via **Vercel Git integration**: pushing to `main` triggers a produ
 
 - The `frontend/` directory is the Vercel project root.
 - API routes and server actions deploy as Vercel serverless functions alongside the Next.js app.
-- A `.github/workflows/deploy.yml` (Vercel CLI-based) is planned for task T9 to enable migration steps on deploy.
+- `.github/workflows/deploy.yml` runs `drizzle-kit migrate` against the production database on push to `main` (Vercel's build step does not run migrations); the app deploy itself stays with the Vercel Git integration.
 
 ## 8. Tech stack
 - Frontend: Next.js 16 + TypeScript + Tailwind CSS v4 + shadcn/ui *(shadcn/ui planned — not yet installed)*

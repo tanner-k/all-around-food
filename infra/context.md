@@ -6,7 +6,7 @@ Vercel deployment configuration and notes. For v1, infrastructure is entirely Ve
 
 - Vercel project root: `frontend/`
 - Deploy trigger: Vercel Git integration (push to `main` → production; PRs → preview deploys)
-- A `.github/workflows/deploy.yml` (Vercel CLI-based, with a `drizzle-kit migrate` step) is planned for task T9.
+- `.github/workflows/deploy.yml` runs the `drizzle-kit migrate` step against the production database on push to `main` (requires the `DATABASE_URL` Actions secret). The app deploy itself is handled by the Vercel Git integration.
 
 ## Not in scope
 - GitHub Actions CI workflows → `.github/workflows/` (at repo root)

@@ -1,0 +1,49 @@
+name: Deploy
+
+# Application deploys are handled automatically by the Vercel Git integration
+# (push to `main` → production; pull requests → preview deploys). Vercel's build
+# step does NOT run database migrations, so this workflow owns the migration step
+# that must run against the production database whenever `main` advances.
+
+on:
+  push:
+    branches: [main]
+
+# Never run two migration jobs against the same database concurrently.
+concurrency:
+  group: deploy-migrations-main
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Apply database migrations (production)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: cd frontend && pnpm install --frozen-lockfile
+
+      - name: Apply Drizzle migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set — cannot run production migrations."
+            echo "Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          cd frontend && pnpm db:migrate
