@@ -1,6 +1,6 @@
 # 0001 — Initial stack
 
-**Status:** Accepted
+**Status:** Superseded by 0002
 **Date:** 2026-05-19
 
 ## Context

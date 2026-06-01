@@ -1,31 +1,19 @@
 # backend/
 
-## Scope
-- HTTP/API endpoints
-- Business logic & domain models
-- Authentication / authorization
-- Background jobs, schedulers, queue workers
+> **This backend is retired for v1.** See ADR 0002 (`docs/decisions/0002-vercel-fullstack.md`).
 
-## Not in scope
-- UI rendering → `frontend/`
-- Database schema → `data/`
-- Cloud infrastructure → `infra/`
+## Status
 
-## Stack
-Python 3.12 + Polars (file-backed; FastAPI planned)
+The Python/Polars backend has been archived to `backend/_legacy/`. Do not add new code here.
 
-## Local skills / conventions
-- test-driven-development
-- python-reviewer
+- `backend/_legacy/src/allaroundfood/models.py` — **Pydantic models; the schema source of truth for the Drizzle ORM port (task T2).** Do not delete this file until the Drizzle schema in `frontend/src/db/schema.ts` has been accepted.
+- `backend/_legacy/pyproject.toml` / `uv.lock` — archived Python deps.
+- `backend/_legacy/tests/` — archived Python tests.
 
-## Run
-```bash
-cd backend
-uv run python -m allaroundfood
-```
+## Where business logic lives now
 
-## Notes for agents
-- One route file per resource (e.g. `routes/users.ts`)
-- Validation at the edge (request → typed input) — never trust the client
-- Errors surface as typed problem objects; do not throw raw strings
-- All env access through a single `config.ts` — fail loudly if a required env var is missing
+Business logic is implemented as **Next.js route handlers and server actions** in `frontend/src/app/api/` and `frontend/src/app/(app)/`. See `frontend/context.md` for conventions.
+
+## Why archived, not deleted
+
+The Pydantic models in `_legacy/src/allaroundfood/models.py` capture the canonical data shape (Recipe, Ingredient, Step, etc.). Task T2 uses them as the authoritative reference when generating the Drizzle schema. Once T2 is merged and accepted, this directory can be removed in a follow-up task.
