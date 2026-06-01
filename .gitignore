@@ -51,6 +51,9 @@ venv/
 .eslintcache
 .prettiercache
 
+# Claude Code agent worktrees (ephemeral, local-only)
+.claude/worktrees/
+
 # Phase A additions
 frontend/.next/
 frontend/node_modules/
