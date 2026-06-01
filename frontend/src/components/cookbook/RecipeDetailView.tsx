@@ -42,6 +42,9 @@ export function RecipeDetailView({ recipeId }: RecipeDetailViewProps) {
   }, [recipeId]);
 
   useEffect(() => {
+    // Fetch-on-mount: state is updated after the awaited fetch resolves, a
+    // legitimate external-sync use of an effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 

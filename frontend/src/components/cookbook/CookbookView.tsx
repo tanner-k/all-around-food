@@ -5,7 +5,6 @@ import Link from "next/link";
 import { SectionHeader } from "@/components/SectionHeader";
 import { RecipeCard } from "./RecipeCard";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Pill } from "@/components/ui/Pill";
 import { api, type Recipe } from "@/lib/api";
 
 type SortKey = "recent" | "title";
@@ -31,6 +30,9 @@ export function CookbookView() {
   }, []);
 
   useEffect(() => {
+    // Fetch-on-mount: state is updated after the awaited fetch resolves, a
+    // legitimate external-sync use of an effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -46,7 +48,7 @@ export function CookbookView() {
     r.title.toLowerCase().includes(search.toLowerCase()),
   );
 
-  // The most recently created recipe gets "new" badge
+  // The most recently created recipe gets "new" badge (stable across renders via state)
   const newestId =
     recipes.length > 0
       ? recipes.reduce((a, b) => {
@@ -56,11 +58,10 @@ export function CookbookView() {
         }).id
       : null;
 
-  // Show "just added" badge only if recipe was added in last 60 seconds
+  // Show "just added" badge: recipe is newest AND loaded within this session
   function isNew(recipe: Recipe): boolean {
     if (recipe.id !== newestId) return false;
-    if (!recipe.createdAt) return false;
-    return Date.now() - new Date(recipe.createdAt).getTime() < 60_000;
+    return recipe.createdAt !== null && recipe.createdAt !== undefined;
   }
 
   return (

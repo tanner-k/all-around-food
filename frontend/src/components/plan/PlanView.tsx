@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { SectionHeader } from "@/components/SectionHeader";
 import { Button } from "@/components/ui/Button";
-import { Pill } from "@/components/ui/Pill";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Dialog } from "@/components/ui/Dialog";
 import { api, type MealPlan, type Recipe } from "@/lib/api";
@@ -77,6 +76,9 @@ export function PlanView() {
   }, []);
 
   useEffect(() => {
+    // Fetch-on-mount: state is updated after the awaited fetch resolves, a
+    // legitimate external-sync use of an effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -289,7 +291,7 @@ export function PlanView() {
             {/* Meal-type breakdown */}
             <div className="rounded-xl border border-line bg-paper p-5 space-y-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-mute">
-                This week's meals
+                This week&apos;s meals
               </p>
 
               {MEAL_TYPES.map((mealType) => {

@@ -29,6 +29,9 @@ export function ShopView() {
   }, []);
 
   useEffect(() => {
+    // Fetch-on-mount: state is updated after the awaited fetch resolves, a
+    // legitimate external-sync use of an effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
 
@@ -223,7 +226,7 @@ export function ShopView() {
             <div>
               <p className="text-sm font-medium text-ink">Add from a recipe</p>
               <p className="text-xs text-ink-mute">
-                Open a recipe in the Cookbook and tap "Add ingredients to shop".
+                Open a recipe in the Cookbook and tap &ldquo;Add ingredients to shop&rdquo;.
               </p>
             </div>
             <Link
