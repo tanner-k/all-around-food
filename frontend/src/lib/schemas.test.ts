@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  BOUNDS,
   recipeCreateSchema,
   recipeUpdateSchema,
   mealPlanCreateSchema,
@@ -93,6 +94,103 @@ describe("recipeCreateSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  // --- New bounds tests (T10 hardening) ---
+
+  it("rejects title exceeding max length", () => {
+    const result = recipeCreateSchema.safeParse({
+      title: "A".repeat(BOUNDS.RECIPE_TITLE_MAX + 1),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts title exactly at max length", () => {
+    const result = recipeCreateSchema.safeParse({
+      title: "A".repeat(BOUNDS.RECIPE_TITLE_MAX),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects non-http(s) sourceUrl", () => {
+    const result = recipeCreateSchema.safeParse({
+      title: "Test",
+      sourceUrl: "ftp://example.com/recipe",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects oversized sourceUrl", () => {
+    const longPath = "a".repeat(BOUNDS.SOURCE_URL_MAX);
+    const result = recipeCreateSchema.safeParse({
+      title: "Test",
+      sourceUrl: `https://example.com/${longPath}`,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects step text exceeding max length", () => {
+    const result = recipeCreateSchema.safeParse({
+      title: "Test",
+      steps: [{ text: "x".repeat(BOUNDS.STEP_TEXT_MAX + 1) }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects zero amount in ingredient", () => {
+    const result = recipeCreateSchema.safeParse({
+      title: "Test",
+      ingredients: [{ name: "flour", amount: 0 }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects Infinity amount in ingredient", () => {
+    const result = recipeCreateSchema.safeParse({
+      title: "Test",
+      ingredients: [{ name: "flour", amount: Infinity }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects amount exceeding max in ingredient", () => {
+    const result = recipeCreateSchema.safeParse({
+      title: "Test",
+      ingredients: [{ name: "flour", amount: BOUNDS.AMOUNT_MAX + 1 }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects ingredient name exceeding max length", () => {
+    const result = recipeCreateSchema.safeParse({
+      title: "Test",
+      ingredients: [{ name: "x".repeat(BOUNDS.INGREDIENT_NAME_MAX + 1) }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects ingredient notes exceeding max length", () => {
+    const result = recipeCreateSchema.safeParse({
+      title: "Test",
+      ingredients: [{ name: "flour", notes: "n".repeat(BOUNDS.INGREDIENT_NOTES_MAX + 1) }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects ingredients array exceeding max size", () => {
+    const tooMany = Array.from({ length: BOUNDS.INGREDIENTS_MAX + 1 }, (_, i) => ({
+      name: `ingredient-${i}`,
+    }));
+    const result = recipeCreateSchema.safeParse({ title: "Test", ingredients: tooMany });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects steps array exceeding max size", () => {
+    const tooMany = Array.from({ length: BOUNDS.STEPS_MAX + 1 }, (_, i) => ({
+      text: `Step ${i}`,
+    }));
+    const result = recipeCreateSchema.safeParse({ title: "Test", steps: tooMany });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("recipeUpdateSchema", () => {
@@ -108,6 +206,13 @@ describe("recipeUpdateSchema", () => {
 
   it("still rejects empty title on update", () => {
     const result = recipeUpdateSchema.safeParse({ title: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("still rejects oversized title on update", () => {
+    const result = recipeUpdateSchema.safeParse({
+      title: "T".repeat(BOUNDS.RECIPE_TITLE_MAX + 1),
+    });
     expect(result.success).toBe(false);
   });
 });
@@ -211,6 +316,29 @@ describe("shoppingItemCreateSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("rejects name exceeding max length", () => {
+    const result = shoppingItemCreateSchema.safeParse({
+      name: "n".repeat(BOUNDS.ITEM_NAME_MAX + 1),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects Infinity amount", () => {
+    const result = shoppingItemCreateSchema.safeParse({
+      name: "Eggs",
+      amount: Infinity,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects amount exceeding max", () => {
+    const result = shoppingItemCreateSchema.safeParse({
+      name: "Eggs",
+      amount: BOUNDS.AMOUNT_MAX + 1,
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("shoppingItemUpdateSchema", () => {
@@ -221,6 +349,13 @@ describe("shoppingItemUpdateSchema", () => {
 
   it("rejects empty name on update", () => {
     const result = shoppingItemUpdateSchema.safeParse({ name: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects oversized name on update", () => {
+    const result = shoppingItemUpdateSchema.safeParse({
+      name: "x".repeat(BOUNDS.ITEM_NAME_MAX + 1),
+    });
     expect(result.success).toBe(false);
   });
 });
@@ -264,6 +399,29 @@ describe("pantryItemCreateSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("rejects name exceeding max length", () => {
+    const result = pantryItemCreateSchema.safeParse({
+      name: "x".repeat(BOUNDS.ITEM_NAME_MAX + 1),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects Infinity amount", () => {
+    const result = pantryItemCreateSchema.safeParse({
+      name: "Sugar",
+      amount: Infinity,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects amount exceeding max", () => {
+    const result = pantryItemCreateSchema.safeParse({
+      name: "Sugar",
+      amount: BOUNDS.AMOUNT_MAX + 1,
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("pantryItemUpdateSchema", () => {
@@ -278,6 +436,13 @@ describe("pantryItemUpdateSchema", () => {
 
   it("rejects empty name on update", () => {
     const result = pantryItemUpdateSchema.safeParse({ name: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects oversized name on update", () => {
+    const result = pantryItemUpdateSchema.safeParse({
+      name: "x".repeat(BOUNDS.ITEM_NAME_MAX + 1),
+    });
     expect(result.success).toBe(false);
   });
 });
