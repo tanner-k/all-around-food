@@ -123,3 +123,43 @@ describe("recipeToShoppingItems", () => {
     expect(result[3].amount).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Edge cases — added by T8
+// ---------------------------------------------------------------------------
+
+describe("recipeToShoppingItems — edge cases", () => {
+  it("omits unit when it is an empty string (after trimming)", () => {
+    const ingredients = [
+      makeIngredient({ id: "i1", name: "salt", unit: "   " }),
+    ];
+    const result = recipeToShoppingItems("recipe-abc", ingredients);
+    expect(result[0].unit).toBeUndefined();
+  });
+
+  it("handles a single ingredient with all fields set", () => {
+    const ingredients = [
+      makeIngredient({ id: "i1", name: "butter", amount: 100, unit: "g" }),
+    ];
+    const result = recipeToShoppingItems("recipe-123", ingredients);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ name: "butter", amount: 100, unit: "g", recipeId: "recipe-123" });
+  });
+
+  it("handles a large list of ingredients without losing any", () => {
+    const ingredients = Array.from({ length: 20 }, (_, i) =>
+      makeIngredient({ id: `i${i}`, name: `ingredient-${i}` }),
+    );
+    const result = recipeToShoppingItems("recipe-big", ingredients);
+    expect(result).toHaveLength(20);
+  });
+
+  it("does not mutate the original ingredient array", () => {
+    const ingredients = [
+      makeIngredient({ id: "i1", name: "  parsley  " }),
+    ];
+    const original = { ...ingredients[0] };
+    recipeToShoppingItems("recipe-abc", ingredients);
+    expect(ingredients[0]).toEqual(original);
+  });
+});

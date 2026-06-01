@@ -35,7 +35,11 @@ _No CLI commands yet._
 Last 5 entries from [CHANGELOG.md](./CHANGELOG.md):
 
 <!-- BEGIN:RECENT-UPDATES -->
-- (auto-populated by `scripts/done.py` once you ship something)
+- Add one E2E smoke test (frontend renders + backend round-trips a recipe)
+- Group by date (ISO `YYYY-MM-DD`).
+- Each entry = one shipped change, written in past tense.
+- The top 5 entries get pulled into `README.md`'s "Recent updates" section (between the `<!-- BEGIN:RECENT-UPDATES -->` / `<!-- END:RECENT-UPDATES -->` markers).
+- Never edit historical entries — append a follow-up entry instead.
 <!-- END:RECENT-UPDATES -->
 
 ## Project map

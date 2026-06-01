@@ -187,3 +187,111 @@ describe("parseRecipe", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Edge cases — added by T8
+// ---------------------------------------------------------------------------
+
+describe("parseRecipe — image input path", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("accepts imageBase64 + imageMediaType and calls the model", async () => {
+    mockFinalMessage = async () => makeToolUseMessage(VALID_RECIPE_INPUT);
+
+    const result = await parseRecipe({
+      imageBase64: "iVBORw0KGgoAAAANSUhEUgAAAAUA",
+      imageMediaType: "image/png",
+    });
+
+    expect(result.title).toBe("Simple Pasta");
+  });
+
+  it("throws RecipeParseError when imageBase64 is provided without imageMediaType", async () => {
+    // No model call expected — validation fails before reaching the SDK
+    await expect(
+      parseRecipe({ imageBase64: "iVBORw0KGgoAAAANSUhEUgAAAAUA" }),
+    ).rejects.toThrow(RecipeParseError);
+    await expect(
+      parseRecipe({ imageBase64: "iVBORw0KGgoAAAANSUhEUgAAAAUA" }),
+    ).rejects.toThrow(/at least one of url, text, or imageBase64/i);
+  });
+
+  it("throws RecipeParseError when imageMediaType is provided without imageBase64", async () => {
+    await expect(
+      parseRecipe({ imageMediaType: "image/jpeg" }),
+    ).rejects.toThrow(RecipeParseError);
+  });
+});
+
+describe("parseRecipe — URL fetch error paths", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("throws RecipeParseError when URL fetch returns non-ok status", async () => {
+    // Use mockResolvedValue (persistent, not Once) so the single assertion works cleanly
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+    } as Response);
+
+    const err = await parseRecipe({ url: "https://example.com/missing-page" }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(RecipeParseError);
+    expect((err as RecipeParseError).message).toMatch(/HTTP 404/);
+  });
+});
+
+describe("parseRecipe — schema edge cases", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("accepts a recipe with empty ingredients array", async () => {
+    mockFinalMessage = async () =>
+      makeToolUseMessage({
+        title: "Mystery Dish",
+        ingredients: [],
+        steps: [{ text: "Combine all ingredients." }],
+      });
+
+    const result = await parseRecipe({ text: "Minimal recipe" });
+    expect(result.title).toBe("Mystery Dish");
+    expect(result.ingredients).toHaveLength(0);
+  });
+
+  it("accepts a recipe with empty steps array", async () => {
+    mockFinalMessage = async () =>
+      makeToolUseMessage({
+        title: "Platter",
+        ingredients: [{ name: "cheese" }],
+        steps: [],
+      });
+
+    const result = await parseRecipe({ text: "Just cheese" });
+    expect(result.title).toBe("Platter");
+    expect(result.steps).toHaveLength(0);
+  });
+
+  it("preserves sourceUrl set by the model even when url is also provided", async () => {
+    // Model returns a different sourceUrl than what was passed in
+    mockFinalMessage = async () =>
+      makeToolUseMessage({
+        ...VALID_RECIPE_INPUT,
+        sourceUrl: "https://canonical.example.com/pasta",
+      });
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      text: async () => "<html><body>pasta recipe</body></html>",
+    } as Response);
+
+    const result = await parseRecipe({ url: "https://example.com/pasta" });
+    // Model's sourceUrl takes precedence
+    expect(result.sourceUrl).toBe("https://canonical.example.com/pasta");
+  });
+});

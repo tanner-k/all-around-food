@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-06-01
+- Add one E2E smoke test (frontend renders + backend round-trips a recipe)
+
 > Shipped work, newest first. Promoted from `TODO.md` via `python3 scripts/done.py "description"`.
 
 ## Conventions
