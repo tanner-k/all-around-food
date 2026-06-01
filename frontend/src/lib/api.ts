@@ -120,6 +120,17 @@ export interface PantryItem {
 }
 
 // ---------------------------------------------------------------------------
+// Import payload type
+// ---------------------------------------------------------------------------
+
+export interface RecipeImportPayload {
+  url?: string;
+  text?: string;
+  imageBase64?: string;
+  imageMediaType?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Resource clients
 // ---------------------------------------------------------------------------
 
@@ -145,6 +156,17 @@ const recipes = {
   remove(id: string): Promise<{ deleted: boolean }> {
     return apiFetch<{ deleted: boolean }>(`/api/recipes/${id}`, {
       method: "DELETE",
+    });
+  },
+  /**
+   * Import a recipe from a URL, pasted text, or a base64-encoded image.
+   * POSTs to /api/recipes/import — body matches the route's importBodySchema.
+   * Throws ApiError(422) when the AI cannot parse the source.
+   */
+  import(payload: RecipeImportPayload): Promise<Recipe> {
+    return apiFetch<Recipe>("/api/recipes/import", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   },
 };
