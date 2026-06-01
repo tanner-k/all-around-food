@@ -3,14 +3,14 @@
 > A planner-first cooking app — weekly meal planning, AI recipe import, smart shopping list, pantry inventory, and a hands-on cook mode.
 
 ## Stack
-- **Frontend:** Next.js 15 + TypeScript + Tailwind CSS v4 + shadcn/ui
-- **Backend:** Python 3.12 + Polars (file-backed; FastAPI planned)
-- **Data:** Parquet/CSV in data/ via Polars; migrate to Postgres later
-- **Infra:** Vercel
+- **Frontend / API:** Next.js 16 + TypeScript + Tailwind CSS v4 (route handlers + server actions for business logic)
+- **Data:** Postgres via Drizzle ORM (Vercel Postgres / Neon)
+- **Auth:** Auth.js (NextAuth v5) — email-allowlist
+- **Infra:** Vercel (single deploy; Git integration)
 
 ## Install
 ```bash
-pnpm install && cd backend && uv sync
+pnpm install
 ```
 
 ## Develop
@@ -20,7 +20,7 @@ pnpm dev
 
 ## Test
 ```bash
-pnpm test && cd backend && uv run pytest
+pnpm test
 ```
 
 ## Build
@@ -45,4 +45,4 @@ See [CLAUDE.md](./CLAUDE.md) (identical to [AGENTS.md](./AGENTS.md)) for the age
 - Branches: `main` (prod, protected) ← `dev` (staging) ← `feature/*`
 - Pre-commit: Prettier + ESLint via Husky
 - CI: every PR runs lint / typecheck / test / build
-- Deploy: push to `main` → `.github/workflows/deploy-ec2.yml`
+- Deploy: push to `main` → Vercel Git integration (production); PRs → Vercel preview deploys

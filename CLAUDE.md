@@ -10,13 +10,11 @@ A planner-first cooking app — weekly meal planning, AI recipe import, smart sh
 A project is "working" when **all** of the following are true:
 
 - Visual shell matches the Cookbook App Flow design (typography, palette, top nav order)
-- Polars stub layer reads/writes data/recipes.parquet
-- `pnpm lint && pnpm build` green
-- `uv run ruff check && uv run mypy && uv run pytest` green
+- `pnpm lint && pnpm build && pnpm test` green
 - CI green on dev branch
 - No remaining `__PLACEHOLDER__` tokens
 
-> Default if unsure: `npm run lint` clean · `npm test` green · `dev` branch deploys to staging without error · no `- [x]` lines linger in `TODO.md` (they should have been promoted to `CHANGELOG.md`).
+> Default if unsure: `pnpm lint` clean · `pnpm test` green · `dev` branch deploys to staging without error · no `- [x]` lines linger in `TODO.md` (they should have been promoted to `CHANGELOG.md`).
 
 ## 3. Project map
 ```
@@ -33,30 +31,32 @@ all-around-food/
 ├── .github/
 │   ├── PULL_REQUEST_TEMPLATE.md
 │   └── workflows/
-│       ├── ci.yml             ← every PR
-│       └── deploy-ec2.yml     ← on push to main
+│       └── ci.yml             ← every PR (deploy via Vercel Git integration)
 ├── .husky/                ← git hooks
 │   └── pre-commit             ← lint-staged
 ├── scripts/
 │   └── done.py            ← promotes TODO line → CHANGELOG entry
-├── frontend/              ← UI · see context.md
-├── backend/               ← API + business logic · see context.md
+├── frontend/              ← UI + API routes + business logic · see context.md
+├── backend/
+│   ├── context.md         ← explains the archive; read before touching backend/
+│   └── _legacy/           ← archived Python/Polars backend (schema reference)
 ├── data/                  ← schemas, migrations, seeds · see context.md
-├── infra/                 ← terraform, deploy scripts · see context.md
+├── infra/                 ← Vercel config notes · see context.md
 └── docs/
     ├── context.md
     ├── architecture.md
     └── decisions/         ← one ADR per architectural decision
-        └── 0001-stack.md
+        ├── 0001-stack.md
+        └── 0002-vercel-fullstack.md
 ```
 
 ## 4. Where to do what
 | If you're working on... | Go to... | Read first |
 |---|---|---|
 | UI component, page, route | `frontend/` | `frontend/context.md` |
-| API endpoint, business logic | `backend/` | `backend/context.md` |
-| Schema, migration, seed | `data/` | `data/context.md` |
-| Terraform, deploy script | `infra/` | `infra/context.md` |
+| API endpoint, business logic | `frontend/src/app/api/` or server actions | `frontend/context.md` |
+| Schema, migration, seed | `frontend/src/db/` | `data/context.md` |
+| Vercel / deploy config | `infra/` | `infra/context.md` |
 | Architecture decision | `docs/decisions/` | latest ADR |
 | Workflow / process question | `CLAUDE.md` (here) | this file |
 
@@ -78,14 +78,18 @@ Apply across the whole repo:
 6. **Identical canon:** If you edit `CLAUDE.md`, copy the same change to `AGENTS.md` (and vice versa) in the same commit.
 
 ## 7. Deploy
-Pushes to `main` trigger `.github/workflows/deploy-vercel.yml`:
-- Deployed to Vercel (frontend auto-deploys on push to main)
-- Backend API deployed separately (see infra docs)
+Deployment is via **Vercel Git integration**: pushing to `main` triggers a production deploy; PRs get preview deploys automatically. No separate deploy workflow is needed for the frontend.
+
+- The `frontend/` directory is the Vercel project root.
+- API routes and server actions deploy as Vercel serverless functions alongside the Next.js app.
+- A `.github/workflows/deploy.yml` (Vercel CLI-based) is planned for task T9 to enable migration steps on deploy.
 
 ## 8. Tech stack
-- Frontend: Next.js 15 + TypeScript + Tailwind CSS v4 + shadcn/ui
-- Backend: Python 3.12 + Polars (file-backed; FastAPI planned)
-- Data: Parquet/CSV in data/ via Polars; migrate to Postgres later
+- Frontend: Next.js 16 + TypeScript + Tailwind CSS v4 + shadcn/ui *(shadcn/ui planned — not yet installed)*
+- Backend: Next.js route handlers + server actions (TypeScript, server-only)
+- Data: Postgres via Drizzle ORM (Vercel Postgres / Neon)
+- Auth: Auth.js (NextAuth v5) — email-allowlist
+- AI: Anthropic SDK, server-side only (claude-sonnet-4-6)
 - Infra: Vercel
 - Package manager: pnpm
 - Node version: 22
