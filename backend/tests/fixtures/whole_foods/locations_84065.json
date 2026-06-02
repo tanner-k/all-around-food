@@ -1,0 +1,45 @@
+{
+  "data": {
+    "storeSearch": {
+      "stores": [
+        {
+          "id": "wfm-south-jordan-ut",
+          "name": "Whole Foods Market",
+          "address": {
+            "street": "10885 S River Front Pkwy",
+            "city": "South Jordan",
+            "state": "UT",
+            "postalCode": "84095"
+          },
+          "coordinates": {
+            "lat": 40.557912,
+            "lng": -111.931534
+          },
+          "phone": "801-302-0070",
+          "hours": {
+            "mon": "7:00 AM - 10:00 PM",
+            "tue": "7:00 AM - 10:00 PM"
+          }
+        },
+        {
+          "id": "wfm-cottonwood-ut",
+          "name": "Whole Foods Market",
+          "address": {
+            "street": "1131 E Brickyard Rd",
+            "city": "Salt Lake City",
+            "state": "UT",
+            "postalCode": "84106"
+          },
+          "coordinates": {
+            "lat": 40.681234,
+            "lng": -111.852345
+          },
+          "phone": "801-463-2947",
+          "hours": {
+            "mon": "7:00 AM - 10:00 PM"
+          }
+        }
+      ]
+    }
+  }
+}

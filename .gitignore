@@ -64,3 +64,6 @@ backend/dist/
 data/*.parquet
 data/*.csv
 !data/.gitkeep
+backend/data/video-import-audio/
+data/video-import-audio/
+backend/.coverage

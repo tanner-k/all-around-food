@@ -1,0 +1,28 @@
+{
+  "warehouseList": [
+    {
+      "warehouseId": "1234",
+      "displayName": "Costco Wholesale",
+      "addr1": "2831 W Empire Ave",
+      "city": "Bountiful",
+      "state": "UT",
+      "zipCode": "84010",
+      "latitude": 40.895512,
+      "longitude": -111.903456,
+      "distance": 12.3,
+      "phoneNumber": "801-292-5300"
+    },
+    {
+      "warehouseId": "1235",
+      "displayName": "Costco Wholesale",
+      "addr1": "1818 W Pkwy Blvd",
+      "city": "West Valley City",
+      "state": "UT",
+      "zipCode": "84119",
+      "latitude": 40.689612,
+      "longitude": -111.938901,
+      "distance": 7.8,
+      "phoneNumber": "801-975-9200"
+    }
+  ]
+}

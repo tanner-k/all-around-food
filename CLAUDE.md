@@ -41,13 +41,20 @@ all-around-food/
 │   └── done.py            ← promotes TODO line → CHANGELOG entry
 ├── frontend/              ← UI · see context.md
 ├── backend/               ← API + business logic · see context.md
+│   └── src/allaroundfood/
+│       ├── pricing/       ← Grocery price tracking adapters, canonical product matching, analytics (see docs/plans/grocery-price-tracking.md)
+│       └── ocr/           ← Receipt OCR pipeline (Qwen2-VL GGUF). Independent of any pantry receipt-import flow. Writes to data/receipts.parquet + PriceObservation rows.
 ├── data/                  ← schemas, migrations, seeds · see context.md
 ├── infra/                 ← terraform, deploy scripts · see context.md
 └── docs/
     ├── context.md
     ├── architecture.md
     └── decisions/         ← one ADR per architectural decision
-        └── 0001-stack.md
+        ├── 0001-stack.md
+        ├── 0002-video-recipe-import.md
+        ├── 0003-grocery-pricing-scope.md       ← personal-use + unofficial adapter gate
+        ├── 0004-canonical-product-matching.md  ← local embeddings (bge-small-en-v1.5)
+        └── 0005-pricing-storage.md             ← Parquet-first; Postgres migration triggers
 ```
 
 ## 4. Where to do what

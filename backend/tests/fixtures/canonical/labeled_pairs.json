@@ -1,0 +1,532 @@
+[
+  {
+    "query": {
+      "name": "Whole Milk",
+      "brand": "Great Value",
+      "size_raw": "1 gal",
+      "gtin": "01234500001"
+    },
+    "expected_canonical_id": "cp-001",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "OJ 52oz",
+      "brand": "Tropicana",
+      "size_raw": null,
+      "gtin": "01234500002"
+    },
+    "expected_canonical_id": "cp-002",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Cheerios",
+      "brand": "General Mills",
+      "size_raw": null,
+      "gtin": "01234500003"
+    },
+    "expected_canonical_id": "cp-003",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Cheddar",
+      "brand": "Tillamook",
+      "size_raw": null,
+      "gtin": "01234500004"
+    },
+    "expected_canonical_id": "cp-004",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Spinach",
+      "brand": "Earthbound Farm",
+      "size_raw": "5 oz",
+      "gtin": "01234500005"
+    },
+    "expected_canonical_id": "cp-005",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Bread Sourdough",
+      "brand": "Daves Killer Bread",
+      "size_raw": null,
+      "gtin": "01234500006"
+    },
+    "expected_canonical_id": "cp-006",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Clif Bar Choc Chip",
+      "brand": "Clif",
+      "size_raw": null,
+      "gtin": "01234500007"
+    },
+    "expected_canonical_id": "cp-007",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Butter 4ct",
+      "brand": "Land O Lakes",
+      "size_raw": null,
+      "gtin": "01234500008"
+    },
+    "expected_canonical_id": "cp-008",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Eggs Large",
+      "brand": "Vital Farms",
+      "size_raw": "12 ct",
+      "gtin": "01234500009"
+    },
+    "expected_canonical_id": "cp-009",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Greek Yogurt",
+      "brand": "Fage",
+      "size_raw": "32 oz",
+      "gtin": "01234500010"
+    },
+    "expected_canonical_id": "cp-010",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Almond Milk",
+      "brand": "Silk",
+      "size_raw": "64 fl oz",
+      "gtin": "01234500011"
+    },
+    "expected_canonical_id": "cp-011",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Penne Pasta",
+      "brand": "Barilla",
+      "size_raw": "16 oz",
+      "gtin": "01234500012"
+    },
+    "expected_canonical_id": "cp-012",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Marinara",
+      "brand": "Rao",
+      "size_raw": "24 oz",
+      "gtin": "01234500013"
+    },
+    "expected_canonical_id": "cp-013",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Chicken Breast",
+      "brand": "Perdue",
+      "size_raw": "2 lb",
+      "gtin": "01234500014"
+    },
+    "expected_canonical_id": "cp-014",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Salmon",
+      "brand": "Wild Planet",
+      "size_raw": "1 lb",
+      "gtin": "01234500015"
+    },
+    "expected_canonical_id": "cp-015",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Whole Milk 1 Gallon",
+      "brand": "Great Value",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-001",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Whole Milk Gallon",
+      "brand": "Great Value",
+      "size_raw": "1 gal",
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-001",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Orange Juice 52 fl oz",
+      "brand": "Tropicana",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-002",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Orange Juice 52oz",
+      "brand": "Tropicana",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-002",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Cheerios Cereal 18 oz",
+      "brand": "General Mills",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-003",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Cheerios 18 oz Cereal",
+      "brand": "General Mills",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-003",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Cheddar Cheese 16 oz",
+      "brand": "Tillamook",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-004",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Baby Spinach 5 oz",
+      "brand": "Earthbound Farm",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-005",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Sourdough Bread",
+      "brand": "Daves Killer Bread",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-006",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Chocolate Chip Clif Bar",
+      "brand": "Clif",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-007",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Salted Butter 4 sticks",
+      "brand": "Land O Lakes",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-008",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Large Eggs 12 ct",
+      "brand": "Vital Farms",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-009",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Greek Yogurt Plain 32 oz",
+      "brand": "Fage",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-010",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Almond Milk Unsweetened 64 fl oz",
+      "brand": "Silk",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-011",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Pasta Penne 16 oz",
+      "brand": "Barilla",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-012",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Marinara Sauce 24 oz",
+      "brand": "Rao",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-013",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Chicken Breast Boneless 2 lb",
+      "brand": "Perdue",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-014",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Salmon Fillet 1 lb",
+      "brand": "Wild Planet",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-015",
+    "should_match": true
+  },
+  {
+    "query": {
+      "name": "Horizon Organic Whole Milk 1 gal",
+      "brand": "Horizon",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-001",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "2% Reduced Fat Milk",
+      "brand": "Organic Valley",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-001",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Granola Cereal 12 oz",
+      "brand": "Nature Valley",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-003",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Pepper Jack Cheese 8 oz",
+      "brand": "Sargento",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-004",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Mixed Salad Greens 5 oz",
+      "brand": "Taylor Farms",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-005",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Whole Wheat Bread",
+      "brand": "Arnold",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-006",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Peanut Butter Energy Bar",
+      "brand": "Kind",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-007",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Unsalted Butter 1 lb",
+      "brand": "Kerrygold",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-008",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Cage Free Eggs 18 ct",
+      "brand": "Happy Egg",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-009",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Vanilla Yogurt 6 oz",
+      "brand": "Chobani",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-010",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Oat Milk Original 64 fl oz",
+      "brand": "Oatly",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-011",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Spaghetti Pasta 16 oz",
+      "brand": "De Cecco",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-012",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Tomato Basil Sauce 25 oz",
+      "brand": "Prego",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-013",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Ground Turkey 1 lb",
+      "brand": "Butterball",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-014",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Tuna Fillet in Water 5 oz",
+      "brand": "Bumble Bee",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-015",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Coca Cola 12 pack",
+      "brand": "Coca Cola",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-001",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Apple Juice 64 fl oz",
+      "brand": "Mott's",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-002",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Mac and Cheese Dinner",
+      "brand": "Kraft",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-012",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Doritos Nacho Cheese 9.25 oz",
+      "brand": "Frito-Lay",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-004",
+    "should_match": false
+  },
+  {
+    "query": {
+      "name": "Olive Oil Extra Virgin 16 oz",
+      "brand": "California Olive Ranch",
+      "size_raw": null,
+      "gtin": null
+    },
+    "expected_canonical_id": "cp-008",
+    "should_match": false
+  }
+]

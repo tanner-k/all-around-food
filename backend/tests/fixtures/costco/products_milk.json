@@ -1,0 +1,56 @@
+{
+  "catalogEntryList": [
+    {
+      "catalogEntryIdentifier": {
+        "externalIdentifier": {
+          "partNumber": "789012"
+        }
+      },
+      "description": [
+        {
+          "name": "Kirkland Signature Organic Whole Milk",
+          "shortDescription": "3 x 64 fl oz",
+          "longDescription": "USDA Organic whole milk, three 64 fl oz cartons"
+        }
+      ],
+      "price": [
+        {
+          "contractPrice": "12.49",
+          "unitPrice": "12.49"
+        }
+      ],
+      "attributes": {
+        "brand": "Kirkland Signature",
+        "membershipRequired": "false",
+        "isMemberOnly": "false"
+      },
+      "thumbnail": "https://mobilecontent.costco.com/live/resource/img/789012.jpg"
+    },
+    {
+      "catalogEntryIdentifier": {
+        "externalIdentifier": {
+          "partNumber": "654321"
+        }
+      },
+      "description": [
+        {
+          "name": "Horizon Organic Whole Milk",
+          "shortDescription": "6 x 8 fl oz",
+          "longDescription": "USDA Organic single-serve whole milk, 6-pack"
+        }
+      ],
+      "price": [
+        {
+          "contractPrice": "8.99",
+          "unitPrice": "8.99"
+        }
+      ],
+      "attributes": {
+        "brand": "Horizon Organic",
+        "membershipRequired": "true",
+        "isMemberOnly": "true"
+      },
+      "thumbnail": "https://mobilecontent.costco.com/live/resource/img/654321.jpg"
+    }
+  ]
+}

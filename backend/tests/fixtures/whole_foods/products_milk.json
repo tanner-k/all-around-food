@@ -1,0 +1,41 @@
+{
+  "searchResult": {
+    "totalResultCount": 18,
+    "items": [
+      {
+        "asin": "B07XJY9BBJ",
+        "title": "365 by Whole Foods Market, Organic Whole Milk, Half Gallon",
+        "brand": "365 by Whole Foods Market",
+        "price": {
+          "amount": 4.99,
+          "currency": "USD",
+          "displayAmount": "$4.99"
+        },
+        "salePrice": null,
+        "imageUrl": "https://m.media-amazon.com/images/I/71ABC123.jpg",
+        "detailPageUrl": "/dp/B07XJY9BBJ",
+        "availability": "IN_STOCK",
+        "size": "64 Fl Oz"
+      },
+      {
+        "asin": "B00XKGJ9OU",
+        "title": "Organic Valley Grassmilk Whole Milk, 64 oz",
+        "brand": "Organic Valley",
+        "price": {
+          "amount": 7.99,
+          "currency": "USD",
+          "displayAmount": "$7.99"
+        },
+        "salePrice": {
+          "amount": 6.49,
+          "currency": "USD",
+          "displayAmount": "$6.49"
+        },
+        "imageUrl": "https://m.media-amazon.com/images/I/71DEF456.jpg",
+        "detailPageUrl": "/dp/B00XKGJ9OU",
+        "availability": "IN_STOCK",
+        "size": "64 Fl Oz"
+      }
+    ]
+  }
+}

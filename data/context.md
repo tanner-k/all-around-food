@@ -14,6 +14,15 @@
 ## Stack
 Parquet/CSV in data/ via Polars; migrate to Postgres later
 
+## Data files
+- `recipes.parquet` — saved recipes (`RecipeStore`)
+- `evaluations.parquet` — LLM-as-judge parse evaluations (`EvalStore`)
+- `pantry.parquet` — pantry inventory items (`PantryStore`)
+- `shopping_list.parquet` — shopping-list items (`ShoppingListStore`)
+- `meal_plans.parquet` — weekly meal plans, one row per week (`MealPlanStore`)
+
+All are written lazily on first save; they don't need to exist up front.
+
 ## Local skills / conventions
 - None yet — add as needed
 

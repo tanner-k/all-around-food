@@ -12,11 +12,10 @@ export function SectionHeader({
   description,
 }: SectionHeaderProps) {
   return (
-    <div className="grid gap-14" style={{ gridTemplateColumns: "280px 1fr" }}>
+    <div className="grid gap-4 md:gap-14 grid-cols-1 md:grid-cols-[280px_1fr]">
       {/* Left column — big italic number */}
       <div
-        className="font-serif italic text-terra leading-[0.8] tracking-tight"
-        style={{ fontSize: "80px" }}
+        className="font-serif italic text-terra leading-[0.8] tracking-tight text-2xl md:text-[80px]"
       >
         {number}
       </div>
@@ -27,8 +26,7 @@ export function SectionHeader({
           {scene}
         </p>
         <h1
-          className="font-serif text-ink leading-[1.05] tracking-tight mb-3.5"
-          style={{ fontSize: "44px" }}
+          className="font-serif text-ink leading-[1.05] tracking-tight mb-3.5 text-3xl md:text-[44px]"
         >
           {title}
         </h1>
