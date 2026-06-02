@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { formatTime } from "@/lib/format-time";
 
 interface CookTimerProps {
   secondsLeft: number;
@@ -8,12 +9,6 @@ interface CookTimerProps {
   onTick: (secondsLeft: number) => void;
   onPause: () => void;
   onReset: () => void;
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(Math.abs(seconds) / 60);
-  const s = Math.abs(seconds) % 60;
-  return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 export function CookTimer({
@@ -61,7 +56,7 @@ export function CookTimer({
         <button
           type="button"
           onClick={running ? onPause : () => onTick(secondsLeft)}
-          className="text-ink-mute hover:text-ink text-xs px-1"
+          className="min-h-8 px-2 text-sm text-ink-mute hover:text-ink active:text-ink rounded transition-colors"
           aria-label={running ? "Pause timer" : "Resume timer"}
         >
           {running ? "⏸" : "▶"}
@@ -70,7 +65,7 @@ export function CookTimer({
       <button
         type="button"
         onClick={onReset}
-        className="text-ink-mute hover:text-ink text-xs px-1"
+        className="min-h-8 px-2 text-sm text-ink-mute hover:text-ink active:text-ink rounded transition-colors"
         aria-label="Reset timer"
       >
         ✕

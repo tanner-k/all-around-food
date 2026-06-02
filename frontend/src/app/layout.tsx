@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Instrument_Serif, Manrope } from "next/font/google";
 import Link from "next/link";
+import { MobileTabBar } from "@/app/(app)/_components/MobileTabBar";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -42,7 +43,7 @@ export default function RootLayout({
       <body>
         {/* ── Top navigation ────────────────────────────────────── */}
         <header className="border-b border-line">
-          <nav className="mx-auto flex max-w-[1400px] items-center gap-8 px-14 py-4">
+          <nav className="mx-auto flex max-w-[1400px] items-center gap-8 px-4 md:px-14 py-4">
             {/* Brand mark */}
             <Link
               href="/plan"
@@ -55,7 +56,7 @@ export default function RootLayout({
             <div className="flex-1" />
 
             {/* Nav items */}
-            <div className="flex items-center gap-6 text-sm font-medium">
+            <div className="hidden md:flex items-center gap-6 text-sm font-medium">
               {navLinks.map(({ label, href }) => (
                 <Link
                   key={href}
@@ -78,9 +79,10 @@ export default function RootLayout({
         </header>
 
         {/* ── Page container ────────────────────────────────────── */}
-        <main className="mx-auto w-full max-w-[1400px] px-14 py-16 pb-24">
+        <main className="mx-auto w-full max-w-[1400px] px-4 md:px-14 py-16 pb-20 md:pb-24">
           {children}
         </main>
+        <MobileTabBar />
       </body>
     </html>
   );

@@ -43,7 +43,7 @@ function StatNumber({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-serif italic text-terra" style={{ fontSize: "48px", lineHeight: 1 }}>
+      <span className="font-serif italic text-terra text-3xl md:text-5xl leading-none">
         {value}
       </span>
       <span className="text-xs font-semibold uppercase tracking-wide text-ink-mute">
@@ -98,7 +98,7 @@ export default async function EvaluationsPage() {
       />
 
       {/* Stats strip */}
-      <div className="grid grid-cols-4 gap-8 mt-12">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 mt-12">
         <StatNumber label="Evaluations" value={displayStats.count} />
         <StatNumber label="Mean overall" value={displayStats.mean_overall} />
         <StatNumber label="Mean accuracy" value={displayStats.mean_accuracy} />

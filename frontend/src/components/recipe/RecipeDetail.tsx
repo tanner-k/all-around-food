@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Recipe, Ingredient } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
+import { pageTitle } from "@/lib/typography";
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -86,7 +87,7 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
       )}
 
       {/* Title */}
-      <h1 className="font-serif text-5xl leading-tight tracking-tight text-ink">
+      <h1 className={`font-serif leading-tight text-ink ${pageTitle}`}>
         {titleStart && <>{titleStart} </>}
         <em className="italic text-terra not-italic">{titleEnd}</em>
       </h1>
@@ -172,23 +173,23 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
       )}
 
       {/* Action row */}
-      <div className="flex gap-3 flex-wrap pt-2 border-t border-line">
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap pt-2 border-t border-line">
         <Link
           href={`/cookbook/${recipe.id}/edit`}
-          className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2"
+          className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10 flex items-center justify-center sm:inline-flex"
         >
           Edit
         </Link>
         <button
           type="button"
           onClick={handleMarkCooked}
-          className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2"
+          className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10"
         >
           Mark cooked
         </button>
         <Link
           href={`/cookbook/${recipe.id}/cook`}
-          className="rounded-full bg-terra px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#A55230] ml-auto"
+          className="rounded-full bg-terra px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#A55230] sm:ml-auto min-h-11 flex items-center justify-center"
         >
           Start cook mode →
         </Link>

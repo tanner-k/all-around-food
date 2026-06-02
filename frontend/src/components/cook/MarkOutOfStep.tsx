@@ -99,7 +99,7 @@ export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
         <button
           type="button"
           onClick={onDone}
-          className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-[#A55230]"
+          className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-[#A55230] active:bg-[#A55230]"
         >
           Finish
         </button>
@@ -125,7 +125,7 @@ export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
             className="flex flex-wrap items-center gap-3 border-b border-line py-3 last:border-b-0"
           >
             <span className="flex-1 capitalize text-ink">{item.name}</span>
-            <div className="inline-flex overflow-hidden rounded-lg border border-line">
+            <div className="grid grid-cols-3 gap-0 overflow-hidden rounded-lg border border-line">
               {STATUS_OPTIONS.map((opt) => {
                 const active = status === opt.value;
                 return (
@@ -135,10 +135,10 @@ export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
                     onClick={() => setStatus(item.id, opt.value)}
                     aria-pressed={active}
                     className={[
-                      "px-2.5 py-1 text-xs font-medium transition-colors",
+                      "min-h-10 px-3 text-sm font-medium transition-colors",
                       active
                         ? opt.active
-                        : "bg-paper text-ink-mute hover:text-ink",
+                        : "bg-paper text-ink-mute hover:text-ink active:text-ink hover:bg-paper-2 active:bg-paper-2",
                     ].join(" ")}
                   >
                     {opt.label}
@@ -161,7 +161,7 @@ export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
           type="button"
           onClick={handleSave}
           disabled={phase === "saving"}
-          className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-[#A55230] disabled:opacity-60"
+          className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-[#A55230] active:bg-[#A55230] disabled:opacity-60"
         >
           {phase === "saving" ? "Saving…" : "Save & finish"}
         </button>
@@ -169,7 +169,7 @@ export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
           type="button"
           onClick={onDone}
           disabled={phase === "saving"}
-          className="min-h-14 w-full rounded-xl border border-line bg-paper font-semibold text-ink transition-colors hover:bg-paper-2 disabled:opacity-60"
+          className="min-h-14 w-full rounded-xl border border-line bg-paper font-semibold text-ink transition-colors hover:bg-paper-2 active:bg-paper-2 disabled:opacity-60"
         >
           Skip
         </button>

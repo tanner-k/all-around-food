@@ -175,16 +175,16 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
       )}
 
       {/* Footer */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 border-t border-line pt-5">
         <p className="text-sm text-ink-mute">
           Checked items become pantry stock when you mark them bought.
         </p>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           {hasChecked && (
             <button
               type="button"
               onClick={handleMarkBought}
-              className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2"
+              className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10"
             >
               Mark as bought
             </button>
@@ -193,7 +193,7 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
             <button
               type="button"
               onClick={handleComplete}
-              className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230]"
+              className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] min-h-11"
             >
               Complete shopping
             </button>
@@ -202,7 +202,7 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
             type="button"
             disabled
             title="Coming soon"
-            className="cursor-not-allowed rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-paper opacity-40"
+            className="cursor-not-allowed rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-paper opacity-40 min-h-10"
           >
             Send to Kroger
           </button>
