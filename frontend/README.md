@@ -18,6 +18,37 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Setup gotchas
+
+### `ERR_PNPM_IGNORED_BUILDS` (sharp / unrs-resolver)
+
+pnpm 10+ does **not** run a dependency's install/build scripts unless you've
+approved them. `sharp` and `unrs-resolver` have native build steps, so on a
+fresh machine `pnpm install` (and therefore `pnpm dev`, which runs an install
+check first) can fail with:
+
+```
+[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: sharp@0.34.5, unrs-resolver@1.12.0
+```
+
+This repo pre-approves both via the `allowBuilds` map in
+[`pnpm-workspace.yaml`](./pnpm-workspace.yaml), and pins the pnpm version with
+the `packageManager` field in [`package.json`](./package.json) so local and CI
+behave the same. A clean clone should "just work".
+
+If you still hit it (e.g. an old `node_modules` cached the builds as ignored,
+or you use a different pnpm version), run the build scripts once:
+
+```bash
+pnpm install --config.dangerouslyAllowAllBuilds=true
+# or, interactively:
+pnpm approve-builds
+```
+
+> Note: pnpm 11.1.3 reads the `allowBuilds: { name: true }` map, **not** the
+> older `onlyBuiltDependencies` array. We keep both in `pnpm-workspace.yaml` for
+> cross-version compatibility — leave them in sync.
+
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
 ## Learn More
