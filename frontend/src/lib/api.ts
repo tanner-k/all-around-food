@@ -200,6 +200,20 @@ export async function completeShoppingList(): Promise<ShoppingCompletionResult> 
   })) as ShoppingCompletionResult;
 }
 
+export interface TextShoppingListResult {
+  sent_to: string;
+  item_count: number;
+}
+
+export async function textShoppingList(
+  recipient: string
+): Promise<TextShoppingListResult> {
+  return (await request("/api/shopping-list/text", {
+    method: "POST",
+    body: JSON.stringify({ recipient }),
+  })) as TextShoppingListResult;
+}
+
 // ── Meal plans ────────────────────────────────────────────────────────────
 
 export async function getMealPlan(weekOf: string): Promise<MealPlan> {

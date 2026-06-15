@@ -40,3 +40,4 @@ uv run python -m allaroundfood
 - All env access through a single `config.ts` — fail loudly if a required env var is missing
 - Pricing context lives at `src/allaroundfood/pricing/context.md`
 - OCR context lives at `src/allaroundfood/ocr/context.md`
+- `messaging/` sends the shopping list via Apple Messages (`osascript`); macOS-only, raises `MessagingError` elsewhere. Recipient numbers pass through `messaging.phone.normalize_phone` before reaching AppleScript.
