@@ -39,6 +39,7 @@ from allaroundfood.shopping_storage import ShoppingListStore
 from allaroundfood.storage import RecipeStore
 from allaroundfood.video_import import (
     VideoImportError,
+    VideoImportSettings,
     check_video_import_binaries,
     fetch_video_text,
 )
@@ -73,6 +74,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             status.ytdlp,
             status.ffmpeg,
         )
+    logger.info(
+        "Video transcription uses in-process whisper.cpp model: %s",
+        VideoImportSettings.from_env().whisper_model,
+    )
     yield
 
 

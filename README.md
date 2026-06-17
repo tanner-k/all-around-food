@@ -44,19 +44,20 @@ uv run python -m allaroundfood
 
 FastAPI will start on http://localhost:8000. Check health: `curl http://localhost:8000/healthz`
 
-> **Port collision with `whispr`:** the [whispr](../../whispr) transcription
-> service also defaults to `:8000`. If you're testing the Instagram/TikTok
-> video importer, run one of them on a different port:
+> **Video transcription (local whisper.cpp):** the Instagram/TikTok video
+> importer transcribes speech in-process via whisper.cpp (`pywhispercpp`) — no
+> separate service to run. Configure it with:
 >
-> ```bash
-> # Option A — keep whispr on :8000, move this backend to :8001
-> PORT=8001 uv run python -m allaroundfood
-> # then set BACKEND_URL=http://localhost:8001 in frontend/.env.local and
-> # restart `pnpm dev` (Next.js only reads .env at startup)
+> - `WHISPER_MODEL` — model name (default `base.en`). English `.en` models suit
+>   English recipe videos. Footprint: `tiny.en` ≈ 75 MB, `base.en` ≈ 142 MB.
+> - `WHISPER_MODELS_DIR` (optional) — directory of pre-downloaded ggml `.bin`
+>   model files, or where a named model is cached.
 >
-> # Option B — move whispr to e.g. :8088, keep this backend on :8000
-> WHISPR_URL=http://localhost:8088 uv run python -m allaroundfood
-> ```
+> On first use the ggml model is downloaded from huggingface.co. In
+> network-restricted environments (including CI and some deploys) huggingface.co
+> may be blocked, so **provision the model as a file**: pre-download the ggml
+> model and point `WHISPER_MODELS_DIR` at it, or run first-use where egress is
+> allowed.
 >
 > The startup log will warn if `yt-dlp` or `ffmpeg` aren't resolvable on PATH.
 

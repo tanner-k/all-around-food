@@ -15,9 +15,12 @@ from tempfile import TemporaryDirectory
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-import httpx
-
 from allaroundfood.models import VideoImportResult
+from allaroundfood.transcription import (
+    Transcriber,
+    TranscriptionError,
+    WhisperCppTranscriber,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +65,11 @@ class VideoImportBinaryStatus:
 def check_video_import_binaries(
     settings: VideoImportSettings | None = None,
 ) -> VideoImportBinaryStatus:
-    """Resolve the configured yt-dlp and ffmpeg binaries via shutil.which."""
+    """Resolve the configured yt-dlp and ffmpeg binaries via shutil.which.
+
+    Transcription runs in-process via whisper.cpp (pywhispercpp), so there is
+    no transcription binary to resolve here — only yt-dlp and ffmpeg.
+    """
     active = settings or VideoImportSettings.from_env()
     return VideoImportBinaryStatus(
         ytdlp=shutil.which(active.ytdlp_bin),
@@ -74,35 +81,53 @@ def check_video_import_binaries(
 class VideoImportSettings:
     """Runtime settings for the video import pipeline."""
 
-    whispr_url: str = "http://localhost:8000"
     ytdlp_bin: str = "yt-dlp"
     ffmpeg_bin: str = "ffmpeg"
     timeout_s: int = 180
+    whisper_model: str = "base.en"
+    whisper_models_dir: str | None = None
 
     @classmethod
     def from_env(cls) -> VideoImportSettings:
         """Build settings from environment variables."""
         return cls(
-            whispr_url=os.environ.get("WHISPR_URL", "http://localhost:8000"),
             ytdlp_bin=os.environ.get("YTDLP_BIN", "yt-dlp"),
             ffmpeg_bin=os.environ.get("FFMPEG_BIN", "ffmpeg"),
             timeout_s=int(os.environ.get("VIDEO_IMPORT_TIMEOUT_S", "180")),
+            whisper_model=os.environ.get("WHISPER_MODEL", "base.en"),
+            whisper_models_dir=os.environ.get("WHISPER_MODELS_DIR"),
         )
 
 
 async def fetch_video_text(
-    source_url: str, settings: VideoImportSettings | None = None
+    source_url: str,
+    settings: VideoImportSettings | None = None,
+    transcriber: Transcriber | None = None,
 ) -> VideoImportResult:
     """Fetch caption and transcript text for a supported social video URL."""
-    return await asyncio.to_thread(_fetch_video_text_sync, source_url, settings)
+    return await asyncio.to_thread(
+        _fetch_video_text_sync, source_url, settings, transcriber
+    )
 
 
 def _fetch_video_text_sync(
-    source_url: str, settings: VideoImportSettings | None = None
+    source_url: str,
+    settings: VideoImportSettings | None = None,
+    transcriber: Transcriber | None = None,
 ) -> VideoImportResult:
     """Synchronous implementation used by the async FastAPI endpoint."""
     active_settings = settings or VideoImportSettings.from_env()
     platform = validate_video_url(source_url)
+
+    if transcriber is None:
+        transcriber = WhisperCppTranscriber(
+            model=active_settings.whisper_model,
+            models_dir=(
+                Path(active_settings.whisper_models_dir)
+                if active_settings.whisper_models_dir
+                else None
+            ),
+        )
 
     with TemporaryDirectory(prefix="allaroundfood-video-") as tmp:
         tmp_path = Path(tmp)
@@ -110,10 +135,13 @@ def _fetch_video_text_sync(
         caption = _metadata_caption(metadata)
         audio_path = _extract_audio(video_path, tmp_path, active_settings)
         try:
-            transcript = _transcribe_audio(audio_path, active_settings)
-        except VideoImportError as exc:
-            if exc.status_code != 504 or not caption:
+            transcript = _transcribe_audio(audio_path, transcriber)
+        except VideoImportError:
+            if not caption:
                 raise
+            logger.warning(
+                "Transcription failed; falling back to caption-only import."
+            )
             transcript = ""
 
     cleaned_transcript = _clean_transcript(transcript)
@@ -229,51 +257,15 @@ def _extract_audio(
     return audio_path
 
 
-def _transcribe_audio(audio_path: Path, settings: VideoImportSettings) -> str:
-    """Transcribe audio by posting it to the configured whispr service."""
-    whispr_url = settings.whispr_url.rstrip("/")
-    endpoint = f"{whispr_url}/api/stt/transcribe"
-
+def _transcribe_audio(audio_path: Path, transcriber: Transcriber) -> str:
+    """Transcribe audio in-process via whisper.cpp."""
     try:
-        with audio_path.open("rb") as audio_file:
-            files = {"audio": (audio_path.name, audio_file, "audio/wav")}
-            response = httpx.post(
-                endpoint,
-                files=files,
-                timeout=settings.timeout_s,
-            )
-            response.raise_for_status()
-    except httpx.TimeoutException as exc:
+        return transcriber.transcribe(audio_path)
+    except TranscriptionError as exc:
         raise VideoImportError(
-            "Transcription took too long. Try a shorter clip or increase VIDEO_IMPORT_TIMEOUT_S.",
-            status_code=504,
-        ) from exc
-    except httpx.HTTPError as exc:
-        raise VideoImportError(
-            "The transcription service is unavailable right now.",
+            "We couldn't transcribe the audio in that video.",
             status_code=502,
         ) from exc
-
-    try:
-        payload = response.json()
-    except ValueError as exc:
-        raise VideoImportError(
-            "The transcription service returned an unreadable response.",
-            status_code=502,
-        ) from exc
-
-    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
-    transcript = payload.get("transcript")
-    if transcript is None:
-        transcript = payload.get("text")
-    if transcript is None:
-        transcript = data.get("raw") or data.get("cleaned")
-    if not isinstance(transcript, str):
-        raise VideoImportError(
-            "The transcription service did not return a transcript.",
-            status_code=502,
-        )
-    return transcript
 
 
 def _run_command(
