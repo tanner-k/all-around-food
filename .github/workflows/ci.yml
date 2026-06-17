@@ -20,7 +20,10 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: latest
+          # Pin to pnpm 10.x: `latest` floats to pnpm 11, which no longer
+          # honors this repo's onlyBuiltDependencies config (pnpm-workspace.yaml)
+          # and fails install with ERR_PNPM_IGNORED_BUILDS for sharp/unrs-resolver.
+          version: 10
 
       - name: Setup Node
         uses: actions/setup-node@v4
