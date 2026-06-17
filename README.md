@@ -125,7 +125,11 @@ _No CLI commands yet._
 Last 5 entries from [CHANGELOG.md](./CHANGELOG.md):
 
 <!-- BEGIN:RECENT-UPDATES -->
-- (auto-populated by `scripts/done.py` once you ship something)
+- Text shopping list to any number via Apple Messages
+- Group by date (ISO `YYYY-MM-DD`).
+- Each entry = one shipped change, written in past tense.
+- The top 5 entries get pulled into `README.md`'s "Recent updates" section (between the `<!-- BEGIN:RECENT-UPDATES -->` / `<!-- END:RECENT-UPDATES -->` markers).
+- Never edit historical entries — append a follow-up entry instead.
 <!-- END:RECENT-UPDATES -->
 
 ## Project map

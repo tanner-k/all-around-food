@@ -17,6 +17,12 @@ from pydantic import BaseModel
 from allaroundfood.aisles import AISLE_ORDER, categorize
 from allaroundfood.eval_storage import EvalStore
 from allaroundfood.meal_plan_storage import MealPlanStore
+from allaroundfood.messaging import (
+    MessagingError,
+    format_shopping_list,
+    normalize_phone,
+    send_imessage,
+)
 from allaroundfood.models import (
     Evaluation,
     MealPlan,
@@ -211,6 +217,12 @@ class GenerateShoppingListRequest(BaseModel):
     """Request body for POST /shopping-list/generate."""
 
     recipe_ids: list[str]
+
+
+class TextShoppingListRequest(BaseModel):
+    """Request body for POST /shopping-list/text."""
+
+    recipient: str
 
 
 class VideoImportRequest(BaseModel):
@@ -781,6 +793,47 @@ async def delete_shopping_item(item_id: str) -> dict[str, str]:
         ) from e
     store.save()
     return {"status": "deleted", "id": item_id}
+
+
+@app.post("/shopping-list/text")
+async def post_text_shopping_list(
+    req: TextShoppingListRequest,
+) -> dict[str, Any]:
+    """Text the current shopping list to a phone number via Apple Messages.
+
+    Unchecked items are formatted by aisle and sent through Messages.app on the
+    host Mac. Sending is macOS-only.
+
+    Args:
+        req: Request body carrying the recipient phone number.
+
+    Returns:
+        Dict with ``sent_to`` (normalized number) and ``item_count``.
+
+    Raises:
+        HTTPException: 400 if the list has no unchecked items, 422 if the
+            number is invalid, 503 if Messages cannot send (e.g. not a Mac).
+    """
+    store = ShoppingListStore.load(_get_shopping_store_path())
+    body = format_shopping_list(store.all())
+    if not body:
+        raise HTTPException(
+            status_code=400,
+            detail="Nothing to send — your shopping list is empty.",
+        )
+
+    try:
+        recipient = normalize_phone(req.recipient)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+    try:
+        send_imessage(recipient, body)
+    except MessagingError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+
+    item_count = sum(1 for item in store.all() if not item.checked)
+    return {"sent_to": recipient, "item_count": item_count}
 
 
 @app.get("/meal-plans/{week_of}")

@@ -954,3 +954,75 @@ def test_put_meal_plan_rejects_bad_day_index(client: TestClient) -> None:
         },
     )
     assert response.status_code == 422
+
+
+def test_text_shopping_list_sends(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POST /shopping-list/text formats the list and sends it via Messages."""
+    client.post("/shopping-list/items", json={"id": "", "name": "Milk"})
+    client.post("/shopping-list/items", json={"id": "", "name": "Apples"})
+
+    sent: dict[str, str] = {}
+
+    def fake_send(recipient: str, body: str) -> None:
+        sent["recipient"] = recipient
+        sent["body"] = body
+
+    monkeypatch.setattr("allaroundfood.api.send_imessage", fake_send)
+
+    response = client.post(
+        "/shopping-list/text", json={"recipient": "+1 (555) 123-4567"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["sent_to"] == "+15551234567"
+    assert data["item_count"] == 2
+    assert sent["recipient"] == "+15551234567"
+    assert "milk" in sent["body"].lower()
+    assert "apples" in sent["body"].lower()
+
+
+def test_text_shopping_list_empty_returns_400(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Texting an empty list is a 400."""
+    monkeypatch.setattr(
+        "allaroundfood.api.send_imessage", lambda r, b: None
+    )
+    response = client.post(
+        "/shopping-list/text", json={"recipient": "+15551234567"}
+    )
+    assert response.status_code == 400
+
+
+def test_text_shopping_list_bad_number_returns_422(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An invalid phone number is a 422."""
+    client.post("/shopping-list/items", json={"id": "", "name": "Milk"})
+    monkeypatch.setattr(
+        "allaroundfood.api.send_imessage", lambda r, b: None
+    )
+    response = client.post(
+        "/shopping-list/text", json={"recipient": "not-a-number"}
+    )
+    assert response.status_code == 422
+
+
+def test_text_shopping_list_messaging_error_returns_503(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A MessagingError (e.g. non-Mac host) surfaces as 503."""
+    from allaroundfood.messaging import MessagingError
+
+    client.post("/shopping-list/items", json={"id": "", "name": "Milk"})
+
+    def fake_send(recipient: str, body: str) -> None:
+        raise MessagingError("Texting only works when the app runs on a signed-in Mac.")
+
+    monkeypatch.setattr("allaroundfood.api.send_imessage", fake_send)
+    response = client.post(
+        "/shopping-list/text", json={"recipient": "+15551234567"}
+    )
+    assert response.status_code == 503
