@@ -58,6 +58,7 @@ pnpm dev
 - `PATCH /api/shopping-list/items/[id]/check` — toggle an item's checked state
 - `POST /api/shopping-list/generate` — generate list items from recipe IDs
 - `DELETE /api/shopping-list/checked` — remove all checked items
+- `POST /api/shopping-list/text` — text unchecked items to a phone number via Apple Messages (macOS-only)
 - `GET|PUT /api/meal-plans/[weekOf]` — get / replace the weekly meal plan
 
 Most `/api/*` routes are thin proxies to the FastAPI backend via `lib/backend-proxy.ts`; `/api/pantry/receipt` calls Claude directly (like `/api/import/parse`).

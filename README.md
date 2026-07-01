@@ -75,6 +75,26 @@ uv run python -m allaroundfood
 FastAPI starts on `http://localhost:8000`. Verify: `curl http://localhost:8000/healthz`
 
 **Terminal B — frontend**
+FastAPI will start on http://localhost:8000. Check health: `curl http://localhost:8000/healthz`
+
+> **Video transcription (local whisper.cpp):** the Instagram/TikTok video
+> importer transcribes speech in-process via whisper.cpp (`pywhispercpp`) — no
+> separate service to run. Configure it with:
+>
+> - `WHISPER_MODEL` — model name (default `base.en`). English `.en` models suit
+>   English recipe videos. Footprint: `tiny.en` ≈ 75 MB, `base.en` ≈ 142 MB.
+> - `WHISPER_MODELS_DIR` (optional) — directory of pre-downloaded ggml `.bin`
+>   model files, or where a named model is cached.
+>
+> On first use the ggml model is downloaded from huggingface.co. In
+> network-restricted environments (including CI and some deploys) huggingface.co
+> may be blocked, so **provision the model as a file**: pre-download the ggml
+> model and point `WHISPER_MODELS_DIR` at it, or run first-use where egress is
+> allowed.
+>
+> The startup log will warn if `yt-dlp` or `ffmpeg` aren't resolvable on PATH.
+
+**Step 3: Start the frontend (Terminal B)**
 
 ```bash
 cd frontend
@@ -207,6 +227,13 @@ export QWEN_GGUF_PATH="$HOME/.cache/allaroundfood/qwen2-vl-7b-instruct-q4_k_m.gg
 See [CHANGELOG.md](./CHANGELOG.md) for what's shipped and [TODO.md](./TODO.md) for open work.
 
 ---
+<!-- BEGIN:RECENT-UPDATES -->
+- Text shopping list to any number via Apple Messages
+- Group by date (ISO `YYYY-MM-DD`).
+- Each entry = one shipped change, written in past tense.
+- The top 5 entries get pulled into `README.md`'s "Recent updates" section (between the `<!-- BEGIN:RECENT-UPDATES -->` / `<!-- END:RECENT-UPDATES -->` markers).
+- Never edit historical entries — append a follow-up entry instead.
+<!-- END:RECENT-UPDATES -->
 
 ## License
 

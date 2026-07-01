@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-06-07
+- Text shopping list to any number via Apple Messages
+
 > Shipped work, newest first. Promoted from `TODO.md` via `python3 scripts/done.py "description"`.
 
 ## Conventions

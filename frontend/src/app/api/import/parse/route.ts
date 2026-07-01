@@ -108,7 +108,7 @@ function hintFor(err: ParseError): string {
       return " — backend unreachable. Confirm the all-around-food FastAPI is running and BACKEND_URL in frontend/.env.local points at it.";
     }
     if (err.status === 502) {
-      return " — upstream service used by the backend failed (e.g. whispr transcription). Check the backend logs.";
+      return " — upstream transcription used by the backend failed — check the backend logs.";
     }
     if (err.status === 504) {
       return " — backend timed out. Try a shorter video or raise VIDEO_IMPORT_TIMEOUT_S.";
