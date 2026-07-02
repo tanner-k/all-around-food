@@ -2,25 +2,29 @@
 
 import { useState } from "react";
 import {
-  addShoppingItem,
-  checkShoppingItem,
-  clearCheckedShoppingItems,
-  completeShoppingList,
-  deleteShoppingItem,
-  getShoppingList,
-  type ShoppingCompletionResult,
-} from "@/lib/api";
+  addManualItemAction,
+  clearCheckedAction,
+  completeShoppingAction,
+  getShoppingListAction,
+  removeItemAction,
+  toggleCheckedAction,
+} from "@/app/(app)/shop/actions";
+import type { ShoppingCompletionResult } from "@/lib/db/shopping";
 import type { ShoppingListResponse } from "@/lib/shopping-schema";
 import { AisleSection } from "./AisleSection";
 import { ShoppingAddForm } from "./ShoppingAddForm";
-import { AddFromRecipesModal } from "./AddFromRecipesModal";
+import { AddFromRecipesModal, type RecipeOption } from "./AddFromRecipesModal";
 import { TextListModal } from "./TextListModal";
 
 interface ShoppingListViewProps {
   initial: ShoppingListResponse;
+  recipeOptions: RecipeOption[];
 }
 
-export function ShoppingListView({ initial }: ShoppingListViewProps) {
+export function ShoppingListView({
+  initial,
+  recipeOptions,
+}: ShoppingListViewProps) {
   const [data, setData] = useState<ShoppingListResponse>(initial);
   const [modalOpen, setModalOpen] = useState(false);
   const [textModalOpen, setTextModalOpen] = useState(false);
@@ -38,22 +42,21 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
   }
 
   async function refresh() {
-    try {
-      setData(await getShoppingList());
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to load shopping list"
-      );
+    const result = await getShoppingListAction();
+    if (result.ok) {
+      setData(result.data);
+    } else {
+      setError(result.error);
     }
   }
 
   async function handleAdd(name: string, quantityText: string) {
     setError(null);
-    try {
-      await addShoppingItem(name, quantityText || undefined);
+    const result = await addManualItemAction(name, quantityText || undefined);
+    if (result.ok) {
       await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add item");
+    } else {
+      setError(result.error);
     }
   }
 
@@ -69,11 +72,10 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
         ),
       })),
     }));
-    try {
-      await checkShoppingItem(id, checked);
-    } catch (err) {
+    const result = await toggleCheckedAction(id, checked);
+    if (!result.ok) {
       setData(previous);
-      setError(err instanceof Error ? err.message : "Failed to update item");
+      setError(result.error);
     }
   }
 
@@ -90,39 +92,34 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
         total_visible: groups.reduce((n, g) => n + g.items.length, 0),
       };
     });
-    try {
-      await deleteShoppingItem(id);
-    } catch (err) {
+    const result = await removeItemAction(id);
+    if (!result.ok) {
       setData(previous);
-      setError(err instanceof Error ? err.message : "Failed to remove item");
+      setError(result.error);
     }
   }
 
   async function handleMarkBought() {
     setError(null);
     setNotice(null);
-    try {
-      const result = await clearCheckedShoppingItems();
-      setNotice(describeResult(result));
+    const result = await clearCheckedAction();
+    if (result.ok) {
+      setNotice(describeResult(result.data));
       await refresh();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to mark items as bought"
-      );
+    } else {
+      setError(result.error);
     }
   }
 
   async function handleComplete() {
     setError(null);
     setNotice(null);
-    try {
-      const result = await completeShoppingList();
-      setNotice(describeResult(result));
+    const result = await completeShoppingAction();
+    if (result.ok) {
+      setNotice(describeResult(result.data));
       await refresh();
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to complete shopping"
-      );
+    } else {
+      setError(result.error);
     }
   }
 
@@ -222,6 +219,7 @@ export function ShoppingListView({ initial }: ShoppingListViewProps) {
 
       {modalOpen && (
         <AddFromRecipesModal
+          recipeOptions={recipeOptions}
           onClose={() => setModalOpen(false)}
           onGenerated={refresh}
         />

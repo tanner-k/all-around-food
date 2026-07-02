@@ -1,23 +1,9 @@
 import Link from "next/link";
 import { SectionHeader } from "@/components/SectionHeader";
-import { BACKEND_URL } from "@/lib/backend-url";
-import type { Recipe } from "@/lib/recipe-schema";
-
-async function getRecipes(): Promise<Recipe[]> {
-  try {
-    const res = await fetch(
-      `${BACKEND_URL}/recipes`,
-      { cache: "no-store" }
-    );
-    if (!res.ok) return [];
-    return (await res.json()) as Recipe[];
-  } catch {
-    return [];
-  }
-}
+import { listRecipes } from "@/lib/db/recipes";
 
 export default async function CookbookPage() {
-  const recipes = await getRecipes();
+  const recipes = await listRecipes();
 
   return (
     <>

@@ -7,7 +7,7 @@ A planner-first cooking app — weekly meal planning, AI recipe import, smart sh
 ```
 ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
 │   frontend   │ ───▶ │   backend    │ ───▶ │     data     │
-│ Next.js 15   │      │ Python 3.12  │      │   Polars     │
+│ Next.js 16   │      │ FastAPI      │      │   Polars     │
 └──────────────┘      └──────────────┘      └──────────────┘
                               │
                               ▼
@@ -22,10 +22,10 @@ A planner-first cooking app — weekly meal planning, AI recipe import, smart sh
 ## Components
 
 ### frontend
-Next.js 15 + TypeScript + Tailwind CSS v4 + shadcn/ui. See [`../frontend/context.md`](../frontend/context.md).
+Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui. See [`../frontend/context.md`](../frontend/context.md).
 
 ### backend
-Python 3.12 + Polars (file-backed; FastAPI planned). See [`../backend/context.md`](../backend/context.md).
+Python 3.12 + FastAPI + Polars (file-backed). See [`../backend/context.md`](../backend/context.md).
 
 ### data
 Parquet/CSV in data/ via Polars; migrate to Postgres later. See [`../data/context.md`](../data/context.md).

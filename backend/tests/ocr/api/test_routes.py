@@ -15,6 +15,7 @@ from allaroundfood.api import app
 from allaroundfood.ocr.api.deps import (
     get_canonical_matcher,
     get_observation_store,
+    get_receipt_image_dir,
     get_receipt_parser,
     get_receipt_store,
 )
@@ -88,11 +89,13 @@ def client(tmp_path: Path) -> TestClient:
     fake_parser = ReceiptParser(FakeQwenVLClient(canned={"default": _canned_response()}))
     fake_receipt_store = ReceiptStore(tmp_path / "receipts.parquet")
     fake_obs_store = PriceObservationStore(tmp_path / "price_obs.parquet")
+    fake_image_dir = tmp_path / "receipt-images"
 
     app.dependency_overrides[get_receipt_parser] = lambda: fake_parser
     app.dependency_overrides[get_canonical_matcher] = lambda: fake_matcher
     app.dependency_overrides[get_receipt_store] = lambda: fake_receipt_store
     app.dependency_overrides[get_observation_store] = lambda: fake_obs_store
+    app.dependency_overrides[get_receipt_image_dir] = lambda: fake_image_dir
 
     yield TestClient(app)
 
@@ -130,6 +133,19 @@ class TestPostReceiptsParse:
         assert "receipt" in data
         assert data["receipt"]["parser_engine"] == "qwen-vl"
         assert data["receipt"]["retailer_guess"] == "Test Mart"
+
+    def test_persisted_receipt_image_path_exists(self, client: TestClient) -> None:
+        """response.data.receipt.image_path points at the durable uploaded image."""
+        png_bytes = _make_tiny_png()
+        response = client.post(
+            "/receipts/parse",
+            files={"image": ("receipt.png", png_bytes, "image/png")},
+        )
+        data = response.json()["data"]
+        image_path = Path(data["receipt"]["image_path"])
+        assert image_path.exists()
+        assert image_path.name.endswith(".png")
+        assert image_path.read_bytes() == png_bytes
 
     def test_response_data_has_observations(self, client: TestClient) -> None:
         """response.data.observations is a list (may be empty if no match)."""

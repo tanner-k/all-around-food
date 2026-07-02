@@ -1,5 +1,6 @@
 import { SectionHeader } from "@/components/SectionHeader";
 import { ImportFlow } from "./ImportFlow";
+import { ImportQueue } from "./ImportQueue";
 
 export default function ImportPage() {
   return (
@@ -16,6 +17,7 @@ export default function ImportPage() {
       />
       <div className="mt-12">
         <ImportFlow />
+        <ImportQueue />
       </div>
     </>
   );

@@ -1,0 +1,32 @@
+name: Supabase Keepalive
+
+# Free-tier Supabase projects auto-pause after ~1 week of inactivity.
+# This workflow registers a tiny bit of activity on a weekly schedule so the
+# project stays awake. It also surfaces a paused/broken project by failing
+# the job when the REST API does not return a 2xx status.
+
+on:
+  schedule:
+    # Mondays at 12:00 UTC (weekly). Cron is in UTC; GitHub may delay scheduled
+    # runs under load, which is fine for a once-a-week keep-alive.
+    - cron: '0 12 * * 1'
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  ping:
+    name: Ping Supabase REST API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trivial authenticated read
+        # Secrets are exposed as env vars scoped to this step only.
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # One trivial read against the recipes table. --fail makes curl exit
+          # non-zero on any HTTP status >= 400, so a paused/broken project fails
+          # this job and surfaces in the Actions UI.
+          curl --fail --silent --show-error \
+            "${SUPABASE_URL}/rest/v1/recipes?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"

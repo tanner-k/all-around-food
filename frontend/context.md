@@ -11,7 +11,7 @@
 - Deployment / infrastructure → `infra/`
 
 ## Stack
-Next.js 15 + TypeScript + Tailwind CSS v4 + shadcn/ui
+Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
 
 ## Local skills / conventions
 - ui-ux-pro-max
@@ -36,6 +36,7 @@ pnpm dev
 - `/import` — recipe import flow
 - `/shop` — shopping list
 - `/pantry` — pantry inventory
+- `/prices` — grocery price comparison (gate before release unless pricing data is seeded)
 
 ### API Routes
 - `POST /api/import/parse` — parse screenshot/URL → structured recipe

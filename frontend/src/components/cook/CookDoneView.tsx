@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { MarkOutOfStep } from "./MarkOutOfStep";
+import { markCookedAction } from "@/app/(app)/cookbook/actions";
 
 interface CookDoneViewProps {
   recipeId: string;
@@ -27,12 +28,9 @@ export function CookDoneView({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/recipes/${recipeId}/cooked`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error ?? "Failed to mark as cooked");
+      const result = await markCookedAction(recipeId);
+      if ("error" in result) {
+        throw new Error(result.error);
       }
       setPhase("stockCheck");
     } catch (err) {

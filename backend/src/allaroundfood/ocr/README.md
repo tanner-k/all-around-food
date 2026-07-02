@@ -1,6 +1,6 @@
 # OCR Receipt Pipeline
 
-This package is independent of any pantry receipt-import flow in the codebase. It writes to `data/receipts.parquet` and emits `PriceObservation` rows via the pricing canonical matcher. It does NOT touch pantry stores or call into pantry receipt code.
+This package is independent of any pantry receipt-import flow in the codebase. It writes to `data/receipts.parquet`, stores uploaded receipt images under `data/receipt-images/`, and emits `PriceObservation` rows via the pricing canonical matcher. It does NOT touch pantry stores or call into pantry receipt code.
 
 ## Pipeline Overview
 

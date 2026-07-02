@@ -1,32 +1,12 @@
 import { SectionHeader } from "@/components/SectionHeader";
 import { PlanView } from "@/components/plan/PlanView";
-import { BACKEND_URL } from "@/lib/backend-url";
-import type { MealPlan } from "@/lib/meal-plan-schema";
-import type { Recipe } from "@/lib/recipe-schema";
+import { getMealPlan } from "@/lib/db/meal-plans";
+import { listRecipes } from "@/lib/db/recipes";
 import { currentMonday } from "@/lib/week";
 
-async function getMealPlan(weekOf: string): Promise<MealPlan> {
-  const empty: MealPlan = { week_of: weekOf, meals: [], updated_at: "" };
-  try {
-    const res = await fetch(`${BACKEND_URL}/meal-plans/${weekOf}`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return empty;
-    return (await res.json()) as MealPlan;
-  } catch {
-    return empty;
-  }
-}
-
 async function getRecipeOptions(): Promise<{ id: string; title: string }[]> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/recipes`, { cache: "no-store" });
-    if (!res.ok) return [];
-    const recipes = (await res.json()) as Recipe[];
-    return recipes.map((r) => ({ id: r.id, title: r.title }));
-  } catch {
-    return [];
-  }
+  const recipes = await listRecipes();
+  return recipes.map((r) => ({ id: r.id, title: r.title }));
 }
 
 export default async function PlanPage() {

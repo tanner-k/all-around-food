@@ -7,6 +7,8 @@ from pathlib import Path
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
 
 class Settings(BaseSettings):
     """Global application settings.
@@ -32,11 +34,30 @@ class Settings(BaseSettings):
     # Embedding model for canonical product matching
     embedding_model_name: str = "BAAI/bge-small-en-v1.5"
 
-    # Where pricing Parquet files live
-    pricing_data_dir: Path = Path("data")
+    # Where pricing/OCR Parquet files live
+    pricing_data_dir: Path = REPO_ROOT / "data"
 
     # Path to Qwen2-VL GGUF model for OCR pipeline (set QWEN_GGUF_PATH env var)
     qwen_gguf_path: Path | None = None
+
+    # ── Worker: Supabase service-role access (bypasses RLS; worker env only) ──
+    supabase_url: str | None = None
+    supabase_service_role_key: SecretStr | None = None
+
+    # ── Worker: Anthropic parsing key (moved off Vercel/frontend, ADR 0007 §3) ──
+    anthropic_api_key_parsing: SecretStr | None = None
+
+    # Run the LLM-as-judge eval pipeline after a recipe parse (fire-and-forget).
+    run_evals: bool = True
+
+    # ── Video import binaries + whisper.cpp (consolidated onto Settings) ──
+    whisper_model: str = "base.en"
+    whisper_models_dir: Path | None = None
+    ffmpeg_bin: str = "ffmpeg"
+    ytdlp_bin: str = "yt-dlp"
+
+    # Poison-job retry cap: a job stops being reclaimed once attempts >= this.
+    worker_max_attempts: int = 3
 
 
 settings = Settings()

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { Recipe, Ingredient, Step } from "@/lib/recipe-schema";
+import { updateRecipeAction } from "@/app/(app)/cookbook/actions";
 
 interface RecipeEditFormProps {
   recipe: Recipe;
@@ -99,14 +100,9 @@ export function RecipeEditForm({ recipe: initialRecipe }: RecipeEditFormProps) {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/recipes/${recipe.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(recipe),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error ?? "Failed to save recipe");
+      const result = await updateRecipeAction(recipe.id, recipe);
+      if ("error" in result) {
+        throw new Error(result.error);
       }
       router.push(`/cookbook/${recipe.id}`);
     } catch (err) {

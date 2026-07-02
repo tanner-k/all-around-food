@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { CookMode } from "@/components/cook/CookMode";
-import { BACKEND_URL } from "@/lib/backend-url";
-import type { Recipe } from "@/lib/recipe-schema";
+import { getRecipe } from "@/lib/db/recipes";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -10,15 +9,11 @@ interface PageProps {
 export default async function CookPage({ params }: PageProps) {
   const { id } = await params;
 
-  const res = await fetch(`${BACKEND_URL}/recipes/${id}`, {
-    cache: "no-store",
-  });
+  const recipe = await getRecipe(id);
 
-  if (!res.ok) {
+  if (!recipe) {
     notFound();
   }
-
-  const recipe = (await res.json()) as Recipe;
 
   return (
     <div className="py-6 px-4">

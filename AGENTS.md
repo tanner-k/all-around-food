@@ -33,8 +33,7 @@ all-around-food/
 ├── .github/
 │   ├── PULL_REQUEST_TEMPLATE.md
 │   └── workflows/
-│       ├── ci.yml             ← every PR
-│       └── deploy-ec2.yml     ← on push to main
+│       └── ci.yml             ← every PR / push to dev or main
 ├── .husky/                ← git hooks
 │   └── pre-commit             ← lint-staged
 ├── scripts/
@@ -43,7 +42,7 @@ all-around-food/
 ├── backend/               ← API + business logic · see context.md
 │   └── src/allaroundfood/
 │       ├── pricing/       ← Grocery price tracking adapters, canonical product matching, analytics (see docs/plans/grocery-price-tracking.md)
-│       └── ocr/           ← Receipt OCR pipeline (Qwen2-VL GGUF). Independent of any pantry receipt-import flow. Writes to data/receipts.parquet + PriceObservation rows.
+│       └── ocr/           ← Receipt OCR pipeline (Qwen2-VL GGUF). Independent of any pantry receipt-import flow. Writes to data/receipts.parquet + data/pricing/price_observations.parquet.
 ├── data/                  ← schemas, migrations, seeds · see context.md
 ├── infra/                 ← terraform, deploy scripts · see context.md
 └── docs/
@@ -85,13 +84,14 @@ Apply across the whole repo:
 6. **Identical canon:** If you edit `CLAUDE.md`, copy the same change to `AGENTS.md` (and vice versa) in the same commit.
 
 ## 7. Deploy
-Pushes to `main` trigger `.github/workflows/deploy-vercel.yml`:
-- Deployed to Vercel (frontend auto-deploys on push to main)
-- Backend API deployed separately (see infra docs)
+No GitHub deploy workflow exists yet. Target state:
+- Frontend deploys through Vercel Git integration (`dev` = staging, `main` = production)
+- Backend API deploys separately to a reachable container/VM host (see `docs/plans/polish-roadmap.md`)
+- When deployment is implemented, update this section, `CLAUDE.md`, `AGENTS.md`, and `README.md` together
 
 ## 8. Tech stack
-- Frontend: Next.js 15 + TypeScript + Tailwind CSS v4 + shadcn/ui
-- Backend: Python 3.12 + Polars (file-backed; FastAPI planned)
+- Frontend: Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
+- Backend: Python 3.12 + FastAPI + Polars (file-backed)
 - Data: Parquet/CSV in data/ via Polars; migrate to Postgres later
 - Infra: Vercel
 - Package manager: pnpm

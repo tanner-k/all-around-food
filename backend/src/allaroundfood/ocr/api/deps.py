@@ -24,10 +24,8 @@ logger = logging.getLogger(__name__)
 def _ocr_data_dir() -> Path:
     """Return the OCR data directory resolved from Settings.pricing_data_dir.
 
-    ``settings.pricing_data_dir`` defaults to ``Path("data")`` (relative), so
-    it resolves against the current working directory — typically the repo root
-    when the server is started with ``uv run`` from the backend directory.
-    This avoids hardcoding an absolute path that breaks across machines.
+    ``settings.pricing_data_dir`` defaults to the repository ``data`` directory
+    so backend startup location does not change which Parquet files are used.
     """
     return settings.pricing_data_dir.resolve()
 
@@ -79,6 +77,11 @@ def get_canonical_matcher() -> CanonicalMatcher:
 def get_receipt_store() -> ReceiptStore:
     """Load ReceiptStore from the configured data directory."""
     return ReceiptStore.load(_ocr_data_dir() / "receipts.parquet")
+
+
+def get_receipt_image_dir() -> Path:
+    """Return the durable directory where uploaded receipt images are stored."""
+    return _ocr_data_dir() / "receipt-images"
 
 
 def get_observation_store() -> PriceObservationStore:
