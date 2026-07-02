@@ -1,173 +1,97 @@
 "use client";
 
 import { useState } from "react";
-import type { Recipe } from "@/lib/recipe-schema";
 import { DropZone } from "@/components/recipe/DropZone";
-import { ParsingProgress } from "@/components/recipe/ParsingProgress";
-import { RecipeReview } from "@/components/recipe/RecipeReview";
-import { SavedConfirmation } from "@/components/recipe/SavedConfirmation";
+import {
+  enqueueUrlJob,
+  enqueueImageJob,
+} from "@/lib/db/parseJobs";
 
-/**
- * Build a user-facing message from /api/import/parse error JSON.
- *
- * The route returns `{ error, source, detail }` where `error` carries the
- * sanitized hint and `detail` carries the actual upstream message
- * (e.g. "The transcription service is unavailable right now."). Show both
- * so the toast tells the user WHAT broke and WHERE.
- */
-function formatParseError(payload: {
-  error?: string;
-  detail?: string;
-}): string {
-  const error = payload.error ?? "Parse failed";
-  const detail = payload.detail;
-  if (!detail || detail === error) return error;
-  return `${error}\n\n${detail}`;
-}
+// Phase 3: importing no longer parses inline. Each handler enqueues exactly one
+// `parse_jobs` row (uploading the image first for screenshot kinds); the worker
+// (Phase 4) drains the queue and creates the recipe. On success we show a brief
+// confirmation, then reset to idle so more sources can be added. The finished
+// recipe surfaces in `ImportQueue` once `result_recipe_id` lands.
 
 type State =
   | { kind: "idle" }
-  | { kind: "parsing"; complete: boolean; source: "default" | "video_url" }
-  | { kind: "review"; recipe: Recipe }
-  | { kind: "saving"; recipe: Recipe }
-  | { kind: "saved"; recipe: Recipe };
+  | { kind: "enqueuing" }
+  | { kind: "queued" };
 
 export function ImportFlow() {
   const [state, setState] = useState<State>({ kind: "idle" });
 
   async function handleImage(
-    base64: string,
-    mediaType: "image/jpeg" | "image/png" | "image/webp"
+    _base64: string,
+    _mediaType: "image/jpeg" | "image/png" | "image/webp",
+    file: File
   ) {
-    setState({ kind: "parsing", complete: false, source: "default" });
+    setState({ kind: "enqueuing" });
     try {
-      const res = await fetch("/api/import/parse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "image", data: base64, mediaType }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(formatParseError(err));
-      }
-      const recipe: Recipe = await res.json();
-      setState({ kind: "parsing", complete: true, source: "default" });
-      // Small delay to let the progress animation finish
-      setTimeout(() => setState({ kind: "review", recipe }), 500);
+      await enqueueImageJob(file, "screenshot");
+      setState({ kind: "queued" });
     } catch (err) {
-      console.error("[import] image parse failed:", err);
-      // Reset to idle with a brief error notice — keep it simple for v1
-      alert(`Failed to parse recipe: ${String(err)}`);
+      console.error("[import] enqueue image failed:", err);
+      alert(`Failed to add to the queue: ${String(err)}`);
       setState({ kind: "idle" });
     }
   }
 
   async function handleUrl(url: string) {
-    setState({ kind: "parsing", complete: false, source: "default" });
+    setState({ kind: "enqueuing" });
     try {
-      const res = await fetch("/api/import/parse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "url", url }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(formatParseError(err));
-      }
-      const recipe: Recipe = await res.json();
-      setState({ kind: "parsing", complete: true, source: "default" });
-      setTimeout(() => setState({ kind: "review", recipe }), 500);
+      await enqueueUrlJob(url);
+      setState({ kind: "queued" });
     } catch (err) {
-      console.error("[import] URL parse failed:", err);
-      alert(`Failed to parse recipe: ${String(err)}`);
+      console.error("[import] enqueue URL failed:", err);
+      alert(`Failed to add to the queue: ${String(err)}`);
       setState({ kind: "idle" });
     }
   }
 
+  // TikTok/Instagram links classify to a `video` job inside `enqueueUrlJob`, so
+  // the video handler shares the same enqueue path as a plain URL.
   async function handleVideoUrl(url: string) {
-    setState({ kind: "parsing", complete: false, source: "video_url" });
-    try {
-      const res = await fetch("/api/import/parse", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "video_url", url }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        throw new Error(formatParseError(err));
-      }
-      const recipe: Recipe = await res.json();
-      setState({ kind: "parsing", complete: true, source: "video_url" });
-      setTimeout(() => setState({ kind: "review", recipe }), 500);
-    } catch (err) {
-      console.error("[import] video URL parse failed:", err);
-      alert(`Failed to parse recipe: ${String(err)}`);
-      setState({ kind: "idle" });
-    }
+    await handleUrl(url);
   }
 
-  async function handleSave(recipe: Recipe) {
-    setState({ kind: "saving", recipe });
-    const withId = { ...recipe, id: crypto.randomUUID() };
-    try {
-      const res = await fetch("/api/recipes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(withId),
-      });
-      if (!res.ok) {
-        throw new Error("Save failed");
-      }
-      setState({ kind: "saved", recipe: withId });
-    } catch (err) {
-      console.error("[import] save failed:", err);
-      alert(`Failed to save recipe: ${String(err)}`);
-      setState({ kind: "review", recipe });
-    }
-  }
-
-  if (state.kind === "idle") {
-    return (
-      <DropZone
-        onImage={handleImage}
-        onUrl={handleUrl}
-        onVideoUrl={handleVideoUrl}
-      />
-    );
-  }
-
-  if (state.kind === "parsing") {
-    return (
-      <div className="rounded-2xl bg-paper border border-line p-8 max-w-md">
-        <h3 className="font-serif italic text-xl text-ink mb-6">
-          Reading the <em className="text-terra">recipe</em>…
-        </h3>
-        <ParsingProgress complete={state.complete} source={state.source} />
-      </div>
-    );
-  }
-
-  if (state.kind === "review") {
-    return (
-      <RecipeReview
-        recipe={state.recipe}
-        onSave={handleSave}
-      />
-    );
-  }
-
-  if (state.kind === "saving") {
+  if (state.kind === "enqueuing") {
     return (
       <div className="rounded-2xl bg-paper border border-line p-8 max-w-md flex items-center gap-4">
         <span className="text-terra animate-pulse text-2xl">⏳</span>
-        <p className="text-ink-soft font-medium">Saving to your cookbook…</p>
+        <p className="text-ink-soft font-medium">Adding to the queue…</p>
       </div>
     );
   }
 
-  if (state.kind === "saved") {
-    return <SavedConfirmation />;
+  if (state.kind === "queued") {
+    return (
+      <div className="rounded-2xl bg-paper border border-line p-8 max-w-md flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <span className="text-terra text-2xl leading-none">✓</span>
+          <p className="font-serif italic text-xl text-ink">
+            Added to the <em className="text-terra">queue</em>
+          </p>
+        </div>
+        <p className="text-sm text-ink-mute">
+          Your recipe will appear shortly — track it in the queue below.
+        </p>
+        <button
+          type="button"
+          onClick={() => setState({ kind: "idle" })}
+          className="self-start rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230]"
+        >
+          Add another
+        </button>
+      </div>
+    );
   }
 
-  return null;
+  return (
+    <DropZone
+      onImage={handleImage}
+      onUrl={handleUrl}
+      onVideoUrl={handleVideoUrl}
+    />
+  );
 }

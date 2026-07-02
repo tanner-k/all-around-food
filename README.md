@@ -3,8 +3,8 @@
 > A planner-first cooking app — weekly meal planning, AI recipe import, smart shopping list, pantry inventory, and a hands-on cook mode.
 
 ## Stack
-- **Frontend:** Next.js 15 + TypeScript + Tailwind CSS v4 + shadcn/ui
-- **Backend:** Python 3.12 + Polars (file-backed; FastAPI planned)
+- **Frontend:** Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
+- **Backend:** Python 3.12 + FastAPI + Polars (file-backed)
 - **Data:** Parquet/CSV in data/ via Polars; migrate to Postgres later
 - **Infra:** Vercel
 
@@ -13,7 +13,7 @@
 pnpm install && cd backend && uv sync
 ```
 
-## Run Phase B locally
+## Run locally
 
 **Prerequisites:**
 - Node 22, pnpm, Python 3.12, uv
@@ -22,9 +22,10 @@ pnpm install && cd backend && uv sync
 
 **Step 1: Configure environment**
 
-Copy the env template and add your API key:
+Copy the env templates and add your API key:
 ```bash
 cp frontend/.env.local.example frontend/.env.local
+cp backend/.env.example backend/.env
 # Edit frontend/.env.local and paste your Anthropic API key:
 # ANTHROPIC_API_KEY_PARSING=sk-ant-...
 ```
@@ -139,4 +140,4 @@ See [CLAUDE.md](./CLAUDE.md) (identical to [AGENTS.md](./AGENTS.md)) for the age
 - Branches: `main` (prod, protected) ← `dev` (staging) ← `feature/*`
 - Pre-commit: Prettier + ESLint via Husky
 - CI: every PR runs lint / typecheck / test / build
-- Deploy: push to `main` → `.github/workflows/deploy-ec2.yml`
+- Deploy: no GitHub deploy workflow exists yet; see `docs/plans/polish-roadmap.md`

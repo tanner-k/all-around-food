@@ -7,15 +7,15 @@
 Day-one decision: pick the stack for all-around-food.
 
 ## Decision
-- **Frontend:** Next.js 15 + TypeScript + Tailwind CSS v4 + shadcn/ui
-- **Backend:** Python 3.12 + Polars (file-backed; FastAPI planned)
+- **Frontend:** Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
+- **Backend:** Python 3.12 + FastAPI + Polars (file-backed)
 - **Data:** Parquet/CSV in data/ via Polars; migrate to Postgres later
 - **Infra:** Vercel
 - **Package manager:** pnpm
 - **Node version:** 22
 
 ## Rationale
-Next.js for editorial UX + Vercel single-deploy. Python/Polars chosen to honor user's Python preference and defer database infra until the data shape is known — will migrate to FastAPI + Postgres in Phase B.
+Next.js for editorial UX + Vercel frontend deploys. Python/FastAPI/Polars chosen to honor user's Python preference and defer database infra until the data shape is known. Postgres remains deferred until the migration triggers in ADR 0005 are met.
 
 ## Consequences
 - (positive) Stack is familiar to the team / fits the deployment target / has good ecosystem

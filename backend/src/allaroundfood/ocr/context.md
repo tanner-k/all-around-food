@@ -11,6 +11,7 @@
 
 ## Data
 - Parsed receipts write to `data/receipts.parquet`.
+- Original uploaded receipt images write to `data/receipt-images/`.
 - Mapped price observations write through the pricing store at `data/pricing/price_observations.parquet`.
 - The OCR pipeline depends on pricing canonical matching but should not depend on pantry modules.
 

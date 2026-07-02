@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import inspect
-from pathlib import Path
 
+from allaroundfood.config import REPO_ROOT
 from allaroundfood.ocr.api.deps import _ocr_data_dir
 
 
@@ -13,9 +13,8 @@ class TestOcrDataDir:
         """_ocr_data_dir() must not be derived from __file__ of the deps module.
 
         The previous bug hardcoded parents[7] of deps.py, which resolved to a
-        machine-specific path.  The fixed version uses Settings.pricing_data_dir
-        (cwd-relative), so the source code of _ocr_data_dir must not reference
-        __file__.
+        machine-specific path. The fixed version uses Settings.pricing_data_dir,
+        so the source code of _ocr_data_dir must not reference __file__.
         """
         import allaroundfood.ocr.api.deps as deps_mod
 
@@ -37,11 +36,11 @@ class TestOcrDataDir:
         resolved = _ocr_data_dir()
         assert resolved.is_absolute(), f"Expected absolute path, got: {resolved}"
 
-    def test_is_cwd_relative(self) -> None:
-        """_ocr_data_dir() must resolve to Path.cwd() / 'data', not an arbitrary path."""
+    def test_defaults_to_repo_data_dir(self) -> None:
+        """_ocr_data_dir() must default to the repo data dir, independent of cwd."""
         resolved = _ocr_data_dir()
-        expected = Path.cwd().resolve() / "data"
+        expected = REPO_ROOT / "data"
         assert resolved == expected, (
             f"Expected {expected}, got {resolved}. "
-            "_ocr_data_dir() should resolve against cwd via settings.pricing_data_dir."
+            "_ocr_data_dir() should use the repo-root default from settings."
         )

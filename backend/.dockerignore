@@ -1,0 +1,37 @@
+# backend/.dockerignore
+# Build context is the backend/ directory (docker build ... backend).
+# Keep the context small: the image only needs pyproject.toml, uv.lock, and src/.
+# Everything below is either rebuilt in the image, secret, or irrelevant.
+
+# Python / build caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# The venv is rebuilt inside the builder stage — never copy the host one.
+.venv/
+
+# Local data + scratch (Parquet, downloaded audio, model weights).
+# Model weights are volume-mounted at /models at runtime, not baked in.
+data/
+
+# Tests and their fixtures are not needed in the runtime image.
+tests/
+
+# Local env + secrets (pass via --env-file at run time, don't bake in).
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.DS_Store
+*.swp
+
+# Docker files themselves
+Dockerfile*
+.dockerignore

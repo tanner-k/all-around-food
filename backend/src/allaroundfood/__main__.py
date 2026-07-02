@@ -1,8 +1,6 @@
 """Entry point: `python -m allaroundfood` starts the API server.
 
-Honors the `PORT` and `HOST` env vars so the backend can sit on a non-default
-port when the `whispr` transcription service occupies :8000 (their defaults
-collide; see `backend/context.md` and ADR 0002).
+Honors the `PORT` and `HOST` env vars for local and deployed environments.
 """
 
 from __future__ import annotations
