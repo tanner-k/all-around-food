@@ -1,9 +1,6 @@
 "use client";
 
 import { useState } from "react";
-// getPantry (FastAPI-backed) is retained solely to refresh after a receipt
-// import, which is still on the OCR/backend path (out of scope for this slice).
-import { getPantry } from "@/lib/api";
 import {
   addPantryItemAction,
   deletePantryItemAction,
@@ -16,7 +13,6 @@ import {
 } from "@/lib/pantry-schema";
 import { PantryAddForm } from "./PantryAddForm";
 import { PantryRow } from "./PantryRow";
-import { ReceiptImportFlow } from "./ReceiptImportFlow";
 
 interface PantryViewProps {
   initialItems: PantryItem[];
@@ -24,16 +20,7 @@ interface PantryViewProps {
 
 export function PantryView({ initialItems }: PantryViewProps) {
   const [items, setItems] = useState<PantryItem[]>(initialItems);
-  const [receiptOpen, setReceiptOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function refresh() {
-    try {
-      setItems(await getPantry());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load pantry");
-    }
-  }
 
   async function handleAdd(name: string) {
     setError(null);
@@ -83,16 +70,7 @@ export function PantryView({ initialItems }: PantryViewProps) {
       {/* Toolbar */}
       <div className="flex flex-wrap items-start gap-3">
         <PantryAddForm onAdd={handleAdd} />
-        <button
-          type="button"
-          onClick={() => setReceiptOpen((v) => !v)}
-          className="rounded-xl border border-line bg-paper-2 px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra"
-        >
-          {receiptOpen ? "Hide receipt upload" : "📷 Upload receipt"}
-        </button>
       </div>
-
-      {receiptOpen && <ReceiptImportFlow onImported={refresh} />}
 
       {error && (
         <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
@@ -103,7 +81,7 @@ export function PantryView({ initialItems }: PantryViewProps) {
       {/* Inventory */}
       {groups.length === 0 ? (
         <div className="rounded-2xl border border-line bg-paper p-12 text-center text-ink-mute">
-          Your pantry is empty. Add items above or upload a receipt.
+          Your pantry is empty. Add items above.
         </div>
       ) : (
         <div className="flex flex-col gap-8">

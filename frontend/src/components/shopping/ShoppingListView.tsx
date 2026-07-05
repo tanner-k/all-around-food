@@ -14,7 +14,6 @@ import type { ShoppingListResponse } from "@/lib/shopping-schema";
 import { AisleSection } from "./AisleSection";
 import { ShoppingAddForm } from "./ShoppingAddForm";
 import { AddFromRecipesModal, type RecipeOption } from "./AddFromRecipesModal";
-import { TextListModal } from "./TextListModal";
 
 interface ShoppingListViewProps {
   initial: ShoppingListResponse;
@@ -27,7 +26,6 @@ export function ShoppingListView({
 }: ShoppingListViewProps) {
   const [data, setData] = useState<ShoppingListResponse>(initial);
   const [modalOpen, setModalOpen] = useState(false);
-  const [textModalOpen, setTextModalOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -197,15 +195,6 @@ export function ShoppingListView({
               Complete shopping
             </button>
           )}
-          {hasItems && (
-            <button
-              type="button"
-              onClick={() => setTextModalOpen(true)}
-              className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink transition-colors hover:border-terra hover:text-terra min-h-10"
-            >
-              Text list
-            </button>
-          )}
           <button
             type="button"
             disabled
@@ -225,9 +214,6 @@ export function ShoppingListView({
         />
       )}
 
-      {textModalOpen && (
-        <TextListModal onClose={() => setTextModalOpen(false)} />
-      )}
     </div>
   );
 }

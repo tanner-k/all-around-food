@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-04
+- Archived migrated core Parquet files under `data/archive/` after Supabase row counts matched.
+- Cut over the app from hosted server proxies to Supabase reads/writes plus the local import worker.
+- Removed the deferred user-facing pricing surface while keeping the backend pricing library.
+- Deleted the Python HTTP server, proxy routes, and core Parquet store path after adding Supabase evaluation stats.
+
 ## 2026-06-07
 - Text shopping list to any number via Apple Messages
 

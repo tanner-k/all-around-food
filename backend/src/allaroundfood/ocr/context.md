@@ -3,7 +3,7 @@
 ## Scope
 - Offline receipt OCR for image/PDF uploads.
 - Preprocess receipts, run Qwen2-VL GGUF locally, parse structured receipts, and map line items to pricing `PriceObservation` rows.
-- FastAPI routes mounted under `/receipts`.
+- Worker-side receipt parsing support. No user-facing receipt route is currently mounted.
 
 ## Not in scope
 - Pantry receipt import flows or pantry inventory mutation.
@@ -23,7 +23,7 @@ bash scripts/download_qwen.sh
 export QWEN_GGUF_PATH="$HOME/.cache/allaroundfood/qwen2-vl-7b-instruct-q4_k_m.gguf"
 ```
 
-Without a valid `QWEN_GGUF_PATH`, the API falls back to `FakeQwenVLClient` so the server can start, but parsing is not real OCR.
+Without a valid `QWEN_GGUF_PATH`, the worker dependency helpers fall back to `FakeQwenVLClient`, but parsing is not real OCR.
 
 PDF inputs use `pdf2image`, which requires Poppler on the host:
 

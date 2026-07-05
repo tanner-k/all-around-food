@@ -1,9 +1,9 @@
 # 0005 — Pricing Storage: Parquet Now, Postgres Later
 
-**Status:** Proposed
+**Status:** Superseded by ADR 0007 for core app storage; pricing Parquet remains deferred until a future pricing migration plan.
 
 ## Context
-`PriceObservation` records are high-volume and append-only: each ingestion run from multiple retailer adapters can produce thousands of rows. The rest of the application uses immutable Parquet stores (`RecipeStore`, `PantryStore`) backed by Polars, and ADR 0001 explicitly defers a Postgres migration until the data shape stabilises.
+`PriceObservation` records are high-volume and append-only: each ingestion run from multiple retailer adapters can produce thousands of rows. This ADR originally assumed the rest of the application used immutable Parquet stores backed by Polars. ADR 0007 moved core app data to Supabase; pricing remains in Parquet until a dedicated pricing migration plan.
 
 ## Decision
 - Start with Parquet stores following the existing immutable `XxxStore` pattern (Polars-backed, file at `data/price_observations.parquet`).

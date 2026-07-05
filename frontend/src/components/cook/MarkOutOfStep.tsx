@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getPantry, setPantryItemStatus } from "@/lib/api";
+import {
+  listPantryItemsAction,
+  updatePantryStatusAction,
+} from "@/app/(app)/pantry/actions";
 import type { PantryItem, PantryStatus } from "@/lib/pantry-schema";
 import { normalizeName } from "@/lib/normalize";
 
@@ -34,11 +37,16 @@ export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
 
   useEffect(() => {
     let cancelled = false;
-    getPantry()
-      .then((pantry) => {
+    listPantryItemsAction()
+      .then((result) => {
         if (cancelled) return;
+        if ("error" in result) {
+          setError(result.error);
+          setPhase("ready");
+          return;
+        }
         const wanted = new Set(ingredientNames.map(normalizeName));
-        const matched = pantry.filter((p) =>
+        const matched = result.items.filter((p) =>
           wanted.has(normalizeName(p.name))
         );
         setChoices(matched.map((item) => ({ item, status: item.status })));
@@ -65,9 +73,12 @@ export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
     setError(null);
     try {
       const changed = choices.filter((c) => c.status !== c.item.status);
-      await Promise.all(
-        changed.map((c) => setPantryItemStatus(c.item.id, c.status))
+      const results = await Promise.all(
+        changed.map((c) => updatePantryStatusAction(c.item.id, c.status))
       );
+      if (results.some((result) => "error" in result)) {
+        throw new Error("Failed to update pantry");
+      }
       onDone();
     } catch {
       setError("Couldn't update some items. Try again.");

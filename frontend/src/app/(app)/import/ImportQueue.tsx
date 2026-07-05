@@ -17,10 +17,10 @@ import {
 // action on failed rows.
 
 const STATUS_LABEL: Record<ParseJobStatus, string> = {
-  pending: "Pending",
-  processing: "Processing",
-  done: "Done",
-  error: "Error",
+  pending: "Queued",
+  processing: "Importing",
+  done: "Imported",
+  error: "Needs retry",
 };
 
 const STATUS_CLASS: Record<ParseJobStatus, string> = {
@@ -38,6 +38,8 @@ const KIND_LABEL: Record<ParseJob["kind"], string> = {
   shopping_list: "Shopping list",
 };
 
+const LONG_RUNNING_MS = 10 * 60 * 1000;
+
 function StatusBadge({ status }: { status: ParseJobStatus }) {
   return (
     <span
@@ -49,6 +51,45 @@ function StatusBadge({ status }: { status: ParseJobStatus }) {
       {STATUS_LABEL[status]}
     </span>
   );
+}
+
+function elapsedMsSince(iso: string): number | null {
+  const timestamp = Date.parse(iso);
+  if (Number.isNaN(timestamp)) return null;
+  return Math.max(0, Date.now() - timestamp);
+}
+
+function formatDuration(ms: number | null): string {
+  if (ms === null) return "a little while";
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "less than 1 min";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"}`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+function formatAgo(iso: string): string {
+  return `${formatDuration(elapsedMsSince(iso))} ago`;
+}
+
+function statusCopy(job: ParseJob): string {
+  if (job.status === "pending") {
+    return `Queued ${formatAgo(job.created_at)}. Waiting for the importer to pick it up.`;
+  }
+  if (job.status === "processing") {
+    const elapsed = elapsedMsSince(job.updated_at);
+    const prefix = `Processing for ${formatDuration(elapsed)}.`;
+    if (elapsed !== null && elapsed >= LONG_RUNNING_MS) {
+      return `${prefix} This is taking longer than usual, but it can keep running in the background.`;
+    }
+    return `${prefix} Checking the source and building the recipe.`;
+  }
+  if (job.status === "done") {
+    return `Import finished ${formatAgo(job.updated_at)}.`;
+  }
+  return `Import failed ${formatAgo(job.updated_at)}. Review the message and retry.`;
 }
 
 /** Human-readable source for a job: URL, uploaded file name, or pasted text. */
@@ -138,10 +179,17 @@ export function ImportQueue() {
                 <span className="text-xs font-medium text-ink-soft uppercase tracking-wide">
                   {KIND_LABEL[job.kind]}
                 </span>
+                {job.attempts > 0 && (
+                  <span className="text-xs font-medium text-ink-mute">
+                    Attempt {job.attempts}
+                  </span>
+                )}
                 <span className="text-sm text-ink-mute break-all">
                   {jobSource(job)}
                 </span>
               </div>
+
+              <p className="text-sm text-ink-soft">{statusCopy(job)}</p>
 
               {job.status === "error" && job.error && (
                 <p className="text-sm text-terra break-words">{job.error}</p>

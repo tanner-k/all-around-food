@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Package, Tag, Plus, type LucideIcon } from "lucide-react";
+import { BookOpen, Package, Plus, type LucideIcon } from "lucide-react";
 
 type Tab = { href: string; label: string; Icon: LucideIcon };
 
 const TABS: Tab[] = [
   { href: "/cookbook", label: "Cookbook", Icon: BookOpen },
   { href: "/pantry",   label: "Pantry",   Icon: Package },
-  { href: "/prices",   label: "Prices",   Icon: Tag },
   { href: "/import",   label: "Import",   Icon: Plus },
 ];
 
@@ -24,7 +23,7 @@ export function MobileTabBar() {
       aria-label="Mobile navigation"
       className="fixed bottom-0 inset-x-0 z-50 md:hidden border-t border-line bg-paper/80 backdrop-blur pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="grid grid-cols-4">
+      <ul className="grid grid-cols-3">
         {TABS.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
           return (

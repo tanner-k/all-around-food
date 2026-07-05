@@ -166,15 +166,12 @@ export async function listJobs(): Promise<ParseJob[]> {
   return (data ?? []) as ParseJob[];
 }
 
-/**
- * Retry a failed job: reset `status` to `pending` and clear `error`. `attempts`
- * is intentionally left intact so the worker's poison-job guard still applies.
- */
+/** Retry a failed job from scratch: reset `status`, `error`, and `attempts`. */
 export async function retryJob(id: string): Promise<ParseJob> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from(TABLE)
-    .update({ status: "pending", error: null })
+    .update({ status: "pending", error: null, attempts: 0 })
     .eq("id", id)
     .select("*")
     .single();

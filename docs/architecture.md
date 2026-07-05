@@ -5,16 +5,17 @@ A planner-first cooking app — weekly meal planning, AI recipe import, smart sh
 
 ## System diagram
 ```
-┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-│   frontend   │ ───▶ │   backend    │ ───▶ │     data     │
-│ Next.js 16   │      │ FastAPI      │      │   Polars     │
-└──────────────┘      └──────────────┘      └──────────────┘
-                              │
-                              ▼
-                      ┌──────────────┐
-                      │    infra     │
-                      │   Vercel     │
-                      └──────────────┘
+┌──────────────┐        ┌──────────────┐
+│   frontend   │ ─────▶ │   Supabase   │
+│ Next.js 16   │        │ Postgres/RLS │
+└──────────────┘        └──────────────┘
+       │                       ▲
+       │ enqueue parse_jobs    │ service-role writes
+       ▼                       │
+┌──────────────┐               │
+│ local worker │ ──────────────┘
+│ Python 3.12  │
+└──────────────┘
 ```
 
 > Replace this ASCII sketch with a real diagram (Excalidraw, Mermaid, etc.) once the shape settles.
@@ -22,16 +23,16 @@ A planner-first cooking app — weekly meal planning, AI recipe import, smart sh
 ## Components
 
 ### frontend
-Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui. See [`../frontend/context.md`](../frontend/context.md).
+Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui. Server components read/write Supabase under RLS. See [`../frontend/context.md`](../frontend/context.md).
 
 ### backend
-Python 3.12 + FastAPI + Polars (file-backed). See [`../backend/context.md`](../backend/context.md).
+Python 3.12 worker for queued recipe imports, video transcription, OCR, evals, and retained pricing libraries. See [`../backend/context.md`](../backend/context.md).
 
 ### data
-Parquet/CSV in data/ via Polars; migrate to Postgres later. See [`../data/context.md`](../data/context.md).
+Supabase migrations plus archived Parquet seed/migration inputs. Pricing/OCR Parquet paths remain local until a future pricing migration. See [`../data/context.md`](../data/context.md).
 
 ### infra
-Vercel. See [`../infra/context.md`](../infra/context.md).
+Vercel for the PWA, Supabase for auth/database/storage, and a local worker process for parsing jobs. See [`../infra/context.md`](../infra/context.md).
 
 ## Decisions
 See [`./decisions/`](./decisions/) for the running ADR log.

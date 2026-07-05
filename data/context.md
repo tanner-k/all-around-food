@@ -1,37 +1,30 @@
 # data/
 
 ## Scope
-- Database schema definitions
-- Migrations (forward + rollback)
-- Seed data for local + test environments
-- Shared query helpers used by both `backend/` and scripts
+- Supabase migration files
+- Archived Parquet files used for one-time migration/seeding
+- Deferred pricing/OCR Parquet paths
 
 ## Not in scope
-- API endpoints → `backend/`
+- Worker code → `backend/`
 - UI-side data shaping → `frontend/`
 - Infrastructure provisioning the database → `infra/`
 
 ## Stack
-Parquet/CSV in data/ via Polars; migrate to Postgres later
+Supabase Postgres migrations; Parquet remains only for archive/migration inputs and deferred pricing/OCR stores
 
 ## Data files
-- `recipes.parquet` — saved recipes (`RecipeStore`)
-- `evaluations.parquet` — LLM-as-judge parse evaluations (`EvalStore`)
-- `pantry.parquet` — pantry inventory items (`PantryStore`)
-- `shopping_list.parquet` — shopping-list items (`ShoppingListStore`)
-- `meal_plans.parquet` — weekly meal plans, one row per week (`MealPlanStore`)
-
-All are written lazily on first save; they don't need to exist up front.
+- `recipes.parquet`, `evaluations.parquet`, `pantry.parquet`, `shopping_list.parquet`, `meal_plans.parquet` — legacy core app data, migrated to Supabase via `backend/scripts/migrate_parquet_to_supabase.py`.
+- `receipts.parquet` and `data/pricing/*.parquet` — deferred OCR/pricing paths retained for worker/library use.
 
 ## Local skills / conventions
 - None yet — add as needed
 
 ## Migration workflow
-1. Add a new file in `data/migrations/` named `YYYYMMDDHHMM_description.sql` (or your migration tool's format)
-2. Write both **up** and **down** halves
-3. Run `_n/a — Polars file-backed for now_` against the local DB
-4. Verify with seeded data
-5. Commit the migration alongside the code that uses it
+1. Add a new SQL file under `supabase/migrations/`.
+2. Make it idempotent where practical.
+3. Apply with `supabase db push`.
+4. Commit the migration alongside the code that uses it.
 
 ## Notes for agents
 - Never edit a migration that has shipped to `main` — write a new one

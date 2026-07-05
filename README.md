@@ -10,15 +10,15 @@
 
 ## Features
 
-- **Weekly meal planner** — drag recipes into a 7-day grid, swap days, and plan the week in minutes
-- **AI recipe import** — paste a URL or drop a screenshot; Claude extracts the title, ingredients, and steps and asks you to review before saving
-- **Smart shopping list** — auto-generated from your meal plan, grouped by aisle, with manual add/remove
-- **Pantry inventory** — track what you have on hand; checked items are crossed off the shopping list automatically
-- **Cook mode** — step-by-step guided view or full-scroll layout with ingredient highlights
-- **Video recipe import** — import from Instagram or TikTok via yt-dlp + Whisper speech-to-text
-- **Receipt OCR** — scan a grocery receipt with the local Qwen2-VL GGUF model; no cloud API required
-- **Grocery price tracking** — compare prices across Walmart, Costco, Kroger, Whole Foods, and Instacart with canonical product matching powered by local bge-small-en-v1.5 embeddings
-- **Eval dashboard** — review how Claude graded each recipe import (accuracy, completeness, field-level feedback)
+- **Weekly meal planner** — drag recipes into a 7-day grid, swap days, and plan the week in minutes.
+- **AI recipe import** — paste a URL or drop a screenshot; the app enqueues a parse job and the worker saves the recipe when it finishes.
+- **Smart shopping list** — recipe-sourced and manual items, grouped by aisle, with checked items flowing back into pantry stock.
+- **Pantry inventory** — track what you have on hand and what is running low.
+- **Cook mode** — guided step-by-step or full-scroll cooking views, with post-cook pantry status updates.
+- **Video recipe import** — import from Instagram or TikTok via yt-dlp, ffmpeg, and local whisper.cpp transcription.
+- **Receipt OCR** — local Qwen2-VL GGUF receipt parsing for the pricing/OCR pipeline.
+- **Grocery price tracking** — pricing adapters, canonical product matching, and analytics live under `backend/src/allaroundfood/pricing/`.
+- **Eval dashboard** — review how Claude graded recipe imports for accuracy and completeness.
 
 ---
 
@@ -39,8 +39,14 @@
 | Python | 3.12 | [python.org](https://python.org/) |
 | uv | latest | [docs.astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/) |
 | Poppler | any | `brew install poppler` (macOS) · `apt install poppler-utils` (Linux) |
+| Docker Desktop | latest | Required for the scheduled local worker |
 
-You also need a Supabase project and an **Anthropic API key** for worker-side recipe parsing — get one at [console.anthropic.com](https://console.anthropic.com).
+You also need:
+
+- A Supabase project with the migrations in `supabase/migrations/` applied.
+- An Anthropic API key for worker-side recipe parsing and evaluation.
+- `yt-dlp` and `ffmpeg` on `PATH` for video imports (`brew install yt-dlp ffmpeg` on macOS).
+- A local model directory for the scheduled worker, mounted into Docker at `/models`.
 
 ### Install
 
@@ -49,11 +55,7 @@ pnpm install
 cd backend && uv sync && cd ..
 ```
 
-### Configure environment
-
-```bash
-cp backend/.env.example backend/.env
-```
+### Configure Environment
 
 Create `frontend/.env.local` with the public Supabase browser values:
 
@@ -62,7 +64,13 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Fill in `backend/.env` with:
+Backend and worker env lives in `backend/.env`:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Fill in at least:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
@@ -71,39 +79,13 @@ Fill in `backend/.env` with:
 | `ANTHROPIC_API_KEY_PARSING` | Yes | Anthropic API key used by the local worker for parsing and evals. |
 | `WHISPER_MODEL` | No | Local whisper.cpp model name; defaults to `base.en`. |
 | `YTDLP_BIN` / `FFMPEG_BIN` | No | Video import binaries; default to `yt-dlp` and `ffmpeg`. |
-| `HOST` / `PORT` | No | FastAPI bind address; default to `0.0.0.0:8000`. |
+| `QWEN_GGUF_PATH` | No | Real receipt OCR model path. |
 
 Apply Supabase migrations and migrate existing Parquet rows using [supabase/README.md](./supabase/README.md).
 
 ### Run
 
-**Terminal A — backend**
-
-```bash
-cd backend
-uv run python -m allaroundfood
-```
-
-FastAPI starts on `http://localhost:8000`. Verify: `curl http://localhost:8000/healthz`.
-
-> **Video transcription (local whisper.cpp):** the Instagram/TikTok video
-> importer transcribes speech in-process via whisper.cpp (`pywhispercpp`) — no
-> separate service to run. Configure it with:
->
-> - `WHISPER_MODEL` — model name (default `base.en`). English `.en` models suit
->   English recipe videos. Footprint: `tiny.en` ≈ 75 MB, `base.en` ≈ 142 MB.
-> - `WHISPER_MODELS_DIR` (optional) — directory of pre-downloaded ggml `.bin`
->   model files, or where a named model is cached.
->
-> On first use the ggml model is downloaded from huggingface.co. In
-> network-restricted environments (including CI and some deploys) huggingface.co
-> may be blocked, so **provision the model as a file**: pre-download the ggml
-> model and point `WHISPER_MODELS_DIR` at it, or run first-use where egress is
-> allowed.
->
-> The startup log will warn if `yt-dlp` or `ffmpeg` aren't resolvable on PATH.
-
-**Terminal B — frontend**
+**Terminal A — frontend**
 
 ```bash
 cd frontend
@@ -112,7 +94,7 @@ pnpm dev
 
 Next.js starts on `http://localhost:3000`.
 
-**Terminal C — worker**
+**Terminal B — worker**
 
 ```bash
 cd backend
@@ -121,13 +103,56 @@ uv run python -m allaroundfood.worker --once
 
 Use `--watch` while developing if you want the worker to poll continuously.
 
-### Try it out
+Before relying on the worker, run the preflight checks and prefetch local models:
 
-1. **Import a recipe** — go to `/import`, paste a URL or drop a screenshot, and add it to the queue.
-2. **Run the worker** — drain the queue with `uv run python -m allaroundfood.worker --once`.
-3. **Plan the week** — go to `/plan` and drag your new recipe into the meal grid.
-4. **Generate a shopping list** — visit `/shop`; the list auto-populates from your plan.
-5. **Grade an import** — go to `/evaluations` to see accuracy and completeness scores from the Claude judge.
+```bash
+cd backend
+uv run python -m allaroundfood.worker --doctor
+uv run python -m allaroundfood.worker --prefetch-models
+```
+
+`--prefetch-models` may download the configured Whisper model on first use. The Qwen GGUF receipt model is not committed; put it in the host model directory that Docker mounts at `/models`:
+
+```bash
+mkdir -p "$HOME/models/allaroundfood/whisper"
+bash scripts/download_qwen.sh "$HOME/models/allaroundfood/qwen2-vl.gguf"
+```
+
+For launchd/Docker, set `QWEN_GGUF_PATH=/models/qwen2-vl.gguf` and `WHISPER_MODELS_DIR=/models/whisper` in `backend/.env`.
+
+### Schedule the Worker on macOS
+
+launchd is the supported local scheduler. Build the worker image, prepare a model directory containing `qwen2-vl.gguf` and a `whisper/` subdirectory, then install the LaunchAgent:
+
+```bash
+docker build -f backend/Dockerfile.worker -t allaroundfood-worker backend
+infra/worker/install_launchd.sh --models "$HOME/models/allaroundfood"
+launchctl load "$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
+launchctl start com.allaroundfood.worker
+launchctl print "gui/$(id -u)/com.allaroundfood.worker"
+tail -f /tmp/allaroundfood-worker.out /tmp/allaroundfood-worker.err
+```
+
+To reload after editing the plist:
+
+```bash
+launchctl unload "$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
+launchctl load "$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
+```
+
+To uninstall:
+
+```bash
+launchctl unload "$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
+rm "$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
+```
+
+### Try It Out
+
+1. Sign in through the PWA.
+2. Go to `/import`, paste a recipe URL or drop a screenshot, and add it to the queue.
+3. Run the worker once; the finished recipe appears in `/cookbook`.
+4. Plan meals in `/plan`, review the shopping list in `/shop`, and check parse grades in `/evaluations`.
 
 ---
 
@@ -139,8 +164,8 @@ Use `--watch` while developing if you want the worker to poll continuously.
 # Frontend (hot reload)
 cd frontend && pnpm dev
 
-# Backend (auto-reload)
-cd backend && uv run python -m allaroundfood
+# Worker (single drain)
+cd backend && uv run python -m allaroundfood.worker --once
 ```
 
 ### Test
@@ -156,7 +181,7 @@ cd frontend && pnpm test:e2e
 cd backend && uv run pytest
 ```
 
-### Lint & typecheck
+### Lint & Typecheck
 
 ```bash
 # Frontend
@@ -180,7 +205,7 @@ cd frontend && pnpm build
 Browser / PWA
   └─▶ Next.js 16 (frontend/)
         ├─▶ Supabase Postgres + Storage
-        └─▶ local API routes for still-hosted backend features
+        └─▶ local API routes for still-hosted frontend features
 
 Local worker (backend/)
   └─▶ Supabase parse_jobs
@@ -189,16 +214,16 @@ Local worker (backend/)
         └─▶ Qwen2-VL receipt OCR / pricing observations
 ```
 
-**Key backend subsystems**
+**Key subsystems**
 
 | Subsystem | Path | What it does |
 |-----------|------|--------------|
 | Supabase data access | `frontend/src/lib/db/` | Server-side reads/writes under RLS |
 | Import queue | `frontend/src/lib/db/parseJobs.ts`, `backend/src/allaroundfood/worker.py` | Enqueues and drains recipe parse jobs |
-| Pricing adapters | `backend/src/allaroundfood/pricing/` | Scrapes/calls Walmart, Costco, Kroger, Whole Foods, Instacart |
-| Canonical matching | `pricing/canonical/` | Deduplicates products with bge-small-en-v1.5 embeddings + RapidFuzz |
-| Receipt OCR | `backend/src/allaroundfood/ocr/` | Runs Qwen2-VL GGUF locally; writes `data/receipts.parquet` |
-| Video import | `backend/src/allaroundfood/video_import.py` | yt-dlp fetch → ffmpeg audio → Whisper transcription |
+| Recipe parsing | `backend/src/allaroundfood/parsing/` | Claude tool-use parsers and judge |
+| Video import | `backend/src/allaroundfood/video_import.py` | yt-dlp fetch, ffmpeg audio, whisper.cpp transcription |
+| Receipt OCR | `backend/src/allaroundfood/ocr/` | Qwen2-VL GGUF receipt parsing |
+| Pricing | `backend/src/allaroundfood/pricing/` | Retailer adapters, canonical matching, analytics |
 
 ---
 
@@ -212,51 +237,51 @@ pnpm approve-builds
 
 **Video import cannot find system binaries**
 
+Install `yt-dlp` and `ffmpeg`, or set `YTDLP_BIN` / `FFMPEG_BIN` in `backend/.env`.
+
 ```bash
-# Install yt-dlp and ffmpeg, or point at custom binaries:
 YTDLP_BIN=/path/to/yt-dlp FFMPEG_BIN=/path/to/ffmpeg uv run python -m allaroundfood.worker --once
 ```
 
-The worker logs warn if `yt-dlp` or `ffmpeg` aren't found on PATH.
+**Whisper model download is blocked**
 
-**Pricing adapter Playwright fallbacks**
+Run `uv run python -m allaroundfood.worker --prefetch-models` on a network that can reach Hugging Face, or pre-download a ggml model and set `WHISPER_MODELS_DIR`.
 
-Install Chromium once:
+**Pricing adapter Playwright fallbacks need Chromium**
 
 ```bash
 cd backend && uv run playwright install chromium
 ```
 
-**Offline receipt OCR (Qwen2-VL)**
-
-Download the local model and export its path:
+**Offline receipt OCR needs Qwen2-VL**
 
 ```bash
-bash scripts/download_qwen.sh
-export QWEN_GGUF_PATH="$HOME/.cache/allaroundfood/qwen2-vl-7b-instruct-q4_k_m.gguf"
+mkdir -p "$HOME/models/allaroundfood/whisper"
+bash scripts/download_qwen.sh "$HOME/models/allaroundfood/qwen2-vl.gguf"
 ```
+
+When running locally without Docker, set `QWEN_GGUF_PATH` to that host path. When running through Docker/launchd, mount the host model directory at `/models` and set `QWEN_GGUF_PATH=/models/qwen2-vl.gguf`.
 
 ---
 
 ## Contributing
 
-1. Branch off `dev`: `git checkout -b feature/your-thing dev`
-2. Open a PR targeting `dev` — **never target `main` directly**
-3. CI must be green (lint + typecheck + test + build) before merge
-4. `dev` → `main` is a release; only maintainers merge that
+1. Branch off `dev`: `git checkout -b feature/your-thing dev`.
+2. Open a PR targeting `dev`; `main` is release-only.
+3. CI must be green before merge.
+4. `dev` → `main` is a release.
 
-See [CHANGELOG.md](./CHANGELOG.md) for what's shipped and [TODO.md](./TODO.md) for open work.
+See [CHANGELOG.md](./CHANGELOG.md) for shipped work and [TODO.md](./TODO.md) for open work.
+
+## Recent Updates
+
+Last 5 entries from [CHANGELOG.md](./CHANGELOG.md):
 
 ---
 <!-- BEGIN:RECENT-UPDATES -->
 - Text shopping list to any number via Apple Messages
 <!-- END:RECENT-UPDATES -->
 
-## Project map
-See [CLAUDE.md](./CLAUDE.md) (identical to [AGENTS.md](./AGENTS.md)) for the agent-readable map of this repo.
+## Project Map
 
-## Workflow
-- Branches: `main` (prod, protected) ← `dev` (staging) ← `feature/*`
-- Pre-commit: Prettier + ESLint via Husky
-- CI: every PR runs lint / typecheck / test / build
-- Deploy: no GitHub deploy workflow exists yet; see `docs/plans/polish-roadmap.md`
+See [CLAUDE.md](./CLAUDE.md), which is identical to [AGENTS.md](./AGENTS.md), for the agent-readable repo map.

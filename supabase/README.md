@@ -115,3 +115,14 @@ A free-tier Supabase project auto-pauses after ~1 week of inactivity. The
 12:00 UTC, plus manual `workflow_dispatch`) and makes one authenticated REST read
 so the project stays active; it fails if the API does not return 2xx. It needs
 two GitHub repo secrets: `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+
+Set those in **GitHub → Settings → Secrets and variables → Actions**:
+
+```text
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_ANON_KEY=<anon-key>
+```
+
+Manual check: open **Actions → Supabase keepalive → Run workflow**. A passing run
+confirms the URL/key pair can read through the REST API. Keep the service-role
+key out of this workflow; only the local worker and migration script need it.
