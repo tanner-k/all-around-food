@@ -11,7 +11,7 @@
 - Deployment / infrastructure → `infra/`
 
 ## Stack
-Next.js 15 + TypeScript + Tailwind CSS v4 + shadcn/ui
+Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
 
 ## Local skills / conventions
 - ui-ux-pro-max
@@ -36,6 +36,7 @@ pnpm dev
 - `/import` — recipe import flow
 - `/shop` — shopping list
 - `/pantry` — pantry inventory
+- `/prices` — grocery price comparison (gate before release unless pricing data is seeded)
 
 ### API Routes
 - `POST /api/import/parse` — parse screenshot/URL → structured recipe
@@ -58,6 +59,7 @@ pnpm dev
 - `PATCH /api/shopping-list/items/[id]/check` — toggle an item's checked state
 - `POST /api/shopping-list/generate` — generate list items from recipe IDs
 - `DELETE /api/shopping-list/checked` — remove all checked items
+- `POST /api/shopping-list/text` — text unchecked items to a phone number via Apple Messages (macOS-only)
 - `GET|PUT /api/meal-plans/[weekOf]` — get / replace the weekly meal plan
 
 Most `/api/*` routes are thin proxies to the FastAPI backend via `lib/backend-proxy.ts`; `/api/pantry/receipt` calls Claude directly (like `/api/import/parse`).

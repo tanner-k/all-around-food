@@ -1,7 +1,9 @@
 # 0002 — Video recipe import transcription
 
-**Status:** Accepted
+**Status:** Superseded by ADR 0006
 **Date:** 2026-05-23
+
+> **Superseded by [ADR 0006](0006-local-whispercpp-transcription.md):** the external `whispr` HTTP service has been replaced with in-process transcription via whisper.cpp (`pywhispercpp`). The rest of this document is retained as a historical record.
 
 ## Context
 Instagram and TikTok recipe import needs a way to turn short-form cooking videos into text that the recipe parser can structure. The importer also needs video/audio acquisition and normalization before transcription.

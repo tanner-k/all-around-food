@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Recipe, Ingredient } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
 import { pageTitle } from "@/lib/typography";
+import { markCookedAction } from "@/app/(app)/cookbook/actions";
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -73,7 +74,7 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
     (groups.size === 1 && !groups.has("__ungrouped__"));
 
   async function handleMarkCooked() {
-    await fetch(`/api/recipes/${recipe.id}/cooked`, { method: "POST" });
+    await markCookedAction(recipe.id);
     router.refresh();
   }
 

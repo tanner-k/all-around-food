@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import tempfile
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
@@ -16,6 +17,7 @@ from pydantic import BaseModel, ConfigDict
 from allaroundfood.ocr.api.deps import (
     get_canonical_matcher,
     get_observation_store,
+    get_receipt_image_dir,
     get_receipt_parser,
     get_receipt_store,
 )
@@ -70,6 +72,7 @@ async def post_parse_receipt(
     matcher: CanonicalMatcher = Depends(get_canonical_matcher),
     receipt_store: ReceiptStore = Depends(get_receipt_store),
     obs_store: PriceObservationStore = Depends(get_observation_store),
+    receipt_image_dir: Path = Depends(get_receipt_image_dir),
 ) -> ApiResponse[ReceiptParseResponse]:
     """Parse a receipt image/PDF and emit PriceObservation rows.
 
@@ -103,20 +106,24 @@ async def post_parse_receipt(
     }
     ext = ext_map.get(content_type, ".bin")
 
+    receipt_image_dir.mkdir(parents=True, exist_ok=True)
+    upload_path = receipt_image_dir / f"{uuid.uuid4()}{ext}"
+    contents = await image.read()
+    upload_path.write_bytes(contents)
+
     with tempfile.TemporaryDirectory(prefix="ocr_upload_") as tmp_dir_str:
         tmp_dir = Path(tmp_dir_str)
-        upload_path = tmp_dir / f"receipt{ext}"
-        contents = await image.read()
-        upload_path.write_bytes(contents)
 
         try:
             preprocessed = preprocess_receipt(upload_path, output_dir=tmp_dir)
         except (ValueError, FileNotFoundError) as exc:
+            upload_path.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         try:
             receipt = parser.parse(preprocessed)
         except ReceiptParseError as exc:
+            upload_path.unlink(missing_ok=True)
             logger.error("OCR parse failed: %s | raw=%s", exc, exc.raw_output[:200])
             raise HTTPException(
                 status_code=422,

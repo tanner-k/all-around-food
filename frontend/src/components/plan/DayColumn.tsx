@@ -5,14 +5,14 @@ import { PlannedRecipeCard } from "./PlannedRecipeCard";
 
 interface DayMeal {
   title: string;
-  index: number;
+  recipeId: string;
 }
 
 interface DayColumnProps {
   day: DayInfo;
   meals: DayMeal[];
   onAdd: (dayIndex: number) => void;
-  onRemove: (index: number) => void;
+  onRemove: (dayIndex: number, recipeId: string) => void;
 }
 
 export function DayColumn({ day, meals, onAdd, onRemove }: DayColumnProps) {
@@ -43,9 +43,9 @@ export function DayColumn({ day, meals, onAdd, onRemove }: DayColumnProps) {
       {/* Planned recipes — however many */}
       {meals.map((meal) => (
         <PlannedRecipeCard
-          key={meal.index}
+          key={meal.recipeId}
           recipeTitle={meal.title}
-          onRemove={() => onRemove(meal.index)}
+          onRemove={() => onRemove(day.index, meal.recipeId)}
         />
       ))}
 

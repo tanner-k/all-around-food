@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+// getPantry (FastAPI-backed) is retained solely to refresh after a receipt
+// import, which is still on the OCR/backend path (out of scope for this slice).
+import { getPantry } from "@/lib/api";
 import {
-  createPantryItem,
-  deletePantryItem,
-  getPantry,
-  setPantryItemStatus,
-} from "@/lib/api";
+  addPantryItemAction,
+  deletePantryItemAction,
+  updatePantryStatusAction,
+} from "@/app/(app)/pantry/actions";
 import {
   AisleSchema,
   type PantryItem,
@@ -35,12 +37,12 @@ export function PantryView({ initialItems }: PantryViewProps) {
 
   async function handleAdd(name: string) {
     setError(null);
-    try {
-      const created = await createPantryItem(name);
-      setItems((prev) => [...prev, created]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add item");
+    const result = await addPantryItemAction(name);
+    if ("error" in result) {
+      setError(result.error);
+      return;
     }
+    setItems((prev) => [...prev, result.item]);
   }
 
   async function handleStatusChange(id: string, status: PantryStatus) {
@@ -49,11 +51,10 @@ export function PantryView({ initialItems }: PantryViewProps) {
     setItems((cur) =>
       cur.map((i) => (i.id === id ? { ...i, status } : i))
     );
-    try {
-      await setPantryItemStatus(id, status);
-    } catch (err) {
+    const result = await updatePantryStatusAction(id, status);
+    if ("error" in result) {
       setItems(previous);
-      setError(err instanceof Error ? err.message : "Failed to update status");
+      setError(result.error);
     }
   }
 
@@ -61,11 +62,10 @@ export function PantryView({ initialItems }: PantryViewProps) {
     setError(null);
     const previous = items;
     setItems((cur) => cur.filter((i) => i.id !== id));
-    try {
-      await deletePantryItem(id);
-    } catch (err) {
+    const result = await deletePantryItemAction(id);
+    if ("error" in result) {
       setItems(previous);
-      setError(err instanceof Error ? err.message : "Failed to remove item");
+      setError(result.error);
     }
   }
 

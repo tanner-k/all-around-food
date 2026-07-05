@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, Manrope } from "next/font/google";
 import Link from "next/link";
 import { MobileTabBar } from "@/app/(app)/_components/MobileTabBar";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -21,6 +22,26 @@ export const metadata: Metadata = {
   title: "All Around Food",
   description:
     "A planner-first cooking app — weekly meal planning, AI recipe import, smart shopping list, pantry inventory, and hands-on cook mode.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "All Around Food",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#C2613B",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 const navLinks = [
@@ -83,6 +104,7 @@ export default function RootLayout({
           {children}
         </main>
         <MobileTabBar />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

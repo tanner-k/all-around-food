@@ -1,0 +1,19 @@
+# infra/worker/crontab.example — Linux/portable equivalent of the launchd plist.
+#
+# Drains the import-queue once a day at 08:00. Unlike launchd, cron does NOT
+# catch up a job it missed while the machine was off/asleep — fine for an
+# always-on host (server/VM); on a laptop prefer the launchd plist.
+#
+# Install:
+#   1. Build the image (once, and after code changes):
+#        docker build -f backend/Dockerfile.worker -t allaroundfood-worker backend
+#   2. Edit the two absolute paths below, then add the line to your crontab:
+#        crontab -e
+#      (or append this file: `crontab -l | cat - infra/worker/crontab.example | crontab -`)
+#
+# Replace:
+#   /path/to/all-around-food   → absolute path to the repo checkout
+#   /path/to/models            → host dir holding qwen2-vl.gguf and whisper/
+#
+# min hour dom mon dow  command
+0 8 * * * docker run --rm --env-file /path/to/all-around-food/backend/.env -v /path/to/models:/models allaroundfood-worker --once

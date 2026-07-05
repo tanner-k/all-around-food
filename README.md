@@ -3,8 +3,8 @@
 > A planner-first cooking app — weekly meal planning, AI recipe import, smart shopping list, pantry inventory, and a hands-on cook mode.
 
 ## Stack
-- **Frontend:** Next.js 15 + TypeScript + Tailwind CSS v4 + shadcn/ui
-- **Backend:** Python 3.12 + Polars (file-backed; FastAPI planned)
+- **Frontend:** Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
+- **Backend:** Python 3.12 + FastAPI + Polars (file-backed)
 - **Data:** Parquet/CSV in data/ via Polars; migrate to Postgres later
 - **Infra:** Vercel
 
@@ -13,7 +13,7 @@
 pnpm install && cd backend && uv sync
 ```
 
-## Run Phase B locally
+## Run locally
 
 **Prerequisites:**
 - Node 22, pnpm, Python 3.12, uv
@@ -22,9 +22,10 @@ pnpm install && cd backend && uv sync
 
 **Step 1: Configure environment**
 
-Copy the env template and add your API key:
+Copy the env templates and add your API key:
 ```bash
 cp frontend/.env.local.example frontend/.env.local
+cp backend/.env.example backend/.env
 # Edit frontend/.env.local and paste your Anthropic API key:
 # ANTHROPIC_API_KEY_PARSING=sk-ant-...
 ```
@@ -44,19 +45,20 @@ uv run python -m allaroundfood
 
 FastAPI will start on http://localhost:8000. Check health: `curl http://localhost:8000/healthz`
 
-> **Port collision with `whispr`:** the [whispr](../../whispr) transcription
-> service also defaults to `:8000`. If you're testing the Instagram/TikTok
-> video importer, run one of them on a different port:
+> **Video transcription (local whisper.cpp):** the Instagram/TikTok video
+> importer transcribes speech in-process via whisper.cpp (`pywhispercpp`) — no
+> separate service to run. Configure it with:
 >
-> ```bash
-> # Option A — keep whispr on :8000, move this backend to :8001
-> PORT=8001 uv run python -m allaroundfood
-> # then set BACKEND_URL=http://localhost:8001 in frontend/.env.local and
-> # restart `pnpm dev` (Next.js only reads .env at startup)
+> - `WHISPER_MODEL` — model name (default `base.en`). English `.en` models suit
+>   English recipe videos. Footprint: `tiny.en` ≈ 75 MB, `base.en` ≈ 142 MB.
+> - `WHISPER_MODELS_DIR` (optional) — directory of pre-downloaded ggml `.bin`
+>   model files, or where a named model is cached.
 >
-> # Option B — move whispr to e.g. :8088, keep this backend on :8000
-> WHISPR_URL=http://localhost:8088 uv run python -m allaroundfood
-> ```
+> On first use the ggml model is downloaded from huggingface.co. In
+> network-restricted environments (including CI and some deploys) huggingface.co
+> may be blocked, so **provision the model as a file**: pre-download the ggml
+> model and point `WHISPER_MODELS_DIR` at it, or run first-use where egress is
+> allowed.
 >
 > The startup log will warn if `yt-dlp` or `ffmpeg` aren't resolvable on PATH.
 
@@ -124,7 +126,11 @@ _No CLI commands yet._
 Last 5 entries from [CHANGELOG.md](./CHANGELOG.md):
 
 <!-- BEGIN:RECENT-UPDATES -->
-- (auto-populated by `scripts/done.py` once you ship something)
+- Text shopping list to any number via Apple Messages
+- Group by date (ISO `YYYY-MM-DD`).
+- Each entry = one shipped change, written in past tense.
+- The top 5 entries get pulled into `README.md`'s "Recent updates" section (between the `<!-- BEGIN:RECENT-UPDATES -->` / `<!-- END:RECENT-UPDATES -->` markers).
+- Never edit historical entries — append a follow-up entry instead.
 <!-- END:RECENT-UPDATES -->
 
 ## Project map
@@ -134,4 +140,4 @@ See [CLAUDE.md](./CLAUDE.md) (identical to [AGENTS.md](./AGENTS.md)) for the age
 - Branches: `main` (prod, protected) ← `dev` (staging) ← `feature/*`
 - Pre-commit: Prettier + ESLint via Husky
 - CI: every PR runs lint / typecheck / test / build
-- Deploy: push to `main` → `.github/workflows/deploy-ec2.yml`
+- Deploy: no GitHub deploy workflow exists yet; see `docs/plans/polish-roadmap.md`
