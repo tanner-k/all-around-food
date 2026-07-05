@@ -1,4 +1,4 @@
-// Pure, unit-testable shopping-list logic, ported from the FastAPI backend:
+// Pure, unit-testable shopping-list logic, ported from the former Python backend:
 //   - aisles.py       → AISLE_KEYWORDS / AISLE_ORDER / categorize()
 //   - naming.py       → normalizeName() (re-exported from @/lib/normalize)
 //   - shopping_logic.py → computePantryFlags / aggregateRecipeIngredients /
@@ -6,8 +6,7 @@
 //
 // These functions have no I/O and no Supabase dependency — the data-access
 // layer (src/lib/db/shopping.ts) composes them around DB reads/writes. Keep in
-// behavioural sync with the backend so the app produces the same lists the
-// FastAPI service did.
+// behavioural sync with the backend worker where the same pure helpers remain.
 
 import { normalizeName } from "@/lib/normalize";
 import type { Aisle, PantryItem } from "@/lib/pantry-schema";

@@ -3,7 +3,7 @@
 ## Scope
 - Grocery price tracking adapters, canonical product matching, and price analytics.
 - Parquet-backed stores for canonical products, retailer SKUs, store locations, and price observations.
-- FastAPI routes mounted under `/pricing`.
+- Worker-side pricing/OCR support. No user-facing pricing route is currently mounted.
 
 ## Not in scope
 - Pantry receipt import flows.

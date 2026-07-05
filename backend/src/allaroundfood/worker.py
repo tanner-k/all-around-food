@@ -281,7 +281,7 @@ def _write_receipt_observations(receipt: Receipt) -> int:
     must succeed even when the pricing domain is unavailable.
     """
     try:
-        from allaroundfood.ocr.api.deps import (
+        from allaroundfood.ocr.deps import (
             get_canonical_matcher,
             get_observation_store,
         )
@@ -307,7 +307,7 @@ def _write_receipt_observations(receipt: Receipt) -> int:
 
 def _handle_receipt(client: Client, job: dict[str, Any]) -> None:
     """Handle a ``receipt`` job: OCR the image, persist the receipt + prices."""
-    from allaroundfood.ocr.api.deps import get_receipt_parser
+    from allaroundfood.ocr.deps import get_receipt_parser
     from allaroundfood.ocr.preprocess import preprocess_receipt
 
     user_id = _job_user_id(job)
@@ -409,7 +409,15 @@ def drain_once(client: Client, limit: int) -> int:
 
     Returns the number of jobs claimed (regardless of individual outcome).
     """
-    from allaroundfood.supabase_client import claim_pending_jobs
+    from allaroundfood.supabase_client import claim_pending_jobs, recover_stale_jobs
+
+    recovered = recover_stale_jobs(
+        client,
+        settings.worker_stale_after_minutes,
+        settings.worker_max_attempts,
+    )
+    if recovered:
+        logger.info("recovered %d stale job(s)", len(recovered))
 
     jobs = claim_pending_jobs(client, limit, settings.worker_max_attempts)
     if not jobs:
@@ -436,6 +444,111 @@ def process_single_job(client: Client, job_id: str) -> int:
     return 1
 
 
+# ── Operational checks ───────────────────────────────────────────────────────
+
+
+def _secret_present(value: Any) -> bool:
+    return value is not None and bool(value.get_secret_value())
+
+
+def _video_settings() -> Any:
+    from allaroundfood.video_import import VideoImportSettings
+
+    return VideoImportSettings(
+        ytdlp_bin=settings.ytdlp_bin,
+        ffmpeg_bin=settings.ffmpeg_bin,
+        whisper_model=settings.whisper_model,
+        whisper_models_dir=(
+            str(settings.whisper_models_dir) if settings.whisper_models_dir else None
+        ),
+    )
+
+
+def _doctor_checks() -> list[tuple[str, bool, str]]:
+    """Return worker preflight checks as ``(name, ok, detail)`` tuples."""
+    from allaroundfood.video_import import check_video_import_binaries
+
+    binary_status = check_video_import_binaries(_video_settings())
+    qwen_path = settings.qwen_gguf_path
+    whisper_dir = settings.whisper_models_dir
+
+    checks: list[tuple[str, bool, str]] = [
+        (
+            "SUPABASE_URL",
+            bool(settings.supabase_url),
+            "set" if settings.supabase_url else "missing",
+        ),
+        (
+            "SUPABASE_SERVICE_ROLE_KEY",
+            _secret_present(settings.supabase_service_role_key),
+            "set" if settings.supabase_service_role_key else "missing",
+        ),
+        (
+            "ANTHROPIC_API_KEY_PARSING",
+            _secret_present(settings.anthropic_api_key_parsing),
+            "set" if settings.anthropic_api_key_parsing else "missing",
+        ),
+        (
+            "yt-dlp",
+            binary_status.ytdlp is not None,
+            binary_status.ytdlp or f"missing; set YTDLP_BIN or install {settings.ytdlp_bin}",
+        ),
+        (
+            "ffmpeg",
+            binary_status.ffmpeg is not None,
+            binary_status.ffmpeg or f"missing; set FFMPEG_BIN or install {settings.ffmpeg_bin}",
+        ),
+        ("WHISPER_MODEL", bool(settings.whisper_model), settings.whisper_model),
+        (
+            "WHISPER_MODELS_DIR",
+            whisper_dir is None or whisper_dir.exists(),
+            str(whisper_dir) if whisper_dir else "using pywhispercpp default cache",
+        ),
+        (
+            "QWEN_GGUF_PATH",
+            qwen_path is not None and qwen_path.is_file(),
+            str(qwen_path) if qwen_path else "missing",
+        ),
+    ]
+    return checks
+
+
+def run_doctor() -> int:
+    """Print worker readiness checks and return a shell-style exit code."""
+    checks = _doctor_checks()
+    for name, ok, detail in checks:
+        marker = "ok" if ok else "FAIL"
+        print(f"{marker:4} {name}: {detail}")
+    return 0 if all(ok for _, ok, _ in checks) else 1
+
+
+def prefetch_models() -> int:
+    """Warm local model files used by video transcription and receipt OCR."""
+    from allaroundfood.transcription import TranscriptionError, WhisperCppTranscriber
+
+    if settings.whisper_models_dir is not None:
+        settings.whisper_models_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        WhisperCppTranscriber(
+            model=settings.whisper_model,
+            models_dir=settings.whisper_models_dir,
+        )._load()
+    except TranscriptionError as exc:
+        print(f"FAIL whisper {settings.whisper_model}: {exc}")
+        return 1
+
+    print(f"ok   whisper {settings.whisper_model}")
+
+    qwen_path = settings.qwen_gguf_path
+    if qwen_path is None or not qwen_path.is_file():
+        print("FAIL QWEN_GGUF_PATH: missing model file")
+        return 1
+
+    print(f"ok   QWEN_GGUF_PATH: {qwen_path}")
+    return 0
+
+
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
 
@@ -454,6 +567,16 @@ def _build_parser() -> argparse.ArgumentParser:
         "--watch",
         action="store_true",
         help="Poll the queue forever, draining each batch on an interval.",
+    )
+    mode.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Check worker env, binaries, and local model paths without draining.",
+    )
+    mode.add_argument(
+        "--prefetch-models",
+        action="store_true",
+        help="Download/cache Whisper and verify the configured Qwen GGUF.",
     )
     parser.add_argument(
         "--interval",
@@ -483,6 +606,12 @@ def main(argv: list[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     args = _build_parser().parse_args(argv)
+
+    if args.doctor:
+        return run_doctor()
+
+    if args.prefetch_models:
+        return prefetch_models()
 
     # A fatal misconfig (missing DB creds) raises here → non-zero exit.
     try:

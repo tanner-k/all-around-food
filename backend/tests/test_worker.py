@@ -11,9 +11,11 @@ are covered too.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from pydantic import SecretStr
 
 from allaroundfood import worker
 from allaroundfood.models import Recipe, ShoppingListItem
@@ -243,7 +245,7 @@ class TestReceiptAndShopping:
                 return sentinel_receipt
 
         monkeypatch.setattr(
-            "allaroundfood.ocr.api.deps.get_receipt_parser", lambda: _FakeParser()
+            "allaroundfood.ocr.deps.get_receipt_parser", lambda: _FakeParser()
         )
         monkeypatch.setattr(
             "allaroundfood.ocr.preprocess.preprocess_receipt",
@@ -442,6 +444,16 @@ class TestDrainAndCli:
             "allaroundfood.supabase_client.claim_pending_jobs",
             lambda client, limit, max_attempts: jobs,
         )
+        recovered: dict[str, Any] = {}
+
+        def _recover(
+            client: Any, stale_after_minutes: int, max_attempts: int
+        ) -> list[dict[str, Any]]:
+            recovered["stale_after_minutes"] = stale_after_minutes
+            recovered["max_attempts"] = max_attempts
+            return [{"id": "stale"}]
+
+        monkeypatch.setattr("allaroundfood.supabase_client.recover_stale_jobs", _recover)
         monkeypatch.setattr(
             "allaroundfood.parsing.recipe_parser.parse_recipe_from_url",
             lambda url: _parse_result(_make_recipe()),
@@ -451,6 +463,8 @@ class TestDrainAndCli:
         client = FakeSupabaseClient()
         assert _drain(client, 10) == 2
         assert {d[0] for d in client.done} == {"j1", "j2"}
+        assert recovered["stale_after_minutes"] == worker.settings.worker_stale_after_minutes
+        assert recovered["max_attempts"] == worker.settings.worker_max_attempts
 
     def test_main_returns_2_on_missing_creds(
         self, monkeypatch: pytest.MonkeyPatch
@@ -475,3 +489,83 @@ class TestDrainAndCli:
         monkeypatch.setattr(worker, "drain_once", _drain)
         assert worker.main(["--once", "--limit", "5"]) == 0
         assert drained["limit"] == 5
+
+    def test_doctor_checks_without_supabase_client(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        qwen = tmp_path / "qwen.gguf"
+        qwen.write_text("model", encoding="utf-8")
+
+        monkeypatch.setattr(worker.settings, "supabase_url", "https://supabase.test")
+        monkeypatch.setattr(
+            worker.settings,
+            "supabase_service_role_key",
+            SecretStr("service-role"),
+        )
+        monkeypatch.setattr(
+            worker.settings,
+            "anthropic_api_key_parsing",
+            SecretStr("anthropic"),
+        )
+        monkeypatch.setattr(worker.settings, "qwen_gguf_path", qwen)
+        monkeypatch.setattr(worker.settings, "whisper_models_dir", tmp_path)
+        monkeypatch.setattr(
+            worker,
+            "get_service_client",
+            lambda: (_ for _ in ()).throw(AssertionError("should not connect")),
+        )
+
+        from allaroundfood.video_import import VideoImportBinaryStatus
+
+        monkeypatch.setattr(
+            "allaroundfood.video_import.check_video_import_binaries",
+            lambda settings=None: VideoImportBinaryStatus(
+                ytdlp="/opt/bin/yt-dlp", ffmpeg="/opt/bin/ffmpeg"
+            ),
+        )
+
+        assert worker.main(["--doctor"]) == 0
+        out = capsys.readouterr().out
+        assert "ok   SUPABASE_URL" in out
+        assert "ok   QWEN_GGUF_PATH" in out
+
+    def test_prefetch_models_without_supabase_client(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        qwen = tmp_path / "qwen.gguf"
+        qwen.write_text("model", encoding="utf-8")
+        whisper_dir = tmp_path / "whisper"
+        loaded: dict[str, Any] = {}
+
+        class _FakeTranscriber:
+            def __init__(self, model: str, models_dir: Path | None) -> None:
+                loaded["model"] = model
+                loaded["models_dir"] = models_dir
+
+            def _load(self) -> object:
+                loaded["called"] = True
+                return object()
+
+        monkeypatch.setattr(worker.settings, "qwen_gguf_path", qwen)
+        monkeypatch.setattr(worker.settings, "whisper_model", "base.en")
+        monkeypatch.setattr(worker.settings, "whisper_models_dir", whisper_dir)
+        monkeypatch.setattr(
+            "allaroundfood.transcription.WhisperCppTranscriber",
+            _FakeTranscriber,
+        )
+        monkeypatch.setattr(
+            worker,
+            "get_service_client",
+            lambda: (_ for _ in ()).throw(AssertionError("should not connect")),
+        )
+
+        assert worker.main(["--prefetch-models"]) == 0
+        assert loaded == {
+            "model": "base.en",
+            "models_dir": whisper_dir,
+            "called": True,
+        }
+        assert whisper_dir.exists()
+        out = capsys.readouterr().out
+        assert "ok   whisper base.en" in out
+        assert "ok   QWEN_GGUF_PATH" in out

@@ -97,6 +97,26 @@ def claim_pending_jobs(client: Client, limit: int, max_attempts: int) -> list[di
     return data
 
 
+def recover_stale_jobs(
+    client: Client, stale_after_minutes: int, max_attempts: int
+) -> list[dict[str, Any]]:
+    """Recover abandoned ``processing`` jobs before claiming new work.
+
+    Delegates to ``recover_stale_parse_jobs``. Stale jobs under the retry cap
+    are moved back to ``pending``; stale jobs at/over the cap become ``error`` so
+    the UI does not show them as still running forever.
+    """
+    response = client.rpc(
+        "recover_stale_parse_jobs",
+        {
+            "p_stale_after_minutes": stale_after_minutes,
+            "p_max_attempts": max_attempts,
+        },
+    ).execute()
+    data: list[dict[str, Any]] = response.data or []  # type: ignore[assignment]
+    return data
+
+
 def mark_done(client: Client, job_id: str, result_recipe_id: str | None = None) -> None:
     """Mark a job ``done``, optionally linking the recipe it produced.
 

@@ -13,12 +13,11 @@ describe("MobileTabBar", () => {
     vi.clearAllMocks();
   });
 
-  it("renders four tabs when pathname is /cookbook", () => {
+  it("renders three tabs when pathname is /cookbook", () => {
     mockUsePathname.mockReturnValue("/cookbook");
     render(<MobileTabBar />);
     expect(screen.getByText("Cookbook")).toBeInTheDocument();
     expect(screen.getByText("Pantry")).toBeInTheDocument();
-    expect(screen.getByText("Prices")).toBeInTheDocument();
     expect(screen.getByText("Import")).toBeInTheDocument();
   });
 
@@ -28,7 +27,7 @@ describe("MobileTabBar", () => {
     const pantryLink = screen.getByRole("link", { name: /pantry/i });
     expect(pantryLink).toHaveAttribute("aria-current", "page");
 
-    for (const label of ["Cookbook", "Prices", "Import"]) {
+    for (const label of ["Cookbook", "Import"]) {
       const link = screen.getByRole("link", { name: new RegExp(label, "i") });
       expect(link).not.toHaveAttribute("aria-current");
     }
@@ -39,7 +38,6 @@ describe("MobileTabBar", () => {
     render(<MobileTabBar />);
     expect(screen.queryByText("Cookbook")).not.toBeInTheDocument();
     expect(screen.queryByText("Pantry")).not.toBeInTheDocument();
-    expect(screen.queryByText("Prices")).not.toBeInTheDocument();
     expect(screen.queryByText("Import")).not.toBeInTheDocument();
   });
 });

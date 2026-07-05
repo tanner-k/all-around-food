@@ -8,28 +8,28 @@
   (cron would silently skip it). See docs/plans/import-queue-worker.md §4.8.
 
   ── Fill in the placeholders ──
+    __DOCKER__  absolute path to the Docker CLI, e.g. /usr/local/bin/docker
+                or /opt/homebrew/bin/docker
     __REPO__    absolute path to the repo checkout, e.g.
                 /Users/tanner/coding/all-around-food
     __MODELS__  absolute path to the host model directory that holds
                 qwen2-vl.gguf and whisper/, e.g. /Users/tanner/models/allaroundfood
 
-  Docker Desktop's `docker` CLI usually lives at /usr/local/bin/docker (Intel)
-  or /opt/homebrew/bin/docker (Apple Silicon). Adjust the first ProgramArgument
-  if `which docker` reports elsewhere. Docker Desktop must be running for the job
-  to succeed.
+  Docker Desktop must be running for the job to succeed.
 
   ── Install ──
     1. Build the image (once, and after code changes):
          docker build -f backend/Dockerfile.worker -t allaroundfood-worker backend
-    2. Copy this file with placeholders filled in:
-         cp infra/worker/com.allaroundfood.worker.plist ~/Library/LaunchAgents/
-         # then edit ~/Library/LaunchAgents/com.allaroundfood.worker.plist
+    2. Render and install the LaunchAgent:
+         infra/worker/install_launchd.sh --models /Users/tanner/models/allaroundfood
     3. Load it:
          launchctl load ~/Library/LaunchAgents/com.allaroundfood.worker.plist
     4. Run it immediately to test:
          launchctl start com.allaroundfood.worker
     5. Tail logs:
          tail -f /tmp/allaroundfood-worker.out /tmp/allaroundfood-worker.err
+    6. Inspect status:
+         launchctl print "gui/$(id -u)/com.allaroundfood.worker"
 
   ── Uninstall / change schedule ──
     launchctl unload ~/Library/LaunchAgents/com.allaroundfood.worker.plist
@@ -42,7 +42,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/local/bin/docker</string>
+        <string>__DOCKER__</string>
         <string>run</string>
         <string>--rm</string>
         <string>--env-file</string>

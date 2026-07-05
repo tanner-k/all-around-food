@@ -59,5 +59,9 @@ class Settings(BaseSettings):
     # Poison-job retry cap: a job stops being reclaimed once attempts >= this.
     worker_max_attempts: int = 3
 
+    # Processing jobs older than this are assumed to have been abandoned by a
+    # crashed/killed worker run and are recovered before each drain.
+    worker_stale_after_minutes: int = 30
+
 
 settings = Settings()

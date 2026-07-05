@@ -25,7 +25,7 @@ const EDITABLE_COLUMNS = ["name", "aisle", "notes", "aisle_overridden"] as const
 
 // ── Aisle categorization ────────────────────────────────────────────────────
 // Ported from backend/src/allaroundfood/aisles.py so new pantry items get the
-// same auto-assigned aisle the FastAPI backend produced. Keep in sync.
+// same auto-assigned aisle as the worker-side logic. Keep in sync.
 
 const AISLE_ORDER: Aisle[] = [
   "Produce",

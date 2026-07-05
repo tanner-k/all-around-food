@@ -10,7 +10,7 @@ A planner-first cooking app — weekly meal planning, AI recipe import, smart sh
 A project is "working" when **all** of the following are true:
 
 - Visual shell matches the Cookbook App Flow design (typography, palette, top nav order)
-- Polars stub layer reads/writes data/recipes.parquet
+- Supabase migrations are applied and `worker --once` drains a test import job
 - `pnpm lint && pnpm build` green
 - `uv run ruff check && uv run mypy && uv run pytest` green
 - CI green on dev branch
@@ -39,11 +39,12 @@ all-around-food/
 ├── scripts/
 │   └── done.py            ← promotes TODO line → CHANGELOG entry
 ├── frontend/              ← UI · see context.md
-├── backend/               ← API + business logic · see context.md
+├── backend/               ← local worker + business logic · see context.md
 │   └── src/allaroundfood/
 │       ├── pricing/       ← Grocery price tracking adapters, canonical product matching, analytics (see docs/plans/grocery-price-tracking.md)
 │       └── ocr/           ← Receipt OCR pipeline (Qwen2-VL GGUF). Independent of any pantry receipt-import flow. Writes to data/receipts.parquet + data/pricing/price_observations.parquet.
-├── data/                  ← schemas, migrations, seeds · see context.md
+├── data/                  ← archive/migration inputs + deferred pricing/OCR paths · see context.md
+├── supabase/              ← Postgres/storage migrations + Supabase notes
 ├── infra/                 ← terraform, deploy scripts · see context.md
 └── docs/
     ├── context.md
@@ -60,8 +61,8 @@ all-around-food/
 | If you're working on... | Go to... | Read first |
 |---|---|---|
 | UI component, page, route | `frontend/` | `frontend/context.md` |
-| API endpoint, business logic | `backend/` | `backend/context.md` |
-| Schema, migration, seed | `data/` | `data/context.md` |
+| Worker, parsing, OCR, pricing library | `backend/` | `backend/context.md` |
+| Supabase schema/migration | `supabase/` or `data/` | `data/context.md` |
 | Terraform, deploy script | `infra/` | `infra/context.md` |
 | Architecture decision | `docs/decisions/` | latest ADR |
 | Workflow / process question | `CLAUDE.md` (here) | this file |
@@ -85,14 +86,15 @@ Apply across the whole repo:
 
 ## 7. Deploy
 No GitHub deploy workflow exists yet. Target state:
-- Frontend deploys through Vercel Git integration (`dev` = staging, `main` = production)
-- Backend API deploys separately to a reachable container/VM host (see `docs/plans/polish-roadmap.md`)
+- Frontend PWA deploys through Vercel Git integration (`dev` = staging, `main` = production)
+- Supabase hosts auth, Postgres, and storage
+- Parsing/OCR/eval jobs run through a local `python -m allaroundfood --once` worker
 - When deployment is implemented, update this section, `CLAUDE.md`, `AGENTS.md`, and `README.md` together
 
 ## 8. Tech stack
 - Frontend: Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
-- Backend: Python 3.12 + FastAPI + Polars (file-backed)
-- Data: Parquet/CSV in data/ via Polars; migrate to Postgres later
+- Backend: Python 3.12 local worker + Supabase service-role client
+- Data: Supabase Postgres + Storage; Parquet retained for deferred pricing/OCR paths
 - Infra: Vercel
 - Package manager: pnpm
 - Node version: 22

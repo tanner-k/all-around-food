@@ -115,7 +115,7 @@ def _fetch_video_text_sync(
     settings: VideoImportSettings | None = None,
     transcriber: Transcriber | None = None,
 ) -> VideoImportResult:
-    """Synchronous implementation used by the async FastAPI endpoint."""
+    """Synchronous implementation used by the async worker helper."""
     active_settings = settings or VideoImportSettings.from_env()
     platform = validate_video_url(source_url)
 

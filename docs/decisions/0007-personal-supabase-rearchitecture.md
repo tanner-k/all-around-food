@@ -1,6 +1,6 @@
 # 0007 — Personal re-architecture: Supabase + local containerized parse worker
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-06-29
 **Supersedes:** the infra portion of ADR 0001 (hosted FastAPI backend on Vercel);
 the Parquet-first storage stance of ADR 0005 (its Postgres-migration trigger is now met,
@@ -42,8 +42,10 @@ GGUF weights) and puts the Anthropic key in the cloud — the opposite of the ne
    re-hosted as a **scheduled cloud container later** (ECS Scheduled Task / Fly machine /
    VM cron) with no code change. All config (Supabase service-role key, Anthropic key,
    model paths) is env-driven.
-6. **Pricing is migrated, not dropped** (per the chosen scope): Parquet pricing stores →
-   Postgres + `pgvector`; adapters + analytics run inside the same worker.
+6. **Pricing is deferred, not user-facing.** The pricing library, adapters, analytics,
+   and Parquet stores stay in the backend for local/OCR support. The `/prices` UI and
+   proxy routes are removed until a future pricing migration plan moves pricing data to
+   Postgres/pgvector.
 
 ## Consequences
 
