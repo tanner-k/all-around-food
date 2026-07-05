@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 interface DropZoneProps {
   onImage: (
     base64: string,
-    mediaType: "image/jpeg" | "image/png" | "image/webp"
+    mediaType: "image/jpeg" | "image/png" | "image/webp",
+    file: File
   ) => void;
   /** Optional — omitted for the receipt variant, which is image-only. */
   onUrl?: (url: string) => void;
@@ -73,7 +74,7 @@ export function DropZone({
           const file = item.getAsFile();
           if (!file) continue;
           const base64 = await fileToBase64(file);
-          onImage(base64, item.type as SupportedMediaType);
+          onImage(base64, item.type as SupportedMediaType, file);
           return;
         }
       }
@@ -106,7 +107,7 @@ export function DropZone({
     if (!file) return;
     if (!isSupportedMediaType(file.type)) return;
     const base64 = await fileToBase64(file);
-    onImage(base64, file.type as SupportedMediaType);
+    onImage(base64, file.type as SupportedMediaType, file);
   }
 
   function handleUrlSubmit(e: React.FormEvent) {
@@ -158,7 +159,7 @@ export function DropZone({
               const file = e.target.files?.[0];
               if (!file || !isSupportedMediaType(file.type)) return;
               const base64 = await fileToBase64(file);
-              onImage(base64, file.type as SupportedMediaType);
+              onImage(base64, file.type as SupportedMediaType, file);
               e.target.value = "";
             }}
           />

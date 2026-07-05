@@ -22,10 +22,8 @@ from allaroundfood.pricing.store.store_location_store import StoreLocationStore
 def _pricing_data_dir() -> Path:
     """Return the pricing data directory resolved from Settings.pricing_data_dir.
 
-    ``settings.pricing_data_dir`` defaults to ``Path("data")`` (relative), so
-    it resolves against the current working directory — typically the repo root
-    when the server is started with ``uv run`` from the backend directory.
-    This avoids hardcoding an absolute path that breaks across machines.
+    ``settings.pricing_data_dir`` defaults to the repository ``data`` directory
+    so backend startup location does not change which Parquet files are used.
     """
     return settings.pricing_data_dir.resolve() / "pricing"
 

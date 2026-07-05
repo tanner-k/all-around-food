@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { generateShoppingList, saveMealPlan } from "@/lib/api";
+import { addFromRecipesAction } from "@/app/(app)/shop/actions";
+import {
+  addPlannedMealAction,
+  removePlannedMealAction,
+} from "@/app/(app)/plan/actions";
 import type { MealPlan, PlannedMeal } from "@/lib/meal-plan-schema";
 import { formatMonthDay, weekDays } from "@/lib/week";
 import { DayColumn } from "./DayColumn";
@@ -31,59 +35,71 @@ export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
 
   function mealsForDay(
     dayIndex: number
-  ): { title: string; index: number }[] {
-    return meals.flatMap((meal, index) =>
+  ): { title: string; recipeId: string }[] {
+    return meals.flatMap((meal) =>
       meal.day_index === dayIndex
         ? [
             {
               title: titleById.get(meal.recipe_id) ?? "Unknown recipe",
-              index,
+              recipeId: meal.recipe_id,
             },
           ]
         : []
     );
   }
 
-  async function persist(next: PlannedMeal[]) {
+  async function handlePick(recipeId: string) {
+    if (!picker) return;
+    const dayIndex = picker.dayIndex;
+    setPicker(null);
+    // The planned-meal id collapses duplicate (day, recipe) pairs, so adding
+    // the same recipe to the same day is a no-op — reflect that optimistically.
+    const already = meals.some(
+      (m) => m.day_index === dayIndex && m.recipe_id === recipeId
+    );
+    if (already) return;
+
     const previous = meals;
+    const next: PlannedMeal[] = [
+      ...meals,
+      { day_index: dayIndex, recipe_id: recipeId },
+    ];
     setMeals(next);
     setError(null);
-    try {
-      await saveMealPlan(weekOf, next);
-    } catch (err) {
+    const result = await addPlannedMealAction(weekOf, dayIndex, recipeId);
+    if ("error" in result) {
       setMeals(previous);
-      setError(err instanceof Error ? err.message : "Failed to save plan");
+      setError(result.error);
     }
   }
 
-  function handlePick(recipeId: string) {
-    if (!picker) return;
-    const next: PlannedMeal[] = [
-      ...meals,
-      { day_index: picker.dayIndex, recipe_id: recipeId },
-    ];
-    setPicker(null);
-    void persist(next);
-  }
-
-  function handleRemove(index: number) {
-    void persist(meals.filter((_, i) => i !== index));
+  async function handleRemove(dayIndex: number, recipeId: string) {
+    const previous = meals;
+    setMeals(
+      meals.filter(
+        (m) => !(m.day_index === dayIndex && m.recipe_id === recipeId)
+      )
+    );
+    setError(null);
+    const result = await removePlannedMealAction(weekOf, dayIndex, recipeId);
+    if ("error" in result) {
+      setMeals(previous);
+      setError(result.error);
+    }
   }
 
   async function handleReviewShopping() {
     if (meals.length === 0 || reviewing) return;
     setReviewing(true);
     setError(null);
-    try {
-      const recipeIds = [...new Set(meals.map((m) => m.recipe_id))];
-      await generateShoppingList(recipeIds);
+    const recipeIds = [...new Set(meals.map((m) => m.recipe_id))];
+    const result = await addFromRecipesAction(recipeIds);
+    if (result.ok) {
       router.push("/shop");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to build shopping list"
-      );
-      setReviewing(false);
+    } else {
+      setError(result.error);
     }
+    setReviewing(false);
   }
 
   return (
@@ -106,7 +122,9 @@ export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
             day={day}
             meals={mealsForDay(day.index)}
             onAdd={(dayIndex) => setPicker({ dayIndex })}
-            onRemove={handleRemove}
+            onRemove={(dayIndex, recipeId) =>
+              void handleRemove(dayIndex, recipeId)
+            }
           />
         ))}
       </div>
@@ -128,7 +146,7 @@ export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
       {picker && (
         <RecipePickerModal
           recipes={recipes}
-          onPick={handlePick}
+          onPick={(recipeId) => void handlePick(recipeId)}
           onClose={() => setPicker(null)}
         />
       )}

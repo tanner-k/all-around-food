@@ -1,0 +1,103 @@
+# backend/Dockerfile.worker
+# ---------------------------------------------------------------------------
+# Import-queue worker image (plan: docs/plans/import-queue-worker.md §4.7).
+#
+# WHAT THIS IS
+#   A containerized, single-shot worker that drains the Supabase `parse_jobs`
+#   queue. Entry point is `python -m allaroundfood.worker`; the default command
+#   `--once` claims all pending jobs, parses each by kind, writes the results to
+#   Supabase, marks them done/error, then exits. Cron/launchd fires it locally
+#   today (infra/worker/); the same image re-hosts as a scheduled cloud
+#   container later with no code change (§4.9).
+#
+# MULTI-STAGE
+#   The runtime needs native wheels (llama-cpp-python + pywhispercpp) that must
+#   be COMPILED (build-essential + cmake). We build them in a fat `builder`
+#   stage, then copy only the resulting virtualenv into a lean `slim` runtime so
+#   the final image carries no toolchain.
+#
+# MODEL WEIGHTS ARE NOT BAKED IN
+#   Qwen2-VL GGUF (receipt OCR) and whisper.cpp models (video transcription) are
+#   large and are volume-mounted at /models — see the QWEN_GGUF_PATH /
+#   WHISPER_MODELS_DIR defaults below. yt-dlp is a pip dep; ffmpeg is the only
+#   apt binary the runtime needs.
+#
+# BUILD (from repo root; build context is the backend/ directory):
+#   docker build -f backend/Dockerfile.worker -t allaroundfood-worker backend
+#
+# RUN (one-off drain; mount your local model directory at /models):
+#   docker run --rm --env-file backend/.env -v "$MODELS":/models allaroundfood-worker --once
+#
+#   where $MODELS is the host directory containing:
+#     qwen2-vl.gguf          (-> QWEN_GGUF_PATH=/models/qwen2-vl.gguf)
+#     whisper/               (-> WHISPER_MODELS_DIR=/models/whisper)
+#
+# VERIFY: this image cannot be built in the agent sandbox (no Docker/network).
+# Verification is a host-side `docker build` with the command above.
+# ---------------------------------------------------------------------------
+
+# ── Stage 1: builder ────────────────────────────────────────────────────────
+# Full python:3.12 (has the compilers' base) + build-essential/cmake so the
+# native wheels compile. uv builds the venv at /app/.venv from the lockfile.
+FROM python:3.12-bookworm AS builder
+
+# Compile toolchain for llama-cpp-python + pywhispercpp.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv (static binary from the official image).
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /app
+
+# uv config: create the project venv in-tree at /app/.venv, and compile
+# bytecode for faster container start. Copy from the venv, not a cache, so use
+# a copy link mode that works across the stage boundary.
+ENV UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
+# Resolve + install deps first (cached unless the lock/manifest changes), then
+# add the app source. `--no-dev` omits the dev dependency group; `--no-install-
+# project` on the first pass keeps the dependency layer cache-stable.
+COPY pyproject.toml uv.lock ./
+RUN uv sync --no-dev --no-install-project
+
+# Now the application source, then install the project itself into the venv.
+COPY src ./src
+RUN uv sync --no-dev
+
+# ── Stage 2: runtime ────────────────────────────────────────────────────────
+# Slim base: no compilers, only the runtime interpreter + ffmpeg. The venv is
+# copied wholesale from the builder.
+FROM python:3.12-slim-bookworm AS runtime
+
+# ffmpeg is the sole runtime apt binary (video-import audio extraction).
+# yt-dlp ships as a pip dep inside the venv.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Bring over the pre-built venv and the app source from the builder.
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
+
+# Put the venv on PATH so `python` == /app/.venv/bin/python (no activation).
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Model weights are volume-mounted at /models — NOT baked into the image.
+# Override via --env-file / -e if your host layout differs.
+ENV QWEN_GGUF_PATH=/models/qwen2-vl.gguf \
+    WHISPER_MODELS_DIR=/models/whisper \
+    FFMPEG_BIN=ffmpeg \
+    YTDLP_BIN=yt-dlp
+
+# `python -m allaroundfood.worker --once`: claim → drain → exit. Override the
+# CMD (e.g. `--watch`, `--job-id ID`) at `docker run` time.
+ENTRYPOINT ["python", "-m", "allaroundfood.worker"]
+CMD ["--once"]

@@ -1,6 +1,6 @@
 import { SectionHeader } from "@/components/SectionHeader";
 import { ShoppingListView } from "@/components/shopping/ShoppingListView";
-import { BACKEND_URL } from "@/lib/backend-url";
+import { getShoppingList, listRecipeOptions } from "@/lib/db/shopping";
 import type { ShoppingListResponse } from "@/lib/shopping-schema";
 
 const EMPTY_LIST: ShoppingListResponse = {
@@ -8,21 +8,18 @@ const EMPTY_LIST: ShoppingListResponse = {
   total_visible: 0,
 };
 
-async function getShoppingList(): Promise<ShoppingListResponse> {
-  try {
-    const res = await fetch(
-      `${BACKEND_URL}/shopping-list`,
-      { cache: "no-store" }
-    );
-    if (!res.ok) return EMPTY_LIST;
-    return (await res.json()) as ShoppingListResponse;
-  } catch {
-    return EMPTY_LIST;
-  }
-}
-
 export default async function ShopPage() {
-  const list = await getShoppingList();
+  let list: ShoppingListResponse = EMPTY_LIST;
+  let recipeOptions: { id: string; title: string }[] = [];
+  try {
+    [list, recipeOptions] = await Promise.all([
+      getShoppingList(),
+      listRecipeOptions(),
+    ]);
+  } catch {
+    list = EMPTY_LIST;
+    recipeOptions = [];
+  }
 
   return (
     <>
@@ -38,7 +35,7 @@ export default async function ShopPage() {
       />
 
       <div className="mt-12">
-        <ShoppingListView initial={list} />
+        <ShoppingListView initial={list} recipeOptions={recipeOptions} />
       </div>
     </>
   );

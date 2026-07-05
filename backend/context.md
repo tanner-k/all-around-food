@@ -12,7 +12,7 @@
 - Cloud infrastructure → `infra/`
 
 ## Stack
-Python 3.12 + Polars (file-backed; FastAPI planned)
+Python 3.12 + FastAPI + Polars (file-backed)
 
 ## Runtime requirements
 - `yt-dlp` for fetching supported Instagram/TikTok recipe video media and metadata
@@ -35,10 +35,10 @@ uv run python -m allaroundfood
 ```
 
 ## Notes for agents
-- One route file per resource (e.g. `routes/users.ts`)
+- Keep FastAPI route modules grouped by resource.
 - Validation at the edge (request → typed input) — never trust the client
 - Errors surface as typed problem objects; do not throw raw strings
-- All env access through a single `config.ts` — fail loudly if a required env var is missing
+- All shared env access goes through `config.py` — fail loudly if a required env var is missing
 - Pricing context lives at `src/allaroundfood/pricing/context.md`
 - OCR context lives at `src/allaroundfood/ocr/context.md`
 - `messaging/` sends the shopping list via Apple Messages (`osascript`); macOS-only, raises `MessagingError` elsewhere. Recipient numbers pass through `messaging.phone.normalize_phone` before reaching AppleScript.

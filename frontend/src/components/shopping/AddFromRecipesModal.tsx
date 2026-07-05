@@ -1,45 +1,27 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { generateShoppingList } from "@/lib/api";
+import { useState } from "react";
+import { addFromRecipesAction } from "@/app/(app)/shop/actions";
 
-interface RecipeOption {
+export interface RecipeOption {
   id: string;
   title: string;
 }
 
 interface AddFromRecipesModalProps {
+  recipeOptions: RecipeOption[];
   onClose: () => void;
   onGenerated: () => void;
 }
 
 export function AddFromRecipesModal({
+  recipeOptions,
   onClose,
   onGenerated,
 }: AddFromRecipesModalProps) {
-  const [recipes, setRecipes] = useState<RecipeOption[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/recipes")
-      .then((res) => res.json())
-      .then((data: RecipeOption[]) => {
-        if (!cancelled) setRecipes(Array.isArray(data) ? data : []);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Failed to load recipes");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -57,12 +39,12 @@ export function AddFromRecipesModal({
     if (selected.size === 0 || busy) return;
     setBusy(true);
     setError(null);
-    try {
-      await generateShoppingList([...selected]);
+    const result = await addFromRecipesAction([...selected]);
+    if (result.ok) {
       onGenerated();
       onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate list");
+    } else {
+      setError(result.error);
       setBusy(false);
     }
   }
@@ -85,16 +67,12 @@ export function AddFromRecipesModal({
         </p>
 
         <div className="-mx-1 flex-1 overflow-y-auto px-1">
-          {loading ? (
-            <p className="py-6 text-center text-sm text-ink-mute">
-              Loading recipes…
-            </p>
-          ) : recipes.length === 0 ? (
+          {recipeOptions.length === 0 ? (
             <p className="py-6 text-center text-sm text-ink-mute">
               No saved recipes yet.
             </p>
           ) : (
-            recipes.map((recipe) => (
+            recipeOptions.map((recipe) => (
               <label
                 key={recipe.id}
                 className="flex items-center gap-3 border-b border-line py-2 last:border-b-0"

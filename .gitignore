@@ -63,6 +63,8 @@ backend/**/__pycache__/
 backend/dist/
 data/*.parquet
 data/*.csv
+data/pricing/*.parquet
+data/receipt-images/
 !data/.gitkeep
 backend/data/video-import-audio/
 data/video-import-audio/

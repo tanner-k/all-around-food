@@ -40,7 +40,7 @@
 | uv | latest | [docs.astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/) |
 | Poppler | any | `brew install poppler` (macOS) · `apt install poppler-utils` (Linux) |
 
-You also need an **Anthropic API key** for recipe parsing — get one at [console.anthropic.com](https://console.anthropic.com).
+You also need a Supabase project and an **Anthropic API key** for worker-side recipe parsing — get one at [console.anthropic.com](https://console.anthropic.com).
 
 ### Install
 
@@ -52,16 +52,28 @@ cd backend && uv sync && cd ..
 ### Configure environment
 
 ```bash
-cp frontend/.env.local.example frontend/.env.local
+cp backend/.env.example backend/.env
 ```
 
-Open `frontend/.env.local` and fill in the values:
+Create `frontend/.env.local` with the public Supabase browser values:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Fill in `backend/.env` with:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_API_KEY_PARSING` | Yes | Anthropic API key used for recipe import and receipt review. Named with a project suffix so it can't be shadowed by a global `ANTHROPIC_API_KEY` in your shell. |
-| `BACKEND_URL` | No | FastAPI base URL — defaults to `http://localhost:8000`. Change if you move the backend to a different port. |
-| `WHISPR_URL` | No | Speech-to-text service URL — defaults to `http://localhost:8000`. Used only for video recipe import. |
+| `SUPABASE_URL` | Yes | Supabase project URL for migration scripts and the worker. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service-role key for migration scripts and the worker; never expose it to the frontend. |
+| `ANTHROPIC_API_KEY_PARSING` | Yes | Anthropic API key used by the local worker for parsing and evals. |
+| `WHISPER_MODEL` | No | Local whisper.cpp model name; defaults to `base.en`. |
+| `YTDLP_BIN` / `FFMPEG_BIN` | No | Video import binaries; default to `yt-dlp` and `ffmpeg`. |
+| `HOST` / `PORT` | No | FastAPI bind address; default to `0.0.0.0:8000`. |
+
+Apply Supabase migrations and migrate existing Parquet rows using [supabase/README.md](./supabase/README.md).
 
 ### Run
 
@@ -72,10 +84,7 @@ cd backend
 uv run python -m allaroundfood
 ```
 
-FastAPI starts on `http://localhost:8000`. Verify: `curl http://localhost:8000/healthz`
-
-**Terminal B — frontend**
-FastAPI will start on http://localhost:8000. Check health: `curl http://localhost:8000/healthz`
+FastAPI starts on `http://localhost:8000`. Verify: `curl http://localhost:8000/healthz`.
 
 > **Video transcription (local whisper.cpp):** the Instagram/TikTok video
 > importer transcribes speech in-process via whisper.cpp (`pywhispercpp`) — no
@@ -94,7 +103,7 @@ FastAPI will start on http://localhost:8000. Check health: `curl http://localhos
 >
 > The startup log will warn if `yt-dlp` or `ffmpeg` aren't resolvable on PATH.
 
-**Step 3: Start the frontend (Terminal B)**
+**Terminal B — frontend**
 
 ```bash
 cd frontend
@@ -103,12 +112,22 @@ pnpm dev
 
 Next.js starts on `http://localhost:3000`.
 
+**Terminal C — worker**
+
+```bash
+cd backend
+uv run python -m allaroundfood.worker --once
+```
+
+Use `--watch` while developing if you want the worker to poll continuously.
+
 ### Try it out
 
-1. **Import a recipe** — go to `/import`, paste a URL or drop a screenshot, review the extracted fields, and click **Save**
-2. **Plan the week** — go to `/plan` and drag your new recipe into the meal grid
-3. **Generate a shopping list** — visit `/shop`; the list auto-populates from your plan
-4. **Grade an import** — go to `/evaluations` to see accuracy and completeness scores from the Claude judge
+1. **Import a recipe** — go to `/import`, paste a URL or drop a screenshot, and add it to the queue.
+2. **Run the worker** — drain the queue with `uv run python -m allaroundfood.worker --once`.
+3. **Plan the week** — go to `/plan` and drag your new recipe into the meal grid.
+4. **Generate a shopping list** — visit `/shop`; the list auto-populates from your plan.
+5. **Grade an import** — go to `/evaluations` to see accuracy and completeness scores from the Claude judge.
 
 ---
 
@@ -158,16 +177,24 @@ cd frontend && pnpm build
 ## Architecture
 
 ```
-Browser
-  └─▶ Next.js 15  (frontend/)       — pages, API proxy routes, shadcn/ui components
-        └─▶ FastAPI  (backend/)      — business logic, Polars file store, ML pipelines
-              └─▶ Parquet / CSV  (data/)   — recipes, meal plans, pantry, price observations
+Browser / PWA
+  └─▶ Next.js 16 (frontend/)
+        ├─▶ Supabase Postgres + Storage
+        └─▶ local API routes for still-hosted backend features
+
+Local worker (backend/)
+  └─▶ Supabase parse_jobs
+        ├─▶ Claude recipe parsing + evals
+        ├─▶ yt-dlp + ffmpeg + whisper.cpp video transcription
+        └─▶ Qwen2-VL receipt OCR / pricing observations
 ```
 
 **Key backend subsystems**
 
 | Subsystem | Path | What it does |
 |-----------|------|--------------|
+| Supabase data access | `frontend/src/lib/db/` | Server-side reads/writes under RLS |
+| Import queue | `frontend/src/lib/db/parseJobs.ts`, `backend/src/allaroundfood/worker.py` | Enqueues and drains recipe parse jobs |
 | Pricing adapters | `backend/src/allaroundfood/pricing/` | Scrapes/calls Walmart, Costco, Kroger, Whole Foods, Instacart |
 | Canonical matching | `pricing/canonical/` | Deduplicates products with bge-small-en-v1.5 embeddings + RapidFuzz |
 | Receipt OCR | `backend/src/allaroundfood/ocr/` | Runs Qwen2-VL GGUF locally; writes `data/receipts.parquet` |
@@ -183,20 +210,14 @@ Browser
 pnpm approve-builds
 ```
 
-**Port collision between the backend and `whispr`**
-
-Both services default to `:8000`. If you're using the video importer:
+**Video import cannot find system binaries**
 
 ```bash
-# Option A — move this backend to :8001, leave whispr on :8000
-PORT=8001 uv run python -m allaroundfood
-# then set BACKEND_URL=http://localhost:8001 in frontend/.env.local and restart pnpm dev
-
-# Option B — move whispr to another port, keep this backend on :8000
-WHISPR_URL=http://localhost:8088 uv run python -m allaroundfood
+# Install yt-dlp and ffmpeg, or point at custom binaries:
+YTDLP_BIN=/path/to/yt-dlp FFMPEG_BIN=/path/to/ffmpeg uv run python -m allaroundfood.worker --once
 ```
 
-The startup log will warn if `yt-dlp` or `ffmpeg` aren't found on PATH.
+The worker logs warn if `yt-dlp` or `ffmpeg` aren't found on PATH.
 
 **Pricing adapter Playwright fallbacks**
 
@@ -229,12 +250,13 @@ See [CHANGELOG.md](./CHANGELOG.md) for what's shipped and [TODO.md](./TODO.md) f
 ---
 <!-- BEGIN:RECENT-UPDATES -->
 - Text shopping list to any number via Apple Messages
-- Group by date (ISO `YYYY-MM-DD`).
-- Each entry = one shipped change, written in past tense.
-- The top 5 entries get pulled into `README.md`'s "Recent updates" section (between the `<!-- BEGIN:RECENT-UPDATES -->` / `<!-- END:RECENT-UPDATES -->` markers).
-- Never edit historical entries — append a follow-up entry instead.
 <!-- END:RECENT-UPDATES -->
 
-## License
+## Project map
+See [CLAUDE.md](./CLAUDE.md) (identical to [AGENTS.md](./AGENTS.md)) for the agent-readable map of this repo.
 
-MIT — see [LICENSE](./LICENSE) (file to be added).
+## Workflow
+- Branches: `main` (prod, protected) ← `dev` (staging) ← `feature/*`
+- Pre-commit: Prettier + ESLint via Husky
+- CI: every PR runs lint / typecheck / test / build
+- Deploy: no GitHub deploy workflow exists yet; see `docs/plans/polish-roadmap.md`

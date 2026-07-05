@@ -11,7 +11,7 @@
 - Frontend comparison UI -> `frontend/`.
 
 ## Data
-- Default data root comes from `PRICING_DATA_DIR` via `Settings.pricing_data_dir`; it defaults to `data`.
+- Default data root comes from `PRICING_DATA_DIR` via `Settings.pricing_data_dir`; it defaults to the repo-root `data/` directory.
 - Pricing files live under `data/pricing/`:
   - `canonical_products.parquet`
   - `retailer_skus.parquet`
