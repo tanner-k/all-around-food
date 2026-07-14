@@ -54,15 +54,15 @@ create index parse_jobs_pending_idx
 alter table public.parse_jobs enable row level security;
 alter table public.parse_results enable row level security;
 
-drop policy if exists "own jobs" on public.parse_jobs;
 create policy "own jobs" on public.parse_jobs
     for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
-drop policy if exists "authenticated read results" on public.parse_results;
 create policy "authenticated read results" on public.parse_results
     for select to authenticated using (true);
 
 -- ── Claim RPC (service-role caller; skip-locked so overlapping runs are safe)
+-- Also reclaims stale 'running' rows (worker died mid-parse — e.g. laptop
+-- slept); the attempts cap still bounds total tries per job.
 create function public.claim_parse_jobs(p_limit integer, p_max_attempts integer)
 returns setof public.parse_jobs
 language sql
@@ -73,13 +73,20 @@ as $$
        set status = 'running', attempts = j.attempts + 1, updated_at = now()
      where j.id in (
          select id from public.parse_jobs
-          where status = 'pending' and attempts < p_max_attempts
+          where attempts < p_max_attempts
+            and (status = 'pending'
+                 or (status = 'running' and updated_at < now() - interval '30 minutes'))
           order by created_at
           limit p_limit
             for update skip locked
      )
     returning j.*;
 $$;
+
+-- security definer bypasses RLS, so the anon/authenticated roles (the phone's
+-- keys) must not be able to call it — only the service-role worker.
+revoke execute on function public.claim_parse_jobs(integer, integer)
+    from public, anon, authenticated;
 
 commit;
 

@@ -69,10 +69,11 @@ def claim_pending_jobs(client: Client, limit: int, max_attempts: int) -> list[di
     """Atomically claim up to ``limit`` pending jobs and return the claimed rows.
 
     Delegates to the ``claim_parse_jobs`` RPC (see
-    ``supabase/migrations/0003_claim_and_payload.sql``), which flips each row to
-    ``processing``, bumps ``attempts``, and uses ``for update skip locked`` so
+    ``supabase/migrations/0004_queue_only.sql``), which flips each row to
+    ``running``, bumps ``attempts``, and uses ``for update skip locked`` so
     overlapping worker runs never claim the same row. Jobs whose ``attempts``
-    have reached ``max_attempts`` (poison jobs) are not returned.
+    have reached ``max_attempts`` (poison jobs) are not returned; stale
+    ``running`` rows are reclaimed after 30 minutes.
 
     Args:
         client: A service-role Supabase client.
@@ -142,7 +143,7 @@ def download_import(client: Client, storage_path: str) -> bytes:
     Args:
         client: A service-role Supabase client.
         storage_path: The object path within the ``imports`` bucket
-            (e.g. ``"<user_id>/<uuid>.jpg"``), as stored on ``parse_jobs.storage_path``.
+            (e.g. ``"<user_id>/<uuid>.jpg"``), as stored on ``parse_jobs.screenshot_path``.
 
     Returns:
         The raw object bytes.

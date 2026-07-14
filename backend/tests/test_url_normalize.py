@@ -42,6 +42,12 @@ def test_non_shortlink_host_never_calls_resolver() -> None:
     assert normalize_url("https://foo.com/x", resolve=boom) == "https://foo.com/x"
 
 
+def test_query_param_order_does_not_change_key() -> None:
+    assert normalize_url("https://foo.com/x?a=1&b=2") == normalize_url(
+        "https://foo.com/x?b=2&a=1"
+    )
+
+
 def test_rejects_non_http_url() -> None:
     with pytest.raises(ValueError):
         normalize_url("ftp://foo.com/x")

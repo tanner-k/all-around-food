@@ -1378,3 +1378,15 @@ git commit -m "refactor(backend): slim to the parse worker — drop API, OCR, pr
   2. Apply `supabase/migrations/0004_queue_only.sql` to the Supabase project (destructive — export first).
   3. Update the laptop cron entry to `worker --once` every 10–15 min if not already.
 - [ ] Follow-up plan to write next: the iOS app (`ios/`) — consumes `parse_results.recipe` JSON; generate decode fixtures from `parse_recipe_from_*` test fixtures.
+
+## Notes carried forward from code review (for the iOS plan / later)
+
+- **HEIC:** the worker's media-type map covers jpg/png/webp only. The iOS app
+  must transcode screenshots to JPEG/PNG before uploading to the bucket.
+- **Stuck jobs:** the claim RPC reclaims `running` rows stale > 30 min
+  (attempts-capped), so a laptop-sleep mid-parse self-heals; the app can treat
+  long-`running` jobs as simply "still parsing".
+- **Eval provenance:** worker/judge model names are hardcoded in
+  `worker._run_eval`; if the parser or judge model changes, update them.
+- **CI:** `.github/workflows/ci.yml` still builds the frozen `frontend/`;
+  candidate for a path filter or removal in a follow-up.

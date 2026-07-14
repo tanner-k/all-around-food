@@ -15,7 +15,7 @@ class Settings(BaseSettings):
 
     All secrets are loaded from environment variables or a .env file.
     No values are hardcoded here — callers that need a secret call
-    ``settings.kroger_client_id.get_secret_value()``.
+    ``settings.anthropic_api_key_parsing.get_secret_value()``.
     """
 
     model_config = SettingsConfigDict(

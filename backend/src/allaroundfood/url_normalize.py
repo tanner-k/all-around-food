@@ -22,11 +22,20 @@ _TRACKING_PARAMS = frozenset(
 
 
 def _default_resolve(url: str) -> str:
-    """Follow redirects for a shortlink and return the final URL."""
+    """Follow redirects for a shortlink and return the final URL.
+
+    Uses a streamed GET (some shortlink hosts reject HEAD) and closes the
+    body without reading it.
+    """
     import httpx
 
-    response = httpx.head(url, follow_redirects=True, timeout=10.0)
-    return str(response.url)
+    try:
+        with httpx.Client(follow_redirects=True, timeout=10.0) as client, client.stream(
+            "GET", url
+        ) as response:
+            return str(response.url)
+    except httpx.HTTPError as exc:
+        raise ValueError(f"could not resolve shortlink {url!r}: {exc}") from exc
 
 
 def _is_tracking(param: str) -> bool:
@@ -52,7 +61,11 @@ def normalize_url(url: str, *, resolve: Callable[[str], str] | None = None) -> s
         parts = urlsplit(resolver(url.strip()))
 
     query = urlencode(
-        [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if not _is_tracking(k)]
+        sorted(
+            (k, v)
+            for k, v in parse_qsl(parts.query, keep_blank_values=True)
+            if not _is_tracking(k)
+        )
     )
     path = parts.path if parts.path in ("", "/") else parts.path.rstrip("/")
     return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, query, ""))
