@@ -4,16 +4,14 @@
 > This file is the entry-point for any AI agent working in this repo.
 
 ## 1. What this project is
-A planner-first cooking app — weekly meal planning, AI recipe import, smart shopping list, pantry inventory, and a hands-on cook mode.
+A planner-first cooking app, now a local-first native iOS app — weekly meal planning, AI recipe import via a laptop parse worker, smart shopping list, pantry inventory, and a hands-on cook mode. See ADR 0008.
 
 ## 2. Working state
 A project is "working" when **all** of the following are true:
 
-- Visual shell matches the Cookbook App Flow design (typography, palette, top nav order)
-- Polars stub layer reads/writes data/recipes.parquet
-- `pnpm lint && pnpm build` green
-- `uv run ruff check && uv run mypy && uv run pytest` green
+- `cd backend && uv run ruff check && uv run mypy src tests && uv run pytest` green
 - CI green on dev branch
+- `frontend/` is frozen: it stays in git but gets no new work
 - No remaining `__PLACEHOLDER__` tokens
 
 > Default if unsure: `npm run lint` clean · `npm test` green · `dev` branch deploys to staging without error · no `- [x]` lines linger in `TODO.md` (they should have been promoted to `CHANGELOG.md`).
@@ -38,13 +36,12 @@ all-around-food/
 │   └── pre-commit             ← lint-staged
 ├── scripts/
 │   └── done.py            ← promotes TODO line → CHANGELOG entry
-├── frontend/              ← UI · see context.md
-├── backend/               ← API + business logic · see context.md
-│   └── src/allaroundfood/
-│       ├── pricing/       ← Grocery price tracking adapters, canonical product matching, analytics (see docs/plans/grocery-price-tracking.md)
-│       └── ocr/           ← Receipt OCR pipeline (Qwen2-VL GGUF). Independent of any pantry receipt-import flow. Writes to data/receipts.parquet + data/pricing/price_observations.parquet.
+├── frontend/              ← FROZEN (ADR 0008) — no new work
+├── ios/                   ← native iOS app (planned — ADR 0008)
+├── backend/               ← laptop parse worker · see context.md
 ├── data/                  ← schemas, migrations, seeds · see context.md
 ├── infra/                 ← terraform, deploy scripts · see context.md
+├── supabase/              ← Postgres migrations (parse queue + URL cache)
 └── docs/
     ├── context.md
     ├── architecture.md
@@ -53,14 +50,18 @@ all-around-food/
         ├── 0002-video-recipe-import.md
         ├── 0003-grocery-pricing-scope.md       ← personal-use + unofficial adapter gate
         ├── 0004-canonical-product-matching.md  ← local embeddings (bge-small-en-v1.5)
-        └── 0005-pricing-storage.md             ← Parquet-first; Postgres migration triggers
+        ├── 0005-pricing-storage.md             ← Parquet-first; Postgres migration triggers
+        ├── 0006-local-whispercpp-transcription.md
+        ├── 0007-personal-supabase-rearchitecture.md
+        └── 0008-local-first-ios.md             ← local-first iOS; Supabase = queue + cache
 ```
 
 ## 4. Where to do what
 | If you're working on... | Go to... | Read first |
 |---|---|---|
-| UI component, page, route | `frontend/` | `frontend/context.md` |
-| API endpoint, business logic | `backend/` | `backend/context.md` |
+| UI component, page, route | `frontend/` is frozen — do not modify | ADR 0008 |
+| iOS feature | `ios/` | ADR 0008 |
+| Parse worker, business logic | `backend/` | `backend/context.md` |
 | Schema, migration, seed | `data/` | `data/context.md` |
 | Terraform, deploy script | `infra/` | `infra/context.md` |
 | Architecture decision | `docs/decisions/` | latest ADR |
@@ -84,15 +85,13 @@ Apply across the whole repo:
 6. **Identical canon:** If you edit `CLAUDE.md`, copy the same change to `AGENTS.md` (and vice versa) in the same commit.
 
 ## 7. Deploy
-No GitHub deploy workflow exists yet. Target state:
-- Frontend deploys through Vercel Git integration (`dev` = staging, `main` = production)
-- Backend API deploys separately to a reachable container/VM host (see `docs/plans/polish-roadmap.md`)
-- When deployment is implemented, update this section, `CLAUDE.md`, `AGENTS.md`, and `README.md` together
+No cloud deploy. The iOS app sideloads via Xcode/TestFlight. The parse
+worker runs on the laptop via cron (`worker --once`, every 10–15 min while
+awake). Supabase hosts only the parse queue + URL cache (ADR 0008).
 
 ## 8. Tech stack
-- Frontend: Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
-- Backend: Python 3.12 + FastAPI + Polars (file-backed)
-- Data: Parquet/CSV in data/ via Polars; migrate to Postgres later
-- Infra: Vercel
-- Package manager: pnpm
-- Node version: 22
+- iOS app: Swift + SwiftUI + SwiftData (iOS 17+), supabase-swift
+- Worker: Python 3.12 + Polars + whisper.cpp + yt-dlp + Anthropic SDK
+- Queue/cache: Supabase (Postgres + Storage), RLS on
+- Frontend (frozen): Next.js 16 + React 19 + Tailwind v4
+- Package manager: pnpm (frontend, frozen) / uv (backend)
