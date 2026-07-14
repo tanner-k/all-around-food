@@ -416,6 +416,8 @@ def test_update_returns_new_instance(tmp_path: Path) -> None:
     # Verify store2 is a different instance
     assert store2 is not store1
     # Verify store1 still has old data
-    assert store1.get("recipe-1").title == "Original Title"
+    before = store1.get("recipe-1")
+    assert before is not None and before.title == "Original Title"
     # Verify store2 has new data
-    assert store2.get("recipe-1").title == "New Title"
+    after = store2.get("recipe-1")
+    assert after is not None and after.title == "New Title"

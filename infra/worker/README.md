@@ -21,7 +21,7 @@ build is slow; the runtime image stays lean (slim base + ffmpeg only).
 ## 2. One-off drain (manual)
 
 Model weights are **not** baked into the image — mount them at `/models`.
-`$MODELS` is a host directory containing `qwen2-vl.gguf` and a `whisper/`
+`$MODELS` is a host directory containing a `whisper/`
 subdirectory.
 
 ```sh

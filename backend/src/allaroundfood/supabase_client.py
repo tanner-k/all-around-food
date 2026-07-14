@@ -1,12 +1,9 @@
-"""Service-role Supabase access layer for the import-queue worker.
+"""Service-role Supabase access layer for the parse-queue worker (ADR 0008).
 
 The worker runs outside any user session, so it authenticates with the
-``SUPABASE_SERVICE_ROLE_KEY`` — which **bypasses RLS**. Because service-role
-calls have no ``auth.uid()``, the column default ``user_id default auth.uid()``
-evaluates to NULL and would violate every table's ``user_id not null``
-constraint. Every write helper here therefore stamps ``user_id`` explicitly from
-the *job's* owner, exactly like ``scripts/migrate_parquet_to_supabase.py`` stamps
-``OWNER_USER_ID``.
+``SUPABASE_SERVICE_ROLE_KEY`` — which **bypasses RLS**. It only touches the
+queue (``parse_jobs``), the URL cache (``parse_results``), and the private
+``imports`` Storage bucket; ``parse_results`` carries no ``user_id``.
 
 This module only builds the client and provides thin CRUD/RPC helpers the worker
 loop calls; it does not run the parsers (see ``parsing/``) or the loop itself
@@ -15,7 +12,6 @@ loop calls; it does not run the parsers (see ``parsing/``) or the loop itself
 
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -24,8 +20,7 @@ from allaroundfood.config import settings
 if TYPE_CHECKING:
     from supabase import Client
 
-    from allaroundfood.models import Recipe, ShoppingListItem
-    from allaroundfood.ocr.models import Receipt
+    from allaroundfood.models import Recipe
 
 # Lazily constructed service-role singleton (see ``get_service_client``).
 _client: Client | None = None
@@ -95,138 +90,6 @@ def claim_pending_jobs(client: Client, limit: int, max_attempts: int) -> list[di
     # the claim RPC always returns ``parse_jobs`` rows, i.e. JSON objects.
     data: list[dict[str, Any]] = response.data or []  # type: ignore[assignment]
     return data
-
-
-def mark_done(client: Client, job_id: str, result_recipe_id: str | None = None) -> None:
-    """Mark a job ``done``, optionally linking the recipe it produced.
-
-    Args:
-        client: A service-role Supabase client.
-        job_id: The ``parse_jobs.id`` to update.
-        result_recipe_id: The produced recipe's id, for recipe kinds; None for
-            receipt/shopping-list kinds that write no recipe.
-    """
-    update: dict[str, Any] = {"status": "done", "error": None, "updated_at": _now_iso()}
-    if result_recipe_id is not None:
-        update["result_recipe_id"] = result_recipe_id
-    client.table("parse_jobs").update(update).eq("id", job_id).execute()
-
-
-def mark_error(client: Client, job_id: str, message: str) -> None:
-    """Mark a job ``error`` and store the failure message.
-
-    Args:
-        client: A service-role Supabase client.
-        job_id: The ``parse_jobs.id`` to update.
-        message: Human-readable failure detail stored in ``parse_jobs.error``.
-    """
-    client.table("parse_jobs").update(
-        {"status": "error", "error": message, "updated_at": _now_iso()}
-    ).eq("id", job_id).execute()
-
-
-# --- Result writes (each stamps user_id from the job's owner) ----------------
-
-
-def insert_recipe(client: Client, recipe: Recipe, user_id: str) -> str:
-    """Upsert a recipe row and return its id.
-
-    Assigns a UUID ``id`` when the recipe has none, stamps ``user_id``, and
-    serializes the nested pydantic fields (ingredients/steps/equipment/
-    dietary_tags/nutrition) to JSON-compatible values via
-    ``model_dump(mode="json")`` so they land in their jsonb columns. Upserts on
-    ``id`` so re-inserting the same recipe (e.g. a reprocess) is idempotent.
-
-    Args:
-        client: A service-role Supabase client.
-        recipe: The parsed recipe to persist.
-        user_id: The owning auth user's uuid (from the job), stamped on the row.
-
-    Returns:
-        The recipe id written to the ``recipes`` table.
-    """
-    row = recipe.model_dump(mode="json")
-    recipe_id = row.get("id") or str(uuid.uuid4())
-    row["id"] = recipe_id
-    row["user_id"] = user_id
-    client.table("recipes").upsert(row, on_conflict="id").execute()
-    return recipe_id
-
-
-def insert_receipt(client: Client, receipt: Receipt, user_id: str) -> str:
-    """Upsert a receipt row and return its id.
-
-    The ``Receipt`` model already exposes ``line_items`` (a list of pydantic
-    line items), which ``model_dump(mode="json")`` renders to the ``line_items``
-    jsonb column (the schema's rename of the old ``line_items_json``). Assigns a
-    UUID id when absent and stamps ``user_id``.
-
-    Args:
-        client: A service-role Supabase client.
-        receipt: The parsed receipt to persist.
-        user_id: The owning auth user's uuid (from the job), stamped on the row.
-
-    Returns:
-        The receipt id written to the ``receipts`` table.
-    """
-    row = receipt.model_dump(mode="json")
-    receipt_id = row.get("id") or str(uuid.uuid4())
-    row["id"] = receipt_id
-    row["user_id"] = user_id
-    client.table("receipts").upsert(row, on_conflict="id").execute()
-    return receipt_id
-
-
-def insert_shopping_items(
-    client: Client, items: list[ShoppingListItem], user_id: str
-) -> list[str]:
-    """Upsert a batch of shopping-list items and return their ids.
-
-    Assigns a UUID id to any item lacking one and stamps ``user_id`` on each.
-
-    Args:
-        client: A service-role Supabase client.
-        items: The parsed shopping-list items to persist.
-        user_id: The owning auth user's uuid (from the job), stamped on each row.
-
-    Returns:
-        The ids of the written ``shopping_list_items`` rows (empty when no items).
-    """
-    if not items:
-        return []
-    rows: list[dict[str, Any]] = []
-    ids: list[str] = []
-    for item in items:
-        row = item.model_dump(mode="json")
-        item_id = row.get("id") or str(uuid.uuid4())
-        row["id"] = item_id
-        row["user_id"] = user_id
-        rows.append(row)
-        ids.append(item_id)
-    client.table("shopping_list_items").upsert(rows, on_conflict="id").execute()
-    return ids
-
-
-def insert_evaluation(client: Client, evaluation: dict[str, Any], user_id: str) -> str:
-    """Upsert an evaluation row and return its id.
-
-    The judge produces a plain dict (already JSON-compatible); this assigns a
-    UUID id when absent and stamps ``user_id``.
-
-    Args:
-        client: A service-role Supabase client.
-        evaluation: The judge's evaluation, as a JSON-compatible dict.
-        user_id: The owning auth user's uuid (from the job), stamped on the row.
-
-    Returns:
-        The evaluation id written to the ``evaluations`` table.
-    """
-    row = dict(evaluation)
-    eval_id = row.get("id") or str(uuid.uuid4())
-    row["id"] = eval_id
-    row["user_id"] = user_id
-    client.table("evaluations").upsert(row, on_conflict="id").execute()
-    return eval_id
 
 
 # --- Queue v2 (ADR 0008): parse_results cache + done/failed transitions ------

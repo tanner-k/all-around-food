@@ -13,7 +13,7 @@
 #
 # Replace:
 #   /path/to/all-around-food   → absolute path to the repo checkout
-#   /path/to/models            → host dir holding qwen2-vl.gguf and whisper/
+#   /path/to/models            → host dir holding whisper/
 #
 # min hour dom mon dow  command
 0 8 * * * docker run --rm --env-file /path/to/all-around-food/backend/.env -v /path/to/models:/models allaroundfood-worker --once

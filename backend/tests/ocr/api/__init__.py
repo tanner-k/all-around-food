@@ -1,1 +1,0 @@
-"""OCR API route tests."""

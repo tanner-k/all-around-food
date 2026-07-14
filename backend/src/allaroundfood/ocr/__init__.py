@@ -1,1 +1,0 @@
-"""OCR receipt pipeline package."""

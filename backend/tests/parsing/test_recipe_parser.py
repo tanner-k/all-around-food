@@ -172,10 +172,10 @@ class TestParseRecipeFromVideoText:
 
 class TestGetClient:
     def test_raises_when_key_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from allaroundfood.config import settings
+
         monkeypatch.setattr(recipe_parser, "_client", None)
-        monkeypatch.setattr(
-            recipe_parser.settings, "anthropic_api_key_parsing", None, raising=False
-        )
+        monkeypatch.setattr(settings, "anthropic_api_key_parsing", None, raising=False)
         with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY_PARSING is not set"):
             recipe_parser.get_client()
         monkeypatch.setattr(recipe_parser, "_client", None)

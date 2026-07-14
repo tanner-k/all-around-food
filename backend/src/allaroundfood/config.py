@@ -24,21 +24,8 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # Kroger API credentials
-    kroger_client_id: SecretStr | None = None
-    kroger_client_secret: SecretStr | None = None
-
-    # Kill-switch: set True to disable all unofficial scraping adapters
-    disable_unofficial_ingestion: bool = False
-
-    # Embedding model for canonical product matching
-    embedding_model_name: str = "BAAI/bge-small-en-v1.5"
-
-    # Where pricing/OCR Parquet files live
+    # Where local Parquet files live (recipes export, eval store)
     pricing_data_dir: Path = REPO_ROOT / "data"
-
-    # Path to Qwen2-VL GGUF model for OCR pipeline (set QWEN_GGUF_PATH env var)
-    qwen_gguf_path: Path | None = None
 
     # ── Worker: Supabase service-role access (bypasses RLS; worker env only) ──
     supabase_url: str | None = None

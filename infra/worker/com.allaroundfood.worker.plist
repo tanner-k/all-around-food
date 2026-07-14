@@ -11,7 +11,7 @@
     __REPO__    absolute path to the repo checkout, e.g.
                 /Users/tanner/coding/all-around-food
     __MODELS__  absolute path to the host model directory that holds
-                qwen2-vl.gguf and whisper/, e.g. /Users/tanner/models/allaroundfood
+                whisper/, e.g. /Users/tanner/models/allaroundfood
 
   Docker Desktop's `docker` CLI usually lives at /usr/local/bin/docker (Intel)
   or /opt/homebrew/bin/docker (Apple Silicon). Adjust the first ProgramArgument
