@@ -229,6 +229,47 @@ def insert_evaluation(client: Client, evaluation: dict[str, Any], user_id: str) 
     return eval_id
 
 
+# --- Queue v2 (ADR 0008): parse_results cache + done/failed transitions ------
+
+
+def lookup_parse_result(client: Client, normalized_url: str) -> dict[str, Any] | None:
+    """Return the cached ``parse_results`` row for a normalized URL, or None."""
+    response = (
+        client.table("parse_results")
+        .select("*")
+        .eq("normalized_url", normalized_url)
+        .execute()
+    )
+    rows: list[dict[str, Any]] = response.data or []  # type: ignore[assignment]
+    return rows[0] if rows else None
+
+
+def upsert_parse_result(
+    client: Client, normalized_url: str, recipe: Recipe, transcript: str | None
+) -> None:
+    """Write a finished parse into the URL cache (idempotent on the key)."""
+    row: dict[str, Any] = {
+        "normalized_url": normalized_url,
+        "recipe": recipe.model_dump(mode="json"),
+        "transcript": transcript,
+    }
+    client.table("parse_results").upsert(row, on_conflict="normalized_url").execute()
+
+
+def mark_job_done(client: Client, job_id: str, result_url: str) -> None:
+    """Mark a job ``done``, pointing at its ``parse_results`` row."""
+    client.table("parse_jobs").update(
+        {"status": "done", "error": None, "result_url": result_url, "updated_at": _now_iso()}
+    ).eq("id", job_id).execute()
+
+
+def mark_job_failed(client: Client, job_id: str, message: str) -> None:
+    """Mark a job ``failed`` and store the failure message."""
+    client.table("parse_jobs").update(
+        {"status": "failed", "error": message, "updated_at": _now_iso()}
+    ).eq("id", job_id).execute()
+
+
 # --- Storage ----------------------------------------------------------------
 
 
