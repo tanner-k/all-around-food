@@ -22,11 +22,16 @@ on conflict (singleton) do update set user_id=excluded.user_id;
 set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub',current_setting('app.test.owner'),true);
-insert into public.parse_jobs(id,kind,payload_text)
-values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','text','eggs');
+insert into public.parse_jobs(id,user_id,kind,payload_text)
+values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',current_setting('app.test.owner')::uuid,'text','eggs');
 do $$ begin
   if (select count(*) from public.parse_jobs where id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa') <> 1
   then raise exception 'owner cannot read own job'; end if;
+  begin
+    insert into public.parse_jobs(id,user_id,kind,payload_text)
+    values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',current_setting('app.test.other')::uuid,'text','wrong owner');
+    raise exception 'client inserted for another owner';
+  exception when insufficient_privilege or check_violation then null; end;
   begin
     update public.parse_jobs set status='done', lease_until=now() where id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
     raise exception 'client changed state';

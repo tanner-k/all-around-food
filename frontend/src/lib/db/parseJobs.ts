@@ -70,13 +70,14 @@ export function classifyUrlKind(url: string): "video" | "url" {
  * `video` job; everything else enqueues a `url` job. Sends only `kind` +
  * `source_url`; the rest of the row defaults server-side.
  */
-export async function enqueueUrlJob(url: string, id = crypto.randomUUID()): Promise<ParseJob> {
+export async function enqueueUrlJob(url: string, id = crypto.randomUUID(), expectedOwner?: string): Promise<ParseJob> {
   const supabase = createClient();
+  if (expectedOwner) await verifyExpectedOwner(supabase, expectedOwner);
   const kind = classifyUrlKind(url);
 
   const { data, error } = await supabase
     .from(TABLE)
-    .insert({ id, kind, source_url: url })
+    .insert({ id, kind, source_url: url, ...(expectedOwner ? { user_id: expectedOwner } : {}) })
     .select("*")
     .single();
 
@@ -90,6 +91,11 @@ const EXT_BY_MEDIA_TYPE: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
 };
+
+async function verifyExpectedOwner(supabase: ReturnType<typeof createClient>, owner: string): Promise<void> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || data.user?.id !== owner) throw new Error("Import account changed; sign in as the original owner");
+}
 
 function extensionFor(file: File): string {
   const byType = EXT_BY_MEDIA_TYPE[file.type];
@@ -109,7 +115,8 @@ function extensionFor(file: File): string {
 export async function enqueueImageJob(
   file: File,
   kind: "screenshot" | "receipt",
-  id = crypto.randomUUID()
+  id = crypto.randomUUID(),
+  expectedOwner?: string,
 ): Promise<ParseJob> {
   if (!Object.hasOwn(EXT_BY_MEDIA_TYPE, file.type)) {
     throw new Error("Upload a JPEG, PNG, or WebP image");
@@ -123,8 +130,10 @@ export async function enqueueImageJob(
   } = await supabase.auth.getUser();
   if (authError) throw new Error(`Not signed in: ${authError.message}`);
   if (!user) throw new Error("Not signed in");
+  if (expectedOwner && user.id !== expectedOwner)
+    throw new Error("Import account changed; sign in as the original owner");
 
-  const path = `${user.id}/${id}.${extensionFor(file)}`;
+  const path = `${expectedOwner ?? user.id}/${id}.${extensionFor(file)}`;
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -137,7 +146,7 @@ export async function enqueueImageJob(
 
   const { data, error } = await supabase
     .from(TABLE)
-    .insert({ id, kind, storage_path: path })
+    .insert({ id, kind, storage_path: path, ...(expectedOwner ? { user_id: expectedOwner } : {}) })
     .select("*")
     .single();
 
@@ -153,14 +162,16 @@ export async function enqueueImageJob(
 export async function enqueueTextJob(
   text: string,
   kind: "text" | "shopping_list",
-  id = crypto.randomUUID()
+  id = crypto.randomUUID(),
+  expectedOwner?: string,
 ): Promise<ParseJob> {
   if (!text.trim() || text.length > 50_000) throw new Error("Text must be 1–50,000 characters");
   const supabase = createClient();
+  if (expectedOwner) await verifyExpectedOwner(supabase, expectedOwner);
 
   const { data, error } = await supabase
     .from(TABLE)
-    .insert({ id, kind, payload_text: text })
+    .insert({ id, kind, payload_text: text, ...(expectedOwner ? { user_id: expectedOwner } : {}) })
     .select("*")
     .single();
 

@@ -42,7 +42,7 @@ create policy "import owner insert" on public.parse_jobs for insert to authentic
   with check (user_id = auth.uid() and user_id = public.import_owner_uid());
 revoke insert, update, delete on public.parse_jobs from public, anon, authenticated;
 grant select on public.parse_jobs to authenticated;
-grant insert (id, kind, source_url, storage_path, payload_text)
+grant insert (id, user_id, kind, source_url, storage_path, payload_text)
   on public.parse_jobs to authenticated;
 
 -- Legacy claim function must not remain callable by signed-in browsers.
