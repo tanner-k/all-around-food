@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import type { Recipe, Ingredient, Step } from "@/lib/recipe-schema";
-import { updateRecipeAction } from "@/app/(app)/cookbook/actions";
+import { localHref } from "@/lib/local/navigation";
 
 interface RecipeEditFormProps {
   recipe: Recipe;
+  onSave: (recipe: Recipe) => Promise<void>;
+  isNew?: boolean;
 }
 
 const inputClass =
@@ -38,8 +38,7 @@ function blankStep(order: number): Step {
   };
 }
 
-export function RecipeEditForm({ recipe: initialRecipe }: RecipeEditFormProps) {
-  const router = useRouter();
+export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }: RecipeEditFormProps) {
   const [recipe, setRecipe] = useState(initialRecipe);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,14 +96,14 @@ export function RecipeEditForm({ recipe: initialRecipe }: RecipeEditFormProps) {
   }
 
   async function handleSave() {
+    if (!recipe.title.trim() || !recipe.ingredients.some((item) => item.name.trim()) || !recipe.steps.some((step) => step.instruction.trim())) {
+      setError("Add a title, an ingredient, and a step before saving.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const result = await updateRecipeAction(recipe.id, recipe);
-      if ("error" in result) {
-        throw new Error(result.error);
-      }
-      router.push(`/cookbook/${recipe.id}`);
+      await onSave({ ...recipe, ingredients: recipe.ingredients.filter((item) => item.name.trim()), steps: recipe.steps.filter((step) => step.instruction.trim()).map((step, index) => ({...step, order: index + 1})) });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setSaving(false);
@@ -115,14 +114,14 @@ export function RecipeEditForm({ recipe: initialRecipe }: RecipeEditFormProps) {
     <div className="flex flex-col gap-8 max-w-3xl mx-auto">
       <div className="flex items-center justify-between gap-4">
         <h1 className="font-serif text-3xl text-ink leading-tight">
-          Edit recipe
+          {isNew ? "New recipe" : "Edit recipe"}
         </h1>
-        <Link
-          href={`/cookbook/${recipe.id}`}
+        <a
+          href={isNew ? localHref("cookbook") : localHref("recipe", recipe.id)}
           className="text-sm text-ink-mute hover:text-ink underline"
         >
           Cancel
-        </Link>
+        </a>
       </div>
 
       {/* Basic info */}
@@ -393,12 +392,12 @@ export function RecipeEditForm({ recipe: initialRecipe }: RecipeEditFormProps) {
         </p>
       )}
       <div className="flex gap-3 justify-end pt-2 border-t border-line">
-        <Link
-          href={`/cookbook/${recipe.id}`}
+        <a
+          href={isNew ? localHref("cookbook") : localHref("recipe", recipe.id)}
           className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2"
         >
           Cancel
-        </Link>
+        </a>
         <button
           type="button"
           onClick={handleSave}

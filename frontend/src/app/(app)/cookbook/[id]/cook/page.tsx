@@ -1,23 +1,6 @@
-import { notFound } from "next/navigation";
-import { CookMode } from "@/components/cook/CookMode";
-import { getRecipe } from "@/lib/db/recipes";
+import { redirect } from "next/navigation";
+import { localHref } from "@/lib/local/navigation";
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
-
-export default async function CookPage({ params }: PageProps) {
-  const { id } = await params;
-
-  const recipe = await getRecipe(id);
-
-  if (!recipe) {
-    notFound();
-  }
-
-  return (
-    <div className="py-6 px-4">
-      <CookMode recipe={recipe} />
-    </div>
-  );
+export default async function CookPage({ params }: { params: Promise<{ id: string }> }) {
+  redirect(localHref("cook", (await params).id));
 }

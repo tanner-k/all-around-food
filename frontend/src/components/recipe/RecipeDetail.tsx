@@ -1,14 +1,15 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { useState } from "react";
 import type { Recipe, Ingredient } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
 import { pageTitle } from "@/lib/typography";
-import { markCookedAction } from "@/app/(app)/cookbook/actions";
+import { localHref } from "@/lib/local/navigation";
 
 interface RecipeDetailProps {
   recipe: Recipe;
+  onMarkCooked: () => Promise<void>;
+  onStartCook: () => Promise<void>;
 }
 
 function PillMeta({ children }: { children: React.ReactNode }) {
@@ -37,8 +38,10 @@ function IngredientRow({ ing }: { ing: Ingredient }) {
   );
 }
 
-export function RecipeDetail({ recipe }: RecipeDetailProps) {
-  const router = useRouter();
+export function RecipeDetail({ recipe, onMarkCooked, onStartCook }: RecipeDetailProps) {
+  const [busy, setBusy] = useState(false);
+  const [logged, setLogged] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const displayTime = recipe.total_time_min ?? recipe.cook_time_min;
   const breadcrumb = [recipe.course, displayTime ? `${displayTime} min` : null]
@@ -74,8 +77,10 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
     (groups.size === 1 && !groups.has("__ungrouped__"));
 
   async function handleMarkCooked() {
-    await markCookedAction(recipe.id);
-    router.refresh();
+    setBusy(true);
+    try { await onMarkCooked(); setLogged(true); } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to save cooking session.");
+    } finally { setBusy(false); }
   }
 
   return (
@@ -175,25 +180,28 @@ export function RecipeDetail({ recipe }: RecipeDetailProps) {
 
       {/* Action row */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap pt-2 border-t border-line">
-        <Link
-          href={`/cookbook/${recipe.id}/edit`}
+        <a
+          href={localHref("edit", recipe.id)}
           className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10 flex items-center justify-center sm:inline-flex"
         >
           Edit
-        </Link>
+        </a>
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         <button
           type="button"
           onClick={handleMarkCooked}
+          disabled={busy || logged}
           className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10"
         >
-          Mark cooked
+          {logged ? "Cooked ✓" : "Mark cooked"}
         </button>
-        <Link
-          href={`/cookbook/${recipe.id}/cook`}
+        <a
+          href={localHref("cook", recipe.id)}
+          onClick={(event) => { event.preventDefault(); void onStartCook().catch((err: unknown) => setError(err instanceof Error ? err.message : "Unable to start cook mode.")); }}
           className="rounded-full bg-terra px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#A55230] sm:ml-auto min-h-11 flex items-center justify-center"
         >
           Start cook mode →
-        </Link>
+        </a>
       </div>
     </div>
   );

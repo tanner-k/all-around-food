@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
-import Link from "next/link";
+import { useState, useEffect, useMemo } from "react";
 import { X } from "lucide-react";
 import type { Recipe } from "@/lib/recipe-schema";
 import { CookStepView } from "./CookStepView";
@@ -11,29 +10,46 @@ import { CookDoneView } from "./CookDoneView";
 import { IngredientsSheet } from "./IngredientsSheet";
 import { TimerSheet } from "./TimerSheet";
 import { formatTime } from "@/lib/format-time";
+import type { CookProgress } from "@/lib/local/schema";
+import type { PantryItem, PantryStatus } from "@/lib/pantry-schema";
+import { localHref } from "@/lib/local/navigation";
 
 type Layout = "step" | "scroll";
 
 interface CookModeProps {
   recipe: Recipe;
+  progress: CookProgress;
+  pantry: PantryItem[];
+  onSaveProgress: (progress: CookProgress) => Promise<void>;
+  onComplete: (sessionId: string) => Promise<boolean>;
+  onSetPantryStatus: (id: string, status: PantryStatus) => Promise<void>;
 }
 
-const LAYOUT_KEY = "aaf:cookLayout";
+export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete, onSetPantryStatus }: CookModeProps) {
+  const [currentStep, setCurrentStep] = useState(progress.step);
+  const [done, setDone] = useState(Boolean(progress.completed_at));
+  const [layout, setLayout] = useState<Layout>(progress.layout);
+  const [timerEndAt, setTimerEndAt] = useState(progress.timer_end_at);
+  const [pausedSeconds, setPausedSeconds] = useState(progress.paused_seconds);
+  const [now, setNow] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const timerRunning = timerEndAt !== null && now > 0 && timerEndAt > now;
+  const timerSeconds = timerEndAt !== null ? now > 0 ? Math.max(0, Math.ceil((timerEndAt - now) / 1000)) : -1 : pausedSeconds ?? -1;
 
-export function CookMode({ recipe }: CookModeProps) {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [done, setDone] = useState(false);
-  const [layout, setLayout] = useState<Layout>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem(LAYOUT_KEY);
-      if (saved === "step" || saved === "scroll") return saved;
-    }
-    return "step";
-  });
+  useEffect(() => {
+    if (timerEndAt === null) return;
+    const tick = () => setNow(Date.now());
+    const firstTick = setTimeout(tick, 0);
+    const interval = setInterval(tick, 1000);
+    window.addEventListener("focus", tick);
+    return () => { clearTimeout(firstTick); clearInterval(interval); window.removeEventListener("focus", tick); };
+  }, [timerEndAt]);
 
-  // Timer state: -1 = not started
-  const [timerSeconds, setTimerSeconds] = useState(-1);
-  const [timerRunning, setTimerRunning] = useState(false);
+  useEffect(() => {
+    const next = { ...progress, step: currentStep, layout, timer_end_at: timerEndAt, paused_seconds: pausedSeconds };
+    if (next.step === progress.step && next.layout === progress.layout && next.timer_end_at === progress.timer_end_at && next.paused_seconds === progress.paused_seconds) return;
+    void onSaveProgress(next).catch((error: unknown) => setSaveError(error instanceof Error ? error.message : "Unable to save progress."));
+  }, [currentStep, layout, timerEndAt, pausedSeconds, onSaveProgress, progress]);
 
   // Mobile sheet state
   const [ingredientsOpen, setIngredientsOpen] = useState(false);
@@ -47,7 +63,6 @@ export function CookMode({ recipe }: CookModeProps) {
 
   function handleLayoutChange(next: Layout) {
     setLayout(next);
-    localStorage.setItem(LAYOUT_KEY, next);
   }
 
   function handlePrev() {
@@ -63,22 +78,24 @@ export function CookMode({ recipe }: CookModeProps) {
   }
 
   function handleStartTimer(minutes: number) {
-    setTimerSeconds(minutes * 60);
-    setTimerRunning(true);
+    setTimerEndAt(Date.now() + minutes * 60_000);
+    setPausedSeconds(null);
+    setNow(Date.now());
   }
 
-  const handleTick = useCallback((secondsLeft: number) => {
-    setTimerSeconds(secondsLeft);
-    if (secondsLeft === 0) setTimerRunning(false);
-  }, []);
-
   function handleTimerPause() {
-    setTimerRunning((r) => !r);
+    if (timerEndAt !== null) {
+      setPausedSeconds(Math.max(0, Math.ceil((timerEndAt - Date.now()) / 1000)));
+      setTimerEndAt(null);
+    } else if (pausedSeconds !== null) {
+      setTimerEndAt(Date.now() + pausedSeconds * 1000);
+      setPausedSeconds(null);
+    }
   }
 
   function handleTimerReset() {
-    setTimerSeconds(-1);
-    setTimerRunning(false);
+    setTimerEndAt(null);
+    setPausedSeconds(null);
     setTimerSheetOpen(false);
   }
 
@@ -93,6 +110,9 @@ export function CookMode({ recipe }: CookModeProps) {
         recipeTitle={recipe.title}
         stepCount={total}
         ingredientNames={ingredientNames}
+        pantry={pantry}
+        onSetPantryStatus={onSetPantryStatus}
+        onComplete={() => onComplete(progress.session_id!)}
       />
     );
   }
@@ -103,13 +123,13 @@ export function CookMode({ recipe }: CookModeProps) {
       <div className="md:hidden flex flex-col min-h-[100dvh]">
         {/* Sticky top strip */}
         <div className="sticky top-0 z-20 flex items-center h-12 px-3 bg-paper/80 backdrop-blur border-b border-line">
-          <Link
-            href={`/cookbook/${recipe.id}`}
+          <a
+            href={localHref("recipe", recipe.id)}
             className="flex items-center justify-center w-8 h-8 rounded-lg text-ink-soft hover:text-ink active:text-ink hover:bg-paper-2 active:bg-paper-2 transition-colors"
             aria-label="Exit cook mode"
           >
             <X className="w-4 h-4" />
-          </Link>
+          </a>
           <span className="flex-1 text-center text-sm font-medium text-ink">
             {currentStep + 1} / {total}
           </span>
@@ -187,12 +207,12 @@ export function CookMode({ recipe }: CookModeProps) {
         {/* Top bar */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
           {/* Exit */}
-          <Link
-            href={`/cookbook/${recipe.id}`}
+          <a
+            href={localHref("recipe", recipe.id)}
             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-paper-2 border border-line text-sm text-ink-soft hover:text-ink active:text-ink transition-colors"
           >
             ← Exit
-          </Link>
+          </a>
 
           {/* Step counter + layout toggle */}
           <div className="flex items-center gap-3">
@@ -234,7 +254,7 @@ export function CookMode({ recipe }: CookModeProps) {
             <CookTimer
               secondsLeft={timerSeconds}
               running={timerRunning}
-              onTick={handleTick}
+              onTick={() => setNow(Date.now())}
               onPause={handleTimerPause}
               onReset={handleTimerReset}
             />
@@ -266,6 +286,7 @@ export function CookMode({ recipe }: CookModeProps) {
             <CookScrollView recipe={recipe} />
           )}
         </div>
+        {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
       </div>
 
       {/* ── SHEETS (mobile only, rendered at root level) ──────────────── */}

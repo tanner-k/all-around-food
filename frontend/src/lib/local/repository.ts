@@ -1,5 +1,5 @@
 import { MealPlanSchema, type MealPlan } from "@/lib/meal-plan-schema";
-import { PantryItemSchema } from "@/lib/pantry-schema";
+import { PantryItemSchema, type PantryStatus } from "@/lib/pantry-schema";
 import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
 import { ShoppingListItemSchema } from "@/lib/shopping-schema";
 import { closeLocalDB, getLocalDB, reportStorageIssue } from "./db";
@@ -117,6 +117,50 @@ export async function saveCookProgress(input: CookProgress): Promise<void> {
   notifyChange();
 }
 
+/** Keep an unfinished session; start a fresh one after a completed cook. */
+export async function beginCookSession(recipeId: string, forceNew = false): Promise<CookProgress> {
+  try {
+    const db = await getLocalDB();
+    const tx = db.transaction("cook_progress", "readwrite");
+    const existing = await tx.store.get(recipeId);
+    const progress: CookProgress = existing && (!existing.completed_at || !forceNew)
+      ? { ...existing, session_id: existing.session_id ?? crypto.randomUUID() }
+      : { recipe_id: recipeId, step: 0, layout: "step", timer_end_at: null,
+          paused_seconds: null, session_id: crypto.randomUUID(), completed_at: null };
+    await tx.store.put(progress);
+    await tx.done;
+    notifyChange();
+    return progress;
+  } catch (error) {
+    await closeLocalDB();
+    reportStorageIssue("Unable to start cooking session.", error);
+    throw error;
+  }
+}
+
+/** The progress marker and cook count commit together, even across tabs. */
+export async function completeCookSession(recipeId: string, sessionId: string): Promise<boolean> {
+  try {
+    const db = await getLocalDB();
+    const tx = db.transaction(["recipes", "cook_progress"], "readwrite");
+    const progress = await tx.objectStore("cook_progress").get(recipeId);
+    const recipe = await tx.objectStore("recipes").get(recipeId);
+    if (!progress || !recipe || progress.session_id !== sessionId || progress.completed_at) {
+      await tx.done;
+      return false;
+    }
+    await tx.objectStore("cook_progress").put({ ...progress, completed_at: new Date().toISOString() });
+    await tx.objectStore("recipes").put({ ...recipe, times_made: recipe.times_made + 1 });
+    await tx.done;
+    notifyChange();
+    return true;
+  } catch (error) {
+    await closeLocalDB();
+    reportStorageIssue("Unable to complete cooking session.", error);
+    throw error;
+  }
+}
+
 export async function saveSetting(input: Setting): Promise<void> {
   const setting = SettingSchema.parse(input);
   try {
@@ -126,6 +170,22 @@ export async function saveSetting(input: Setting): Promise<void> {
   } catch (error) {
     await closeLocalDB();
     reportStorageIssue("Unable to save local settings.", error);
+    throw error;
+  }
+  notifyChange();
+}
+
+export async function setPantryStatus(id: string, status: PantryStatus): Promise<void> {
+  try {
+    const db = await getLocalDB();
+    const tx = db.transaction("pantry", "readwrite");
+    const item = await tx.store.get(id);
+    if (!item) throw new Error("Pantry item was not found.");
+    await tx.store.put(PantryItemSchema.parse({ ...item, status }));
+    await tx.done;
+  } catch (error) {
+    await closeLocalDB();
+    reportStorageIssue("Unable to update pantry status.", error);
     throw error;
   }
   notifyChange();

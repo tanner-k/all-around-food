@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { MarkOutOfStep } from "./MarkOutOfStep";
-import { markCookedAction } from "@/app/(app)/cookbook/actions";
+import type { PantryItem, PantryStatus } from "@/lib/pantry-schema";
+import { localHref } from "@/lib/local/navigation";
 
 interface CookDoneViewProps {
   recipeId: string;
   recipeTitle: string;
   stepCount: number;
   ingredientNames: string[];
+  pantry: PantryItem[];
+  onSetPantryStatus: (id: string, status: PantryStatus) => Promise<void>;
+  onComplete: () => Promise<boolean>;
 }
 
 export function CookDoneView({
@@ -18,8 +20,10 @@ export function CookDoneView({
   recipeTitle,
   stepCount,
   ingredientNames,
+  pantry,
+  onSetPantryStatus,
+  onComplete,
 }: CookDoneViewProps) {
-  const router = useRouter();
   const [phase, setPhase] = useState<"done" | "stockCheck">("done");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,10 +32,7 @@ export function CookDoneView({
     setLoading(true);
     setError(null);
     try {
-      const result = await markCookedAction(recipeId);
-      if ("error" in result) {
-        throw new Error(result.error);
-      }
+      await onComplete();
       setPhase("stockCheck");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -44,7 +45,9 @@ export function CookDoneView({
     return (
       <MarkOutOfStep
         ingredientNames={ingredientNames}
-        onDone={() => router.push(`/cookbook/${recipeId}`)}
+        pantry={pantry}
+        onSetPantryStatus={onSetPantryStatus}
+        onDone={() => { window.location.href = localHref("recipe", recipeId); }}
       />
     );
   }
@@ -77,12 +80,12 @@ export function CookDoneView({
         >
           {loading ? "Saving…" : "Mark as cooked"}
         </button>
-        <Link
-          href={`/cookbook/${recipeId}`}
+        <a
+          href={localHref("recipe", recipeId)}
           className="w-full min-h-14 rounded-xl border border-line bg-paper text-ink font-semibold text-base flex items-center justify-center transition-colors hover:bg-paper-2 active:bg-paper-2"
         >
           Back to recipe
-        </Link>
+        </a>
       </div>
     </div>
   );

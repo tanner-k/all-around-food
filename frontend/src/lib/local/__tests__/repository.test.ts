@@ -3,6 +3,8 @@ import type { IDBPObjectStore } from "idb";
 import { closeLocalDB, getLocalDB, type LocalDBSchema } from "../db";
 import {
   putRecipe,
+  beginCookSession,
+  completeCookSession,
   readSnapshot,
   saveCookProgress,
   saveMealPlan,
@@ -75,6 +77,19 @@ describe("local repository", () => {
     expect(snapshot.cook_progress).toEqual([
       expect.objectContaining({ recipe_id: "recipe-1", step: 1 }),
     ]);
+  });
+
+  it("counts a cooking session only once across repeated completion calls", async () => {
+    await putRecipe(recipeFixture());
+    const session = await beginCookSession("recipe-1");
+    expect(await completeCookSession("recipe-1", session.session_id!)).toBe(true);
+    expect(await completeCookSession("recipe-1", session.session_id!)).toBe(false);
+    expect((await readSnapshot()).recipes[0].times_made).toBe(1);
+    expect((await beginCookSession("recipe-1")).session_id).toBe(session.session_id);
+    const next = await beginCookSession("recipe-1", true);
+    expect(next.session_id).not.toBe(session.session_id);
+    expect(await completeCookSession("recipe-1", next.session_id!)).toBe(true);
+    expect((await readSnapshot()).recipes[0].times_made).toBe(2);
   });
 
   it("rejects a write when its database transaction cannot start", async () => {

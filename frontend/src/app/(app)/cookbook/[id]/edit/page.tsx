@@ -1,23 +1,6 @@
-import { notFound } from "next/navigation";
-import { RecipeEditForm } from "@/components/recipe/RecipeEditForm";
-import { getRecipe } from "@/lib/db/recipes";
+import { redirect } from "next/navigation";
+import { localHref } from "@/lib/local/navigation";
 
-interface PageProps {
-  params: Promise<{ id: string }>;
-}
-
-export default async function EditRecipePage({ params }: PageProps) {
-  const { id } = await params;
-
-  const recipe = await getRecipe(id);
-
-  if (!recipe) {
-    notFound();
-  }
-
-  return (
-    <div className="py-8 px-4 md:px-0">
-      <RecipeEditForm recipe={recipe} />
-    </div>
-  );
+export default async function EditRecipePage({ params }: { params: Promise<{ id: string }> }) {
+  redirect(localHref("edit", (await params).id));
 }

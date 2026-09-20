@@ -10,6 +10,8 @@ export const CookProgressSchema = z.object({
   layout: z.enum(["step", "scroll"]),
   timer_end_at: z.number().nullable(),
   paused_seconds: z.number().nullable(),
+  session_id: z.string().optional(),
+  completed_at: z.string().nullable().optional(),
 });
 
 export const RecipeDraftSchema = z.object({
