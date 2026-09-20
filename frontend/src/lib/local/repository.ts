@@ -372,8 +372,11 @@ export async function addRecipesToShopping(recipeIds: string[]): Promise<void> {
   try {
     const db = await getLocalDB();
     const tx = db.transaction(["recipes", "pantry", "shopping"], "readwrite");
-    const [recipes, pantry] = await Promise.all([tx.objectStore("recipes").getAll(), tx.objectStore("pantry").getAll()]);
+    const [recipes, pantry, existing] = await Promise.all([
+      tx.objectStore("recipes").getAll(), tx.objectStore("pantry").getAll(), tx.objectStore("shopping").getAll(),
+    ]);
     const selected = recipes.filter(recipe => recipeIds.includes(recipe.id));
+    for (const item of existing) if (item.source === "recipe") await tx.objectStore("shopping").delete(item.id);
     for (const item of aggregateRecipeIngredients(selected, pantry)) await tx.objectStore("shopping").put(ShoppingListItemSchema.parse(item));
     await tx.done;
   } catch (error) { await closeLocalDB(); storageFailure("Unable to add recipes to shopping.", error); }
