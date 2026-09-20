@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Recipe } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
 
 interface RecipeReviewProps {
   recipe: Recipe;
   onSave: (recipe: Recipe) => void | Promise<void>;
-  onChange?: (recipe: Recipe) => void;
+  onChange?: (recipe: Recipe) => Promise<void>;
   warnings?: string[];
   saveLabel?: string;
 }
@@ -19,10 +19,41 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
   const [showAllIngredients, setShowAllIngredients] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editStatus, setEditStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [editError, setEditError] = useState<string | null>(null);
+  const latestRecipe = useRef(initialRecipe);
+  const pendingWrite = useRef<Promise<void>>(Promise.resolve());
+  const revision = useRef(0);
+
+  useEffect(() => {
+    if (editStatus !== "saving" && editStatus !== "error") return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [editStatus]);
+
+  function persist(next: Recipe) {
+    if (!onChange) return;
+    const currentRevision = ++revision.current;
+    setEditStatus("saving");
+    setEditError(null);
+    setError(null);
+    const write = pendingWrite.current.catch(() => undefined).then(() => onChange(next));
+    pendingWrite.current = write;
+    void write.then(() => {
+      if (currentRevision === revision.current) setEditStatus("saved");
+    }, (cause: unknown) => {
+      if (currentRevision === revision.current) {
+        setEditStatus("error");
+        setEditError(cause instanceof Error ? cause.message : "Could not save review edits locally");
+      }
+    });
+  }
 
   function change(next: Recipe) {
     setRecipe(next);
-    onChange?.(next);
+    latestRecipe.current = next;
+    persist(next);
   }
 
   async function save() {
@@ -32,7 +63,10 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
     }
     setSaving(true);
     setError(null);
-    try { await onSave(recipe); }
+    try {
+      await pendingWrite.current;
+      await onSave(latestRecipe.current);
+    }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save recipe"); setSaving(false); }
   }
 
@@ -172,6 +206,11 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
       )}
 
       {/* Action buttons */}
+      {editStatus === "saving" && <p role="status" className="text-sm text-ink-mute">Saving draft…</p>}
+      {editStatus === "saved" && <p role="status" className="text-sm text-ink-mute">All changes saved locally</p>}
+      {editStatus === "error" && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+        <span>{editError}</span><button type="button" onClick={() => persist(latestRecipe.current)} className="underline">Retry saving draft</button>
+      </div>}
       {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
       <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
         <button
@@ -184,7 +223,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
         <button
           type="button"
           onClick={() => void save()}
-          disabled={saving}
+          disabled={saving || editStatus === "error"}
           className="rounded-full bg-terra px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] min-h-11"
         >
           {saving ? "Saving…" : saveLabel}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
 import { LocalImports } from "../LocalImports";
@@ -13,15 +13,19 @@ vi.mock("@/lib/local/imports", () => ({
 }));
 vi.mock("@/lib/supabase/client", () => ({ createClient }));
 
+let getSession: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.resetAllMocks();
+  window.localStorage.clear();
   listLocalImports.mockResolvedValue([]);
   queueLocalImport.mockResolvedValue({ id: "queued" });
   updateImportDraft.mockResolvedValue(undefined);
   acceptDraft.mockResolvedValue({ ...recipeFixture(), id: "job-1" });
-  createClient.mockReturnValue({ auth: { getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: "owner" } } } }) } });
+  getSession = vi.fn().mockResolvedValue({ data: { session: { user: { id: "owner" } } }, error: null });
+  createClient.mockReturnValue({ auth: { getSession } });
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "public-key";
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
 });
 
 it("queues pasted recipe text with the cached owner and keeps manual entry", async () => {
@@ -55,4 +59,77 @@ it("requires a new screenshot for an expired uploaded request", async () => {
   expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Reselect screenshot"), { target: { files: [new File(["png"], "toast.png", { type: "image/png" })] } });
   await waitFor(() => expect(reselectScreenshotImport).toHaveBeenCalledWith("old", expect.any(File)));
+});
+
+it("clears a prior owner after explicit sign-out before queueing new work", async () => {
+  window.localStorage.setItem("aaf-import-owner-id", "old-owner");
+  getSession.mockResolvedValue({ data: { session: null }, error: null });
+  render(<LocalImports drafts={[]} />);
+  fireEvent.change(screen.getByLabelText("Recipe text"), { target: { value: "Soup" } });
+  fireEvent.click(screen.getByRole("button", { name: "Import pasted text" }));
+  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith({ kind: "text", payload_text: "Soup", owner_id: null }));
+  expect(window.localStorage.getItem("aaf-import-owner-id")).toBeNull();
+});
+
+it("retains a known owner when offline and Auth is unavailable", async () => {
+  window.localStorage.setItem("aaf-import-owner-id", "old-owner");
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+  getSession.mockRejectedValue(new Error("offline"));
+  render(<LocalImports drafts={[]} />);
+  fireEvent.change(screen.getByLabelText("Recipe text"), { target: { value: "Soup" } });
+  fireEvent.click(screen.getByRole("button", { name: "Import pasted text" }));
+  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith({ kind: "text", payload_text: "Soup", owner_id: "old-owner" }));
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+});
+
+it("uses the newly signed-in account for a new request after an account switch", async () => {
+  window.localStorage.setItem("aaf-import-owner-id", "old-owner");
+  getSession.mockResolvedValue({ data: { session: { user: { id: "new-owner" } } }, error: null });
+  render(<LocalImports drafts={[]} />);
+  fireEvent.change(screen.getByLabelText("Recipe text"), { target: { value: "Soup" } });
+  fireEvent.click(screen.getByRole("button", { name: "Import pasted text" }));
+  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith({ kind: "text", payload_text: "Soup", owner_id: "new-owner" }));
+  expect(window.localStorage.getItem("aaf-import-owner-id")).toBe("new-owner");
+});
+
+it("keeps pasted text and URL available after a local queue failure", async () => {
+  queueLocalImport.mockRejectedValue(new Error("Local storage failed"));
+  render(<LocalImports drafts={[]} />);
+  fireEvent.change(screen.getByLabelText("Recipe text"), { target: { value: "Toast the bread." } });
+  fireEvent.click(screen.getByRole("button", { name: "Import pasted text" }));
+  await screen.findByText("Local storage failed");
+  expect(screen.getByLabelText("Recipe text")).toHaveValue("Toast the bread.");
+  fireEvent.click(screen.getByRole("button", { name: "🔗 URL" }));
+  fireEvent.change(screen.getByPlaceholderText("Paste a recipe URL, TikTok, or Instagram Reel"), { target: { value: "https://example.com/soup" } });
+  fireEvent.click(screen.getByRole("button", { name: /^Import$/ }));
+  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith(expect.objectContaining({ source_url: "https://example.com/soup" })));
+  expect(screen.getByPlaceholderText("Paste a recipe URL, TikTok, or Instagram Reel")).toHaveValue("https://example.com/soup");
+});
+
+it("waits for the review edit commit before explicit Save", async () => {
+  let finish!: () => void;
+  updateImportDraft.mockImplementationOnce(() => new Promise<void>((resolve) => { finish = resolve; }));
+  const draft = { id: "job-1", recipe: { ...recipeFixture(), id: "job-1" }, warnings: [], received_at: "2026-09-20T12:00:00Z" };
+  render(<LocalImports drafts={[draft]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "My toast" } });
+  expect(screen.getByText("Saving draft…")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Save to cookbook" }));
+  expect(acceptDraft).not.toHaveBeenCalled();
+  await waitFor(() => expect(updateImportDraft).toHaveBeenCalledTimes(1));
+  await act(async () => { finish(); });
+  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" })));
+});
+
+it("reports a failed draft write and retries it", async () => {
+  updateImportDraft.mockRejectedValueOnce(new Error("Quota exceeded"));
+  const draft = { id: "job-1", recipe: { ...recipeFixture(), id: "job-1" }, warnings: [], received_at: "2026-09-20T12:00:00Z" };
+  render(<LocalImports drafts={[draft]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "My toast" } });
+  expect(await screen.findByText("Quota exceeded")).toBeInTheDocument();
+  expect(acceptDraft).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Retry saving draft" }));
+  await screen.findByText("All changes saved locally");
+  expect(updateImportDraft).toHaveBeenCalledTimes(2);
 });

@@ -19,11 +19,15 @@ async function knownOwner(): Promise<string | null> {
   const cached = window.localStorage.getItem(ownerKey);
   if (!publicConfig()) return cached;
   try {
-    const { data } = await createClient().auth.getSession();
+    const { data, error } = await createClient().auth.getSession();
     const current = data.session?.user.id;
     if (current) {
       window.localStorage.setItem(ownerKey, current);
       return current;
+    }
+    if (!error && navigator.onLine) {
+      window.localStorage.removeItem(ownerKey); // Explicitly signed out; bind a new request on its first signed-in flush.
+      return null;
     }
   } catch { /* An offline request can still use the last known owner. */ }
   return cached;
@@ -50,15 +54,17 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
     return subscribeToLocalChanges(refresh);
   }, [refresh]);
 
-  async function queue(input: LocalImportInput) {
+  async function queue(input: LocalImportInput): Promise<boolean> {
     setBusy(true);
     setNotice(null);
     try {
       await queueLocalImport({ ...input, owner_id: await knownOwner() });
       setNotice("Saved locally. Import processing will resume when you are online and signed in.");
       refresh();
+      return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Could not queue import");
+      return false;
     } finally { setBusy(false); }
   }
 
@@ -90,14 +96,16 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
     </div>
     {!publicConfig() && <p role="status" className="mt-5 rounded-xl border border-line bg-paper-2 p-4 text-sm text-ink-soft">Online import is not configured on this device. You can still queue a source and enter recipes manually.</p>}
     <div className="mt-8 max-w-3xl">
-      <DropZone onUrl={(url) => void queue({ kind: classifyUrlKind(url), source_url: url })}
-        onVideoUrl={(url) => void queue({ kind: "video", source_url: url })}
+      <DropZone onUrl={(url) => queue({ kind: classifyUrlKind(url), source_url: url })}
+        onVideoUrl={(url) => queue({ kind: "video", source_url: url })}
         onImage={(_base64, _type, file) => void queue({ kind: "screenshot", upload: file })} />
       <form className="mt-6 rounded-2xl border border-line bg-paper p-5" onSubmit={(event) => {
         event.preventDefault();
         if (!text.trim()) return;
-        void queue({ kind: "text", payload_text: text.trim() });
-        setText("");
+        const submitted = text.trim();
+        void queue({ kind: "text", payload_text: submitted }).then((saved) => {
+          if (saved) setText((current) => current === text ? "" : current);
+        });
       }}>
         <label htmlFor="local-import-text" className="block text-sm font-semibold text-ink">Recipe text</label>
         <textarea id="local-import-text" value={text} onChange={(event) => setText(event.target.value)}
@@ -112,7 +120,7 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
       <h2 className="font-serif text-2xl text-ink">Ready to review</h2>
       <div className="mt-5 space-y-8">{drafts.map((draft) => <div key={draft.id} className="rounded-2xl border border-line bg-paper p-5">
         <RecipeReview recipe={draft.recipe} warnings={draft.warnings} saveLabel="Save to cookbook"
-          onChange={(recipe) => { void updateImportDraft(draft.id, recipe); }}
+          onChange={(recipe) => updateImportDraft(draft.id, recipe)}
           onSave={async (recipe) => {
             const saved = await acceptDraft(draft.id, recipe);
             window.location.hash = localHref("recipe", saved.id).split("#")[1];
@@ -133,8 +141,8 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
           {row.state === "error" && <div className="mt-3 flex flex-wrap items-center gap-3">
             {row.error !== "Import expired; submit again" && <button type="button" onClick={() => void retry(row.id)} disabled={retrying === row.id}
               className="min-h-11 rounded-full border border-line px-4 text-sm font-semibold text-ink disabled:opacity-50">Retry</button>}
-            {row.kind === "screenshot" && !row.upload && <label className="inline-flex min-h-11 cursor-pointer items-center rounded-full border border-line px-4 text-sm font-semibold text-ink">
-              Reselect screenshot<input aria-label="Reselect screenshot" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only"
+            {row.kind === "screenshot" && !row.upload && <label className={`inline-flex min-h-11 items-center rounded-full border border-line px-4 text-sm font-semibold text-ink ${retrying === row.id ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
+              Reselect screenshot<input aria-label="Reselect screenshot" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={retrying === row.id}
                 onChange={(event) => { const file = event.target.files?.[0]; if (file) void reselect(row.id, file); event.target.value = ""; }} />
             </label>}
             {row.error === "Import expired; submit again" && row.kind !== "screenshot" && <button type="button" onClick={() => void retry(row.id)} disabled={retrying === row.id}

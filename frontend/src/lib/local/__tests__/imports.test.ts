@@ -341,6 +341,17 @@ describe("durable local recipe imports", () => {
     expect(enqueueImageJob).toHaveBeenNthCalledWith(2, expect.any(File), "screenshot", replacementId, owner);
   });
 
+  it("returns the same replacement if screenshot reselection is repeated", async () => {
+    await queueLocalImport({ kind: "screenshot", upload: new Blob(["png"], { type: "image/png" }), owner_id: owner });
+    await flushLocalImports();
+    getJob.mockRejectedValueOnce(new Error("Import expired; submit again"));
+    await flushLocalImports();
+    const first = await reselectScreenshotImport(jobId, new Blob(["again"], { type: "image/png" }));
+    const second = await reselectScreenshotImport(jobId, new Blob(["different"], { type: "image/png" }));
+    expect(second.id).toBe(first.id);
+    expect(await (await getLocalDB()).getAll("imports")).toHaveLength(2);
+  });
+
   it("keeps Save committed while a prior acknowledgement RPC is pending", async () => {
     await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
     let finishAck!: () => void;

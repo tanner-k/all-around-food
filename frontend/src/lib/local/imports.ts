@@ -64,6 +64,11 @@ export async function reselectScreenshotImport(id: string, upload: Blob): Promis
     const committed = tx.done;
     void committed.catch(() => undefined);
     const current = LocalImportSchema.parse(await tx.store.get(id));
+    if (current.state === "replaced" && current.replacement_id) {
+      const replacement = LocalImportSchema.parse(await tx.store.get(current.replacement_id));
+      await committed;
+      return replacement;
+    }
     if (current.kind !== "screenshot" || current.state !== "error") {
       tx.abort();
       throw new Error("Screenshot is not waiting for reselection");

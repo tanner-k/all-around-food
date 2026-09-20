@@ -75,6 +75,7 @@ test("an offline request resumes through mocked Supabase, survives review reload
   await page.goto("/app#/import");
   await page.getByRole("button", { name: "Edit" }).click();
   await page.getByLabel("Recipe title").fill("My Toast");
+  await expect(page.getByText("All changes saved locally")).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { name: "My Toast" })).toBeVisible();
   await page.getByRole("button", { name: "Save to cookbook" }).click();
