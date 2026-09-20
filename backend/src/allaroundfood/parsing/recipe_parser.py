@@ -18,6 +18,7 @@ import re
 import socket
 import time
 from dataclasses import dataclass
+from threading import BoundedSemaphore, Event, Thread
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -42,6 +43,7 @@ WORKER_MODEL = "claude-haiku-4-5"
 WORKER_MAX_TOKENS = 4096
 FETCH_TIMEOUT_S = 10.0
 STRIPPED_TEXT_CAP = 30_000
+_DNS_SLOTS = BoundedSemaphore(4)
 
 # ── Shared system prompt for the worker (VERBATIM from claude.ts) ────────────
 WORKER_SYSTEM_BASE = """You are an expert recipe parser. Extract the recipe shown in this image into the exact structured schema provided by the `extract_recipe` tool.
@@ -216,27 +218,48 @@ def _strip_html(raw_html: str) -> str:
     return stripped.strip()[:STRIPPED_TEXT_CAP]
 
 
-def _check_public_url(url: str) -> str:
+def _check_public_url(url: str, deadline: float | None = None) -> str:
     """Resolve and return a public address to pin for this request."""
     parsed = urlsplit(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username:
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username is not None:
         raise ValueError("Only public HTTP(S) recipe links are supported")
     if parsed.port not in {None, 80, 443}:
         raise ValueError("Only public HTTP(S) recipe links are supported")
     try:
         addresses = [ipaddress.ip_address(parsed.hostname)]
     except ValueError:
-        try:
-            addresses = [
-                ipaddress.ip_address(row[4][0])
-                for row in socket.getaddrinfo(
-                    parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
+        dns_deadline = deadline if deadline is not None else time.monotonic() + FETCH_TIMEOUT_S
+        if not _DNS_SLOTS.acquire(timeout=max(0, dns_deadline - time.monotonic())):
+            raise ValueError(
+                "Recipe website took too long; paste its text or a screenshot"
+            ) from None
+        finished = Event()
+        resolved: list[Any] = []
+        errors: list[OSError] = []
+
+        def resolve() -> None:
+            try:
+                resolved.extend(
+                    socket.getaddrinfo(
+                        parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
+                    )
                 )
-            ]
-        except OSError as exc:
+            except OSError as exc:
+                errors.append(exc)
+            finally:
+                _DNS_SLOTS.release()
+                finished.set()
+
+        Thread(target=resolve, daemon=True).start()
+        if not finished.wait(max(0, dns_deadline - time.monotonic())):
+            raise ValueError(
+                "Recipe website took too long; paste its text or a screenshot"
+            ) from None
+        if errors:
             raise ValueError(
                 "Recipe website could not be resolved; paste its text or a screenshot"
-            ) from exc
+            ) from errors[0]
+        addresses = [ipaddress.ip_address(row[4][0]) for row in resolved]
     if not addresses or any(not address.is_global for address in addresses):
         raise ValueError("Only public recipe websites are supported; paste text or a screenshot")
     return str(addresses[0])
@@ -248,7 +271,7 @@ def _fetch_public_html(url: str) -> str:
     current = url
     with httpx.Client(timeout=FETCH_TIMEOUT_S, follow_redirects=False, trust_env=False) as http:
         for _ in range(6):
-            address = _check_public_url(current)
+            address = _check_public_url(current, deadline)
             original = urlsplit(current)
             address_host = f"[{address}]" if ":" in address else address
             pinned_url = urlunsplit(

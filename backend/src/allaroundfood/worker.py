@@ -438,21 +438,25 @@ def process_job(client: Client, job: dict[str, Any]) -> bool:
 
 
 def drain_once(client: Client, limit: int) -> int:
-    """Claim up to ``limit`` pending jobs and process them all.
+    """Claim and process up to ``limit`` pending jobs one at a time.
 
     Returns the number of jobs claimed (regardless of individual outcome).
     """
     from allaroundfood.supabase_client import claim_pending_jobs
 
-    jobs = claim_pending_jobs(client, limit, settings.worker_max_attempts)
-    logger.info("claimed %d job(s)", len(jobs))
-    for job in jobs:
-        process_job(client, job)
+    claimed = 0
+    for _ in range(max(limit, 0)):
+        jobs = claim_pending_jobs(client, 1, settings.worker_max_attempts)
+        if not jobs:
+            break
+        claimed += 1
+        process_job(client, jobs[0])
+    logger.info("claimed %d job(s)", claimed)
     try:
         cleanup_import_jobs(client)
     except Exception:
         logger.exception("import cleanup failed; will retry next cycle")
-    return len(jobs)
+    return claimed
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────

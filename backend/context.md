@@ -15,8 +15,8 @@
 Python 3.12 + FastAPI + Polars (file-backed)
 
 ## Runtime requirements
-- `yt-dlp` for fetching supported Instagram/TikTok recipe video media and metadata
-- `ffmpeg` for audio extraction/transcoding before transcription
+- `yt-dlp` for fetching supported Instagram/TikTok recipe video media and metadata. Video fetch runs its Python package in an isolated child process that checks every socket destination. Only one direct HTTP(S) media stream is accepted; HLS/DASH/RTMP and split streams return a fallback error that suggests caption text or a screenshot.
+- `ffmpeg` for local-file audio extraction/transcoding before transcription; input protocols are limited to `file,pipe` so a downloaded media file cannot trigger an outbound fetch.
 - local whisper.cpp speech-to-text, in-process via the `pywhispercpp` package (no external service, no separate binary — the runtime ships in the pip wheel). See ADR 0006.
   - `WHISPER_MODEL` selects the model by name (default `base.en`); English `.en` models suit English recipe videos. `WHISPER_MODELS_DIR` (optional) points at a directory of pre-downloaded ggml `.bin` files, or where a named model is cached.
   - ggml model `.bin` files download on first use from huggingface.co (`tiny.en` ≈ 75 MB, `base.en` ≈ 142 MB). In network-restricted environments (including CI and some deploys) huggingface.co may be blocked, so provision the model as a file: pre-download it and point `WHISPER_MODELS_DIR` at it, or run first-use where egress is allowed. The FastAPI startup hook will log whether `yt-dlp` and `ffmpeg` resolved (ADR 0002 follow-up).

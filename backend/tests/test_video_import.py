@@ -68,8 +68,8 @@ def test_fetch_video_text_runs_pipeline(
         assert text is True
         assert timeout == 30
 
-        if cmd[0] == "yt-dlp":
-            output_template = Path(cmd[cmd.index("-o") + 1])
+        if cmd[2:3] == ["allaroundfood.safe_ytdlp"]:
+            output_template = Path(cmd[-2])
             tmp_path = output_template.parent
             (tmp_path / "source.mp4").write_bytes(b"video")
             (tmp_path / "source.info.json").write_text(
@@ -94,9 +94,13 @@ def test_fetch_video_text_runs_pipeline(
         FakeTranscriber(transcript="mix the eggs and flour"),
     )
 
-    assert [cmd[0] for cmd in commands] == ["yt-dlp", "yt-dlp", "ffmpeg"]
-    assert "--max-filesize" in commands[1]
-    assert "--no-config" in commands[1]
+    assert [cmd[2] if cmd[1:2] == ["-m"] else cmd[0] for cmd in commands] == [
+        "allaroundfood.safe_ytdlp",
+        "allaroundfood.safe_ytdlp",
+        "ffmpeg",
+    ]
+    assert [cmd[3] for cmd in commands[:2]] == ["metadata", "media"]
+    assert commands[2][commands[2].index("-protocol_whitelist") + 1] == "file,pipe"
     assert result.platform == "instagram"
     assert result.caption == "Caption ingredients: pasta and tomatoes"
     assert "mix the eggs and flour" in result.transcript
@@ -118,8 +122,8 @@ def test_fetch_video_text_allows_caption_without_transcript(
         text: bool,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
-        if cmd[0] == "yt-dlp":
-            output_template = Path(cmd[cmd.index("-o") + 1])
+        if cmd[2:3] == ["allaroundfood.safe_ytdlp"]:
+            output_template = Path(cmd[-2])
             tmp_path = output_template.parent
             temp_paths.append(tmp_path)
             (tmp_path / "source.mp4").write_bytes(b"video")
@@ -158,8 +162,8 @@ def test_fetch_video_text_reraises_when_no_caption(
         text: bool,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
-        if cmd[0] == "yt-dlp":
-            output_template = Path(cmd[cmd.index("-o") + 1])
+        if cmd[2:3] == ["allaroundfood.safe_ytdlp"]:
+            output_template = Path(cmd[-2])
             tmp_path = output_template.parent
             (tmp_path / "source.mp4").write_bytes(b"video")
         elif cmd[0] == "ffmpeg":
@@ -212,8 +216,8 @@ def test_fetch_video_text_requires_caption_or_transcript(
         text: bool,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
-        if cmd[0] == "yt-dlp":
-            output_template = Path(cmd[cmd.index("-o") + 1])
+        if cmd[2:3] == ["allaroundfood.safe_ytdlp"]:
+            output_template = Path(cmd[-2])
             tmp_path = output_template.parent
             (tmp_path / "source.mp4").write_bytes(b"video")
         elif cmd[0] == "ffmpeg":

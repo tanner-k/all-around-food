@@ -219,6 +219,27 @@ def test_drain_finishes_before_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
     assert events == ["finish", "cleanup"]
 
 
+def test_drain_claims_next_job_only_after_previous_is_processed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    pending = iter([job(id="first"), job(id="second")])
+
+    def claim(*args: Any) -> list[dict[str, Any]]:
+        item = next(pending)
+        events.append(f"claim:{item['id']}")
+        return [item]
+
+    monkeypatch.setattr("allaroundfood.supabase_client.claim_pending_jobs", claim)
+    monkeypatch.setattr(
+        worker, "process_job", lambda client, item: events.append(f"process:{item['id']}")
+    )
+    monkeypatch.setattr(worker, "cleanup_import_jobs", lambda client: None)
+
+    assert worker.drain_once(object(), 2) == 2  # type: ignore[arg-type]
+    assert events == ["claim:first", "process:first", "claim:second", "process:second"]
+
+
 def test_exhausted_job_is_not_processed_when_claim_rpc_returns_none(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

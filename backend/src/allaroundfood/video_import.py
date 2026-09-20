@@ -9,6 +9,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -186,13 +187,16 @@ def _download_video(
     """Download media and metadata for a source video with yt-dlp."""
     output_template = tmp_path / "source.%(ext)s"
     metadata_path = tmp_path / "metadata.json"
+    if shutil.which(settings.ytdlp_bin) is None:
+        raise VideoImportError(
+            "yt-dlp is not installed or YTDLP_BIN points to a missing binary.",
+            status_code=503,
+        )
     cmd = [
-        settings.ytdlp_bin,
-        "--no-config",
-        "--no-playlist",
-        "--write-info-json",
-        "--skip-download",
-        "-o",
+        sys.executable,
+        "-m",
+        "allaroundfood.safe_ytdlp",
+        "metadata",
         str(output_template),
         source_url,
     ]
@@ -207,21 +211,20 @@ def _download_video(
     metadata = _read_metadata(info_json)
 
     cmd = [
-        settings.ytdlp_bin,
-        "--no-config",
-        "--no-playlist",
-        "--max-filesize",
-        "100M",
-        "-f",
-        "bv*+ba/best",
-        "-o",
+        sys.executable,
+        "-m",
+        "allaroundfood.safe_ytdlp",
+        "media",
         str(output_template),
         source_url,
     ]
     _run_command(
         cmd,
         missing="yt-dlp is not installed or YTDLP_BIN points to a missing binary.",
-        failed="We could not download that video. It may be private, expired, or blocked.",
+        failed=(
+            "We could not download that video safely. "
+            "Paste its caption or upload a screenshot instead."
+        ),
         timeout_s=settings.timeout_s,
     )
 
@@ -239,6 +242,8 @@ def _extract_audio(video_path: Path, tmp_path: Path, settings: VideoImportSettin
     cmd = [
         settings.ffmpeg_bin,
         "-y",
+        "-protocol_whitelist",
+        "file,pipe",
         "-i",
         str(video_path),
         "-vn",

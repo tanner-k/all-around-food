@@ -201,6 +201,67 @@ def test_dns_private_address_is_blocked(monkeypatch: pytest.MonkeyPatch) -> None
         recipe_parser._check_public_url("https://recipes.example/private")
 
 
+def test_stalled_dns_respects_total_fetch_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    import threading
+    import time
+
+    release = threading.Event()
+    monkeypatch.setattr(recipe_parser, "FETCH_TIMEOUT_S", 0.05)
+    def stalled_dns(*args: Any) -> list[tuple[Any, ...]]:
+        release.wait(1)
+        return [(None, None, None, None, ("93.184.216.34", 443))]
+
+    monkeypatch.setattr(recipe_parser.socket, "getaddrinfo", stalled_dns)
+
+    class Client:
+        def __init__(self, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> Client:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+        def stream(self, *args: Any, **kwargs: Any) -> None:
+            pytest.fail("fetch after stalled DNS")
+
+    monkeypatch.setattr(recipe_parser.httpx, "Client", Client)
+    start = time.monotonic()
+    try:
+        with pytest.raises(ValueError, match="too long"):
+            recipe_parser._fetch_public_html("https://recipes.example/start")
+        assert time.monotonic() - start < 0.3
+    finally:
+        release.set()
+
+
+def test_stalled_dns_lookups_do_not_spawn_unbounded_threads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import threading
+
+    release = threading.Event()
+    started = 0
+
+    def stalled_dns(*args: Any) -> list[tuple[Any, ...]]:
+        nonlocal started
+        started += 1
+        release.wait(1)
+        return [(None, None, None, None, ("93.184.216.34", 443))]
+
+    monkeypatch.setattr(recipe_parser.socket, "getaddrinfo", stalled_dns)
+    monkeypatch.setattr(recipe_parser, "FETCH_TIMEOUT_S", 0.01)
+    monkeypatch.setattr(recipe_parser, "_DNS_SLOTS", threading.BoundedSemaphore(4))
+    try:
+        for _ in range(5):
+            with pytest.raises(ValueError, match="too long"):
+                recipe_parser._check_public_url("https://recipes.example")
+        assert started <= 4
+    finally:
+        release.set()
+
+
 def test_redirect_to_loopback_is_blocked_before_second_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -235,7 +296,9 @@ def test_redirect_to_loopback_is_blocked_before_second_request(
     monkeypatch.setattr(
         recipe_parser,
         "_check_public_url",
-        lambda url: check("http://127.0.0.1") if "127.0.0.1" in url else "93.184.216.34",
+        lambda url, deadline: check("http://127.0.0.1")
+        if "127.0.0.1" in url
+        else "93.184.216.34",
     )
     with pytest.raises(ValueError, match="public"):
         recipe_parser._fetch_public_html("https://recipes.example/start")
