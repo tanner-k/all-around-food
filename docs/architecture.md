@@ -38,3 +38,12 @@ See [`./decisions/`](./decisions/) for the running ADR log.
 
 ## Open questions
 - (Track unresolved design questions here. Move to an ADR once decided.)
+
+## Planned local-first direction (2026-09-19)
+
+[ADR 0008](./decisions/0008-local-first-pwa.md) proposes an installable React PWA
+with IndexedDB for everyday data and the user's Mac Mini for online imports.
+Supabase is retained for private import jobs and temporary results. See the
+[implementation plan](./superpowers/plans/2026-09-19-local-first-pwa.md) for
+migration, offline acceptance tests and rollout. This is a planned replacement;
+the application has not yet been converted to local storage.

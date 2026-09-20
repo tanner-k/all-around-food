@@ -79,3 +79,7 @@
 
 ## Icebox
 - [ ] (ideas that aren't on the roadmap yet)
+
+## Local-first PWA — planned
+- [ ] Implement the local-first installable PWA and Mac Mini import loop
+  - Plan: [Downloadable Local-First Cooking App](docs/superpowers/plans/2026-09-19-local-first-pwa.md)

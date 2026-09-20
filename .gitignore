@@ -50,6 +50,8 @@ venv/
 # Tool caches
 .eslintcache
 .prettiercache
+.worktrees/
+.superpowers/
 
 # Phase A additions
 frontend/.next/
