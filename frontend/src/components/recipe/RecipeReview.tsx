@@ -24,24 +24,33 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
   const latestRecipe = useRef(initialRecipe);
   const pendingWrite = useRef<Promise<void>>(Promise.resolve());
   const revision = useRef(0);
+  const unsafeToLeave = useRef(false);
+  const savingNow = useRef(false);
 
   useEffect(() => {
-    if (editStatus !== "saving" && editStatus !== "error") return;
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!unsafeToLeave.current && !savingNow.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [editStatus]);
+  }, []);
 
   function persist(next: Recipe) {
     if (!onChange) return;
     const currentRevision = ++revision.current;
+    unsafeToLeave.current = true;
     setEditStatus("saving");
     setEditError(null);
     setError(null);
     const write = pendingWrite.current.catch(() => undefined).then(() => onChange(next));
     pendingWrite.current = write;
     void write.then(() => {
-      if (currentRevision === revision.current) setEditStatus("saved");
+      if (currentRevision === revision.current) {
+        unsafeToLeave.current = false;
+        setEditStatus("saved");
+      }
     }, (cause: unknown) => {
       if (currentRevision === revision.current) {
         setEditStatus("error");
@@ -51,6 +60,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
   }
 
   function change(next: Recipe) {
+    if (savingNow.current) return;
     setRecipe(next);
     latestRecipe.current = next;
     persist(next);
@@ -61,13 +71,17 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
       setError("Add a title, an ingredient, and a step before saving.");
       return;
     }
+    if (savingNow.current) return;
+    savingNow.current = true;
     setSaving(true);
     setError(null);
     try {
       await pendingWrite.current;
       await onSave(latestRecipe.current);
+      savingNow.current = false;
+      setSaving(false);
     }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save recipe"); setSaving(false); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save recipe"); savingNow.current = false; setSaving(false); }
   }
 
   const meta = [
@@ -97,6 +111,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
           {editing ? (
             <input
               aria-label="Recipe title"
+              disabled={saving}
               value={recipe.title}
               onChange={(e) => change({ ...recipe, title: e.target.value })}
               className="font-serif text-2xl md:text-4xl text-ink bg-transparent border-b border-terra focus:outline-none w-full"
@@ -122,6 +137,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
           )}
           {editing && <label className="flex items-center gap-2 text-sm text-ink-soft">Servings
             <input type="number" min="1" value={recipe.servings ?? ""}
+              disabled={saving}
               onChange={(event) => change({ ...recipe, servings: event.target.value ? Number(event.target.value) : null })}
               className="w-20 rounded border border-line bg-paper px-2 py-1 text-ink" />
           </label>}
@@ -143,10 +159,10 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
             <li key={idx} className="flex items-baseline gap-2">
               <span className="text-ink-mute">·</span>
               {editing ? <>
-                <input aria-label={`Ingredient ${idx + 1} name`} value={ing.name} onChange={(e) => change({ ...recipe,
+                <input aria-label={`Ingredient ${idx + 1} name`} disabled={saving} value={ing.name} onChange={(e) => change({ ...recipe,
                   ingredients: recipe.ingredients.map((item, index) => index === idx ? { ...item, name: e.target.value } : item),
                 })} className="min-w-0 flex-1 rounded border border-line bg-paper px-2 py-1 text-ink" />
-                <input aria-label={`Ingredient ${idx + 1} amount`} value={ing.quantity.as_written} onChange={(e) => change({ ...recipe,
+                <input aria-label={`Ingredient ${idx + 1} amount`} disabled={saving} value={ing.quantity.as_written} onChange={(e) => change({ ...recipe,
                   ingredients: recipe.ingredients.map((item, index) => index === idx ? { ...item, quantity: { ...item.quantity, as_written: e.target.value } } : item),
                 })} className="w-24 rounded border border-line bg-paper px-2 py-1 text-ink" />
               </> : <><span className="text-ink">{ing.name}</span><span className="bg-terra-soft text-terra px-1.5 py-0.5 rounded-md text-xs font-medium">{ing.quantity.as_written}</span></>}
@@ -178,7 +194,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
               <span className="font-serif italic text-terra text-2xl leading-none flex-shrink-0 mt-0.5">
                 {step.order}.
               </span>
-              {editing ? <textarea aria-label={`Step ${step.order} instruction`} value={step.instruction} onChange={(e) => change({ ...recipe,
+              {editing ? <textarea aria-label={`Step ${step.order} instruction`} disabled={saving} value={step.instruction} onChange={(e) => change({ ...recipe,
                 steps: recipe.steps.map((item) => item.order === step.order ? { ...item, instruction: e.target.value } : item),
               })} className="min-h-20 w-full rounded border border-line bg-paper p-2 text-sm text-ink" /> : <p className="text-sm text-ink leading-relaxed">
                 <InlineAmountText
@@ -209,13 +225,14 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
       {editStatus === "saving" && <p role="status" className="text-sm text-ink-mute">Saving draft…</p>}
       {editStatus === "saved" && <p role="status" className="text-sm text-ink-mute">All changes saved locally</p>}
       {editStatus === "error" && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
-        <span>{editError}</span><button type="button" onClick={() => persist(latestRecipe.current)} className="underline">Retry saving draft</button>
+        <span>{editError}</span><button type="button" disabled={saving} onClick={() => persist(latestRecipe.current)} className="underline disabled:opacity-50">Retry saving draft</button>
       </div>}
       {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
       <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
         <button
           type="button"
           onClick={() => setEditing((v) => !v)}
+          disabled={saving}
           className="rounded-full border border-line bg-paper px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10"
         >
           {editing ? "Done" : "Edit"}

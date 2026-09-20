@@ -133,3 +133,31 @@ it("reports a failed draft write and retries it", async () => {
   await screen.findByText("All changes saved locally");
   expect(updateImportDraft).toHaveBeenCalledTimes(2);
 });
+
+it("freezes review fields while explicit Save is pending", async () => {
+  let finish!: () => void;
+  acceptDraft.mockImplementationOnce(() => new Promise((resolve) => {
+    finish = () => resolve({ ...recipeFixture(), id: "job-1", title: "First title" });
+  }));
+  const draft = { id: "job-1", recipe: { ...recipeFixture(), id: "job-1" }, warnings: [], received_at: "2026-09-20T12:00:00Z" };
+  render(<LocalImports drafts={[draft]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "First title" } });
+  await screen.findByText("All changes saved locally");
+  fireEvent.click(screen.getByRole("button", { name: "Save to cookbook" }));
+  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "First title" })));
+  expect(screen.getByLabelText("Recipe title")).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "Later title" } });
+  expect(screen.getByLabelText("Recipe title")).toHaveValue("First title");
+  expect(updateImportDraft).toHaveBeenCalledTimes(1);
+  await act(async () => { finish(); });
+});
+
+it("warns on unload immediately after a review edit starts saving", async () => {
+  updateImportDraft.mockImplementationOnce(() => new Promise<void>(() => undefined));
+  const draft = { id: "job-1", recipe: { ...recipeFixture(), id: "job-1" }, warnings: [], received_at: "2026-09-20T12:00:00Z" };
+  render(<LocalImports drafts={[draft]} />);
+  fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+  fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "Pending title" } });
+  expect(window.dispatchEvent(new Event("beforeunload", { cancelable: true }))).toBe(false);
+});
