@@ -9,12 +9,13 @@ import {
   SettingSchema,
   type CookProgress,
   type LibrarySnapshot,
+  type Setting,
 } from "./schema";
 
 const CHANGE_EVENT = "aaf-local-storage-change";
 let channel: BroadcastChannel | undefined;
 
-function notifyChange(): void {
+export function notifyChange(): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new Event(CHANGE_EVENT));
   if (typeof BroadcastChannel !== "undefined") {
@@ -111,6 +112,20 @@ export async function saveCookProgress(input: CookProgress): Promise<void> {
   } catch (error) {
     await closeLocalDB();
     reportStorageIssue("Unable to save cook progress locally.", error);
+    throw error;
+  }
+  notifyChange();
+}
+
+export async function saveSetting(input: Setting): Promise<void> {
+  const setting = SettingSchema.parse(input);
+  try {
+    const db = await getLocalDB();
+    const tx = db.transaction("settings", "readwrite");
+    await Promise.all([tx.store.put(setting), tx.done]);
+  } catch (error) {
+    await closeLocalDB();
+    reportStorageIssue("Unable to save local settings.", error);
     throw error;
   }
   notifyChange();
