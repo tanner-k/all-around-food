@@ -26,7 +26,7 @@ supabase/
 
 ## Applying the migrations
 
-Run `0001_init.sql` then `0002_storage.sql`, in order. Pick one method:
+Run numbered migrations in order through `0004_local_recipe_drafts.sql`. Pick one method:
 
 ### Supabase CLI (recommended)
 
@@ -40,6 +40,8 @@ supabase db push          # applies everything under supabase/migrations/
 ```bash
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0001_init.sql
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0002_storage.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0003_claim_and_payload.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0004_local_recipe_drafts.sql
 ```
 
 `$SUPABASE_DB_URL` is the connection string from
@@ -48,10 +50,35 @@ psql "$SUPABASE_DB_URL" -f supabase/migrations/0002_storage.sql
 ### Supabase SQL editor
 
 Open **SQL Editor** in the dashboard, paste the contents of `0001_init.sql`,
-run it, then do the same for `0002_storage.sql`.
+run it, then do the same for `0002_storage.sql` through `0004_local_recipe_drafts.sql` in order.
 
-The migrations are idempotent (`create ... if not exists`,
-`on conflict do nothing`, `drop policy if exists`), so re-running is safe.
+Apply each migration once. Track applied files before using the SQL editor or `psql`.
+
+Before using imports, set the personal owner in the SQL editor (as the database
+administrator), substituting the existing auth user UUID. Until configured,
+import policies and claims fail closed:
+
+```sql
+insert into app_private.import_owner(singleton, user_id)
+values (true, '<existing-owner-auth-uuid>')
+on conflict (singleton) do update set user_id = excluded.user_id;
+```
+
+Disable public sign-ups under **Authentication → Providers → Email** (and any
+other enabled providers) in the Supabase dashboard. Only invite/create the owner
+account. The worker must also set `IMPORT_OWNER_USER_ID` to this same UUID.
+
+Run `supabase/tests/local_recipe_drafts.sql` only against a separate disposable
+project with two actual test users and all migrations applied. Set
+`AAF_TEST_DATABASE_URL`, `AAF_TEST_OWNER_ID`, `AAF_TEST_OTHER_ID`, and
+`AAF_TEST_DISPOSABLE_PROJECT=YES`, then run:
+
+```bash
+psql "$AAF_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/local_recipe_drafts.sql
+```
+
+The suite rolls back its rows and temporary owner configuration. The explicit
+guard prevents accidental execution without the disposable-project flag.
 
 > The `vector` (pgvector) extension is enabled by `0001_init.sql`. If your
 > project blocks `create extension`, enable **Vector** under

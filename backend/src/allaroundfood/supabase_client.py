@@ -15,9 +15,10 @@ loop calls; it does not run the parsers (see ``parsing/``) or the loop itself
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from allaroundfood.config import settings
 
@@ -87,14 +88,68 @@ def claim_pending_jobs(client: Client, limit: int, max_attempts: int) -> list[di
     Returns:
         The claimed ``parse_jobs`` rows as dicts (empty when none are pending).
     """
-    response = client.rpc(
-        "claim_parse_jobs",
-        {"p_limit": limit, "p_max_attempts": max_attempts},
+    claimed: list[dict[str, Any]] = []
+    for _ in range(max(limit, 0)):
+        response = client.rpc("claim_parse_jobs", {"p_limit": 1}).execute()
+        # PostgREST types JSON broadly; the RPC returns parse_jobs rows.
+        rows: list[dict[str, Any]] = response.data or []  # type: ignore[assignment]
+        if not rows:
+            break
+        claimed.extend(rows)
+    return claimed
+
+
+def renew_import_job(client: Client, job_id: str, claim_token: str) -> None:
+    """Extend a live claim; a stale token is rejected by the RPC."""
+    client.rpc(
+        "renew_import_job", {"p_id": job_id, "p_claim_token": claim_token}
     ).execute()
-    # postgrest types ``response.data`` as ``list[JSON]`` (a broad recursive union);
-    # the claim RPC always returns ``parse_jobs`` rows, i.e. JSON objects.
-    data: list[dict[str, Any]] = response.data or []  # type: ignore[assignment]
-    return data
+
+
+def finish_import_job(
+    client: Client, job_id: str, claim_token: str, recipe: Recipe, warnings: list[str]
+) -> None:
+    """Atomically publish a validated local draft while the lease is owned."""
+    validated = recipe.model_copy(update={"id": job_id})
+    client.rpc(
+        "finish_import_job",
+        {
+            "p_id": job_id,
+            "p_claim_token": claim_token,
+            "p_recipe": validated.model_dump(mode="json"),
+            "p_warnings": warnings,
+        },
+    ).execute()
+
+
+def fail_import_job(client: Client, job_id: str, claim_token: str, message: str) -> None:
+    """Record a failure only for the worker holding the current lease."""
+    client.rpc(
+        "fail_import_job",
+        {"p_id": job_id, "p_claim_token": claim_token, "p_message": message[:1000]},
+    ).execute()
+
+
+def cleanup_import_jobs(client: Client) -> list[str]:
+    """Remove expired/acknowledged uploads and orphaned objects after DB cleanup.
+
+    A Storage failure leaves its path on the job, so the next cycle retries it.
+    """
+    response = client.rpc("cleanup_import_jobs").execute()
+    rows: list[dict[str, Any]] = response.data or []  # type: ignore[assignment]
+    orphans = cast(list[str], client.rpc("list_import_orphans").execute().data or [])
+    removed: list[str] = []
+    for row in rows:
+        path = str(row["storage_path"])
+        client.storage.from_(_IMPORTS_BUCKET).remove([path])
+        client.rpc(
+            "forget_import_storage", {"p_id": row["job_id"], "p_path": path}
+        ).execute()
+        removed.append(path)
+    for path in orphans:
+        client.storage.from_(_IMPORTS_BUCKET).remove([path])
+        removed.append(path)
+    return removed
 
 
 def mark_done(client: Client, job_id: str, result_recipe_id: str | None = None) -> None:
@@ -232,7 +287,9 @@ def insert_evaluation(client: Client, evaluation: dict[str, Any], user_id: str) 
 # --- Storage ----------------------------------------------------------------
 
 
-def download_import(client: Client, storage_path: str) -> bytes:
+def download_import(
+    client: Client, storage_path: str, owner_user_id: str | None = None
+) -> bytes:
     """Download an import media object from the private ``imports`` bucket.
 
     Args:
@@ -243,5 +300,20 @@ def download_import(client: Client, storage_path: str) -> bytes:
     Returns:
         The raw object bytes.
     """
+    match = re.fullmatch(
+        r"([0-9a-fA-F-]{36})/([0-9a-fA-F-]{36})\.(jpg|png|webp)", storage_path
+    )
+    if match is None or (owner_user_id is not None and match.group(1) != owner_user_id):
+        raise ValueError("Invalid import media path or owner")
     data: bytes = client.storage.from_(_IMPORTS_BUCKET).download(storage_path)
+    if len(data) > 10 * 1024 * 1024:
+        raise ValueError("Import media exceeds 10 MB")
+    suffix = match.group(3)
+    valid = (
+        data.startswith(b"\xff\xd8\xff") if suffix == "jpg"
+        else data.startswith(b"\x89PNG\r\n\x1a\n") if suffix == "png"
+        else data.startswith(b"RIFF") and data[8:12] == b"WEBP"
+    )
+    if not valid:
+        raise ValueError("Import media does not match its image type")
     return data
