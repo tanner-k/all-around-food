@@ -19,7 +19,7 @@ const backup = JSON.stringify({
   library: { recipes: [recipe], meal_plans: [], shopping: [], pantry: [], cook_progress: [], drafts: [], settings: [] },
 });
 
-test("installed shell opens an unvisited recipe and cook mode after a cold offline restart", async ({ baseURL }) => {
+test("installed shell opens an unvisited recipe offline and recovers online after cache eviction", async ({ baseURL }) => {
   const profile = await mkdtemp(join(tmpdir(), "aaf-pwa-"));
   let context = await chromium.launchPersistentContext(profile, { headless: true, baseURL });
   try {
@@ -56,6 +56,18 @@ test("installed shell opens an unvisited recipe and cook mode after a cold offli
     await expect(page.getByText("Simmer carrots.").last()).toBeVisible();
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/\/app#\/plan$/);
+    await context.setOffline(false);
+    await page.evaluate(async () => {
+      const name = (await caches.keys()).find((key) => key.startsWith("aaf-shell-"));
+      if (!name) throw new Error("Installed release cache missing");
+      const cache = await caches.open(name);
+      if (!(await cache.delete("/app")) || !(await cache.delete("/icons/icon-192.png"))) {
+        throw new Error("Required cache entries were not present before eviction");
+      }
+    });
+    expect(await page.evaluate(async () => (await fetch("/icons/icon-192.png")).ok)).toBe(true);
+    await page.goto(`/app#/cookbook/${recipeId}`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Offline Soup Updated" })).toBeVisible();
   } finally {
     await context.close();
     await rm(profile, { recursive: true, force: true });

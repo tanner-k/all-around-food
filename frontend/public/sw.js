@@ -4,6 +4,11 @@ const release = self.__PWA_PRECACHE;
 const cacheName = `aaf-shell-${release.buildId}`;
 const required = new Set(release.assets);
 
+async function releaseAssetOrNetwork(path, request) {
+  const cached = await (await caches.open(cacheName)).match(path);
+  return cached || fetch(request);
+}
+
 async function clientRelease(client) {
   return new Promise((resolve) => {
     const channel = new MessageChannel();
@@ -71,7 +76,7 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     if (url.pathname === "/app" && !url.search) {
-      event.respondWith(caches.open(cacheName).then((cache) => cache.match("/app")));
+      event.respondWith(releaseAssetOrNetwork("/app", request));
     } else if (!url.search && (url.pathname === "/" ||
         ["/plan", "/shop", "/pantry", "/import"].includes(url.pathname) ||
         /^\/cookbook(?:\/|$)/.test(url.pathname))) {
@@ -83,7 +88,7 @@ self.addEventListener("fetch", (event) => {
 
   if (url.search || url.pathname === "/app") return;
   if (required.has(url.pathname)) {
-    event.respondWith(caches.open(cacheName).then((cache) => cache.match(url.pathname)));
+    event.respondWith(releaseAssetOrNetwork(url.pathname, request));
   } else if (url.pathname.startsWith("/_next/static/")) {
     event.respondWith((async () => {
       for (const name of await caches.keys()) {
