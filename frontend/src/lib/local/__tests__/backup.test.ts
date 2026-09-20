@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { openDB } from "idb";
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
-import { closeLocalDB, getLocalDB } from "../db";
+import { closeLocalDB, getLocalDB, type LocalDBSchema } from "../db";
 import { exportBackup, restoreBackup } from "../backup";
 import { readSnapshot } from "../repository";
 
@@ -80,9 +81,40 @@ describe("backup and restore", () => {
     expect((await readSnapshot()).recipes[0].title).toBe("Toast");
   });
 
+  it("rejects a second-tab edit queued between the old snapshot read and replacement transaction", async () => {
+    await seed();
+    const preRestoreBackup = await exportBackup();
+    const replacement = JSON.parse(preRestoreBackup);
+    replacement.library.recipes[0].title = "Replacement toast";
+    const db = await getLocalDB();
+    const secondTab = await openDB<LocalDBSchema>("aaf-local");
+    const transaction = db.transaction.bind(db);
+    let concurrentWrite: Promise<unknown> | undefined;
+    vi.spyOn(db, "transaction").mockImplementation((names, mode, options) => {
+      if (mode === "readwrite" && !concurrentWrite) {
+        concurrentWrite = secondTab.put("recipes", { ...recipeFixture(), title: "Second-tab edit" });
+      }
+      return transaction(names, mode, options);
+    });
+    try {
+      const report = await restoreBackup(JSON.stringify(replacement), "replace", { confirmed: true, preRestoreBackup });
+      await concurrentWrite;
+      expect(report.validation_errors).toMatchObject([expect.stringMatching(/changed after the pre-restore backup/i)]);
+      expect((await readSnapshot()).recipes[0].title).toBe("Second-tab edit");
+    } finally {
+      vi.restoreAllMocks();
+      secondTab.close();
+    }
+  });
+
   it("rolls back earlier store writes when a later operation fails", async () => {
     await seed();
-    const backup = await exportBackup();
+    const preRestoreBackup = await exportBackup();
+    const original = await readSnapshot();
+    const replacement = JSON.parse(preRestoreBackup);
+    replacement.library.recipes[0].title = "Replacement toast";
+    replacement.library.shopping = [];
+    replacement.library.pantry[0].name = "Replacement bread";
     const db = await getLocalDB();
     const transaction = db.transaction.bind(db);
     vi.spyOn(db, "transaction").mockImplementation((names, mode, options) => {
@@ -93,8 +125,11 @@ describe("backup and restore", () => {
         vi.spyOn(tx, "objectStore").mockImplementation((name) => {
           const store = objectStore(name);
           if (name === "pantry") {
-            vi.spyOn(store as unknown as { put: (item: unknown) => Promise<unknown> }, "put")
-              .mockRejectedValueOnce(new Error("simulated write failure"));
+            const writable = store as unknown as { add: (item: unknown) => Promise<unknown>; put: (item: unknown) => Promise<unknown> };
+            vi.spyOn(writable, "put").mockImplementationOnce(async (item) => {
+              await writable.add(item);
+              return writable.add(item); // A real duplicate-key request aborts the transaction.
+            });
           }
           return store;
         });
@@ -102,9 +137,9 @@ describe("backup and restore", () => {
       return tx;
     });
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    await expect(restoreBackup(backup, "replace", { confirmed: true, preRestoreBackup: backup })).rejects.toThrow("simulated write failure");
+    await expect(restoreBackup(JSON.stringify(replacement), "replace", { confirmed: true, preRestoreBackup })).rejects.toThrow();
     vi.restoreAllMocks();
     consoleError.mockRestore();
-    expect(await readSnapshot()).toEqual(JSON.parse(backup).library);
+    expect(await readSnapshot()).toEqual(original);
   });
 });

@@ -111,6 +111,7 @@ export async function restoreBackup(
   const { backup, errors } = parseBackup(json);
   report.validation_errors.push(...errors);
   if (!backup) return report;
+  let preRestoreLibrary: LibrarySnapshot | undefined;
   if (mode === "replace") {
     if (!options.confirmed || !options.preRestoreBackup) {
       report.validation_errors.push("Replace requires explicit confirmation and a downloaded pre-restore backup.");
@@ -121,11 +122,7 @@ export async function restoreBackup(
       report.validation_errors.push("Pre-restore backup is invalid.");
       return report;
     }
-    const current = await readSnapshot();
-    if (JSON.stringify(pre.backup.library) !== JSON.stringify(current)) {
-      report.validation_errors.push("Local library changed after the pre-restore backup. Download a new backup.");
-      return report;
-    }
+    preRestoreLibrary = pre.backup.library;
   }
 
   try {
@@ -134,6 +131,14 @@ export async function restoreBackup(
     void tx.done.catch(() => undefined);
     try {
       if (mode === "replace") {
+        const current = LibrarySchema.parse(Object.fromEntries(await Promise.all(
+          storeNames.map(async (name) => [name, await tx.objectStore(name).getAll()]),
+        )));
+        if (JSON.stringify(preRestoreLibrary) !== JSON.stringify(current)) {
+          report.validation_errors.push("Local library changed after the pre-restore backup. Download a new backup.");
+          await tx.done;
+          return report;
+        }
         for (const name of storeNames) await tx.objectStore(name).clear();
       }
       for (const name of storeNames) {
