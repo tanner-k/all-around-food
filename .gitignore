@@ -57,6 +57,8 @@ venv/
 frontend/.next/
 frontend/node_modules/
 frontend/out/
+frontend/public/assets/pwa-precache.js
+frontend/test-results/
 backend/.venv/
 backend/.pytest_cache/
 backend/.mypy_cache/

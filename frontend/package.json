@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && node scripts/build-pwa-manifest.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:pwa": "playwright test --config=playwright.pwa.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",

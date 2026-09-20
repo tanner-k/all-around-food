@@ -1,94 +1,97 @@
-// All Around Food — minimal, safe service worker.
-// Strategy:
-//   - Navigations (HTML): network-first, fall back to cache, then offline shell.
-//   - Static same-origin GET assets: cache-first, populate cache on miss.
-//   - Everything else (non-GET, cross-origin): pass through to the network.
-// A versioned cache name plus an activate cleanup keeps stale assets from lingering.
+importScripts("/assets/pwa-precache.js");
 
-const CACHE_VERSION = "aaf-v1";
-const STATIC_CACHE = `${CACHE_VERSION}-static`;
+const release = self.__PWA_PRECACHE;
+const cacheName = `aaf-shell-${release.buildId}`;
+const required = new Set(release.assets);
 
-// Minimal app shell to pre-cache on install.
-const PRECACHE_URLS = [
-  "/",
-  "/manifest.webmanifest",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-];
+async function clientRelease(client) {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => { channel.port1.close(); resolve(null); }, 1500);
+    channel.port1.onmessage = (event) => {
+      clearTimeout(timer);
+      channel.port1.close();
+      resolve(event.data?.buildId ?? null);
+    };
+    client.postMessage({ type: "PWA_RELEASE_QUERY" }, [channel.port2]);
+  });
+}
+
+async function cleanUnusedReleases() {
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  const versions = await Promise.all(clients.map(clientRelease));
+  if (versions.some((version) => version !== release.buildId)) return;
+  const names = await caches.keys();
+  await Promise.all(names.filter((name) => name.startsWith("aaf-shell-") && name !== cacheName)
+    .map((name) => caches.delete(name)));
+}
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches
-      .open(STATIC_CACHE)
-      .then((cache) => cache.addAll(PRECACHE_URLS))
-      .catch(() => {
-        // Never let a failed precache block installation.
-      })
-      .then(() => self.skipWaiting()),
-  );
+  event.waitUntil((async () => {
+    const cache = await caches.open(cacheName);
+    try {
+      const responses = await Promise.all(release.assets.map(async (path) => {
+        const response = await fetch(path, { cache: "reload", credentials: "omit", redirect: "error" });
+        if (!response.ok || response.type !== "basic" ||
+            (path === "/app" && !response.headers.get("content-type")?.includes("text/html"))) {
+          throw new Error(`Required PWA asset failed: ${path}`);
+        }
+        return response;
+      }));
+      await Promise.all(release.assets.map((path, index) => cache.put(path, responses[index])));
+    } catch (error) {
+      await caches.delete(cacheName);
+      throw error;
+    }
+    // The first installation activates normally. Updates wait for the user's choice.
+  })());
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter((key) => key !== STATIC_CACHE)
-            .map((key) => caches.delete(key)),
-        ),
-      )
-      .then(() => self.clients.claim()),
-  );
+  event.waitUntil(self.clients.claim().then(cleanUnusedReleases));
+});
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "CHECK_READY") {
+    event.waitUntil((async () => {
+      const cache = await caches.open(cacheName);
+      const ready = !!(await cache.match("/app"));
+      event.ports[0]?.postMessage({ type: "PWA_READY", ready, buildId: release.buildId });
+      await cleanUnusedReleases();
+    })());
+  }
+  if (event.data?.type === "ACTIVATE_UPDATE") event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener("fetch", (event) => {
-  const { request } = event;
-
-  // Only handle GET; leave POST/PUT/etc. to the network.
+  const request = event.request;
   if (request.method !== "GET") return;
-
   const url = new URL(request.url);
-
-  // Never touch cross-origin requests.
   if (url.origin !== self.location.origin) return;
 
-  // Navigations (page loads): network-first so we never serve stale HTML.
   if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches
-            .open(STATIC_CACHE)
-            .then((cache) => cache.put(request, copy))
-            .catch(() => {});
-          return response;
-        })
-        .catch(async () => {
-          const cached = await caches.match(request);
-          return cached || caches.match("/");
-        }),
-    );
+    if (url.pathname === "/app" && !url.search) {
+      event.respondWith(caches.open(cacheName).then((cache) => cache.match("/app")));
+    } else if (!url.search && (url.pathname === "/" ||
+        ["/plan", "/shop", "/pantry", "/import"].includes(url.pathname) ||
+        /^\/cookbook(?:\/|$)/.test(url.pathname))) {
+      const localPath = url.pathname === "/" ? "/plan" : url.pathname;
+      event.respondWith(Response.redirect(new URL(`/app#${localPath}`, url.origin), 302));
+    }
     return;
   }
 
-  // Static same-origin assets: cache-first, then network (and populate cache).
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached;
-      return fetch(request).then((response) => {
-        // Only cache successful, basic (same-origin) responses.
-        if (response.ok && response.type === "basic") {
-          const copy = response.clone();
-          caches
-            .open(STATIC_CACHE)
-            .then((cache) => cache.put(request, copy))
-            .catch(() => {});
-        }
-        return response;
-      });
-    }),
-  );
+  if (url.search || url.pathname === "/app") return;
+  if (required.has(url.pathname)) {
+    event.respondWith(caches.open(cacheName).then((cache) => cache.match(url.pathname)));
+  } else if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith((async () => {
+      for (const name of await caches.keys()) {
+        if (!name.startsWith("aaf-shell-")) continue;
+        const cached = await (await caches.open(name)).match(url.pathname);
+        if (cached) return cached;
+      }
+      return fetch(request);
+    })());
+  }
 });
