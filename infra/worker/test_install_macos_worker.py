@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import plistlib
+import shlex
 import stat
 import subprocess
 import sys
@@ -29,7 +30,10 @@ class InstallMacosWorkerTests(unittest.TestCase):
         self.home.mkdir()
         self._executable(
             self.backend / ".venv/bin/python",
-            "#!/bin/sh\nif [ \"$1\" = \"-c\" ]; then echo 3.12; fi\n",
+            "#!/bin/sh\n"
+            "if [ \"$1\" = \"-c\" ]; then echo 3.12; else "
+            "printf '%s\\n' \"$1\" > \"$VENV_PYTHON_MARKER\"; exec "
+            f"{shlex.quote(sys.executable)} \"$@\"; fi\n",
         )
         self._executable(self.bin_dir / "ffmpeg", "#!/bin/sh\nexit 0\n")
         self._executable(self.bin_dir / "yt-dlp", "#!/bin/sh\nexit 0\n")
@@ -59,17 +63,24 @@ class InstallMacosWorkerTests(unittest.TestCase):
         path.write_text(content)
         path.chmod(path.stat().st_mode | stat.S_IXUSR)
 
-    def _run(self) -> subprocess.CompletedProcess[str]:
+    def _run(self, output: Path | None = None) -> subprocess.CompletedProcess[str]:
         marker = self.root / "plutil-args"
         environment = {
             **os.environ,
             "HOME": str(self.home),
             "PATH": f"{self.bin_dir}:/usr/bin:/bin",
-            "PLIST_PYTHON": sys.executable,
             "PLUTIL_MARKER": str(marker),
+            "VENV_PYTHON_MARKER": str(self.root / "venv-python-marker"),
         }
         return subprocess.run(
-            ["/bin/bash", str(SCRIPT), "--repo", str(self.repo), "--output", str(self.output)],
+            [
+                "/bin/bash",
+                str(SCRIPT),
+                "--repo",
+                str(self.repo),
+                "--output",
+                str(output or self.output),
+            ],
             check=False,
             capture_output=True,
             text=True,
@@ -105,6 +116,7 @@ class InstallMacosWorkerTests(unittest.TestCase):
             (self.home / "Library/Logs/allaroundfood/worker.out.log").resolve(),
         )
         self.assertTrue((self.root / "plutil-args").read_text().startswith("-lint "))
+        self.assertEqual((self.root / "venv-python-marker").read_text(), "-\n")
 
     def test_rejects_missing_secret_without_disclosing_it(self) -> None:
         env_file = self.backend / ".env"
@@ -128,6 +140,53 @@ class InstallMacosWorkerTests(unittest.TestCase):
         result = self._run()
 
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rejects_an_arbitrary_output_filename_without_overwriting(self) -> None:
+        target = self.root / "secrets.txt"
+        original = "SUPABASE_SERVICE_ROLE_KEY=super-secret\n"
+        target.write_text(original)
+
+        result = self._run(target)
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("com.allaroundfood.worker.plist", result.stderr)
+        self.assertNotIn("super-secret", result.stdout + result.stderr)
+        self.assertEqual(target.read_text(), original)
+
+    def test_rejects_a_symlink_output_without_following_it(self) -> None:
+        self.output.parent.mkdir(parents=True)
+        protected = self.root / "protected.txt"
+        protected.write_text("do not overwrite")
+        self.output.symlink_to(protected)
+
+        result = self._run()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("symlink", result.stderr)
+        self.assertEqual(protected.read_text(), "do not overwrite")
+        self.assertTrue(self.output.is_symlink())
+
+    def test_rejects_an_existing_non_plist_target_without_overwriting(self) -> None:
+        self.output.parent.mkdir(parents=True)
+        original = "SUPABASE_SERVICE_ROLE_KEY=super-secret\n"
+        self.output.write_text(original)
+
+        result = self._run()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("existing --output", result.stderr)
+        self.assertNotIn("super-secret", result.stdout + result.stderr)
+        self.assertEqual(self.output.read_text(), original)
+
+    def test_rejects_a_nonregular_output_target(self) -> None:
+        self.output.parent.mkdir(parents=True)
+        self.output.mkdir()
+
+        result = self._run()
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("regular file", result.stderr)
+        self.assertTrue(self.output.is_dir())
 
 
 if __name__ == "__main__":

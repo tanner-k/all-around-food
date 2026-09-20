@@ -55,6 +55,14 @@ PLIST="$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
 bash "$CHECKOUT/infra/worker/install-macos-worker.sh" --repo "$CHECKOUT" --output "$PLIST"
 ```
 
+The installer accepts an absolute output path only when its final filename is
+`com.allaroundfood.worker.plist`. It creates missing parent directories, but
+rejects a symlink or nonregular output and will not replace an existing file
+unless it is already a plist for this worker. This keeps temporary test
+directories usable while preventing an accidental write to `.env` or another
+unrelated file. Plist generation uses the preflighted backend virtualenv
+Python, so a separate system Python installation is not required.
+
 Use `--check-only` to run prerequisite checks without writing a plist. The
 generated plist has a resolved virtualenv Python, working directory of
 `$CHECKOUT/backend` so `.env` resolves, `--watch --interval 30 --limit 1`,

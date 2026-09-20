@@ -10,6 +10,7 @@ Usage:
   install-macos-worker.sh --repo /absolute/checkout --output /absolute/plist [--check-only]
 
 Checks the native worker prerequisites and writes a resolved LaunchAgent plist.
+The output filename must be com.allaroundfood.worker.plist.
 It does not bootstrap, kickstart, stop, or otherwise load launchd.
 USAGE
 }
@@ -119,18 +120,59 @@ if [[ "$check_only" == true ]]; then
     exit 0
 fi
 
+[[ "$output" = /* ]] || fail '--output must be an absolute path'
+[[ "$(basename "$output")" == "$LABEL.plist" ]] || fail "--output filename must be $LABEL.plist"
+if [[ -L "$output" ]]; then
+    fail "--output must not be a symlink: $output"
+fi
+if [[ -e "$output" && ! -f "$output" ]]; then
+    fail "--output must be a regular file or a new path: $output"
+fi
+
 output_parent=$(dirname "$output")
 mkdir -p "$output_parent"
 output_parent=$(cd "$output_parent" && pwd -P)
-output="$output_parent/$(basename "$output")"
+output="$output_parent/$LABEL.plist"
+if [[ -L "$output" ]]; then
+    fail "--output must not be a symlink: $output"
+fi
+if [[ -e "$output" && ! -f "$output" ]]; then
+    fail "--output must be a regular file or a new path: $output"
+fi
+if [[ -f "$output" ]]; then
+    if ! "$python_bin" - "$output" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+
+try:
+    with Path(sys.argv[1]).open("rb") as file:
+        payload = plistlib.load(file)
+except Exception:
+    raise SystemExit(1)
+
+if not isinstance(payload, dict) or payload.get("Label") != "com.allaroundfood.worker":
+    raise SystemExit(1)
+PY
+    then
+        fail "existing --output must be a plist for $LABEL: $output"
+    fi
+fi
+
 log_dir="$HOME/Library/Logs/allaroundfood"
 install -d -m 700 "$log_dir"
 log_dir=$(cd "$log_dir" && pwd -P)
 
-plist_python="${PLIST_PYTHON:-/usr/bin/python3}"
-[[ -x "$plist_python" ]] || fail "plist generator Python is missing: $plist_python"
 umask 077
-"$plist_python" - "$output" "$backend" "$python_bin" "$log_dir" "$worker_path" "$ffmpeg_bin" "$ytdlp_bin" <<'PY'
+temporary_output=$(mktemp "$output_parent/.$LABEL.plist.XXXXXX")
+cleanup() {
+    if [[ -n "${temporary_output:-}" && -e "$temporary_output" ]]; then
+        rm -f "$temporary_output"
+    fi
+}
+trap cleanup EXIT
+
+"$python_bin" - "$temporary_output" "$backend" "$python_bin" "$log_dir" "$worker_path" "$ffmpeg_bin" "$ytdlp_bin" <<'PY'
 from __future__ import annotations
 
 import os
@@ -170,5 +212,6 @@ with output.open("wb") as file:
 os.chmod(output, 0o600)
 PY
 
-"$plutil_bin" -lint "$output" >/dev/null
+"$plutil_bin" -lint "$temporary_output" >/dev/null
+mv -f "$temporary_output" "$output"
 printf 'generated and validated %s; it has not been loaded.\n' "$output"
