@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { closeLocalDB, getLocalDB } from "../db";
+import type { IDBPObjectStore } from "idb";
+import { closeLocalDB, getLocalDB, type LocalDBSchema } from "../db";
 import {
   putRecipe,
   readSnapshot,
@@ -10,6 +11,7 @@ import {
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
 import { PlannedMealSchema } from "@/lib/meal-plan-schema";
 import { ShoppingListItemSchema } from "@/lib/shopping-schema";
+import { SettingSchema } from "../schema";
 
 async function deleteLocalDB(): Promise<void> {
   await closeLocalDB();
@@ -44,6 +46,16 @@ describe("local repository", () => {
     expect((await readSnapshot()).recipes[0].title).toBe("Toast");
   });
 
+  it("reopens after a cached database handle is closed", async () => {
+    const db = await getLocalDB();
+    db.close();
+
+    await expect(putRecipe(recipeFixture())).rejects.toThrow();
+    await putRecipe(recipeFixture());
+
+    expect((await readSnapshot()).recipes[0].title).toBe("Toast");
+  });
+
   it("stores validated planner and cook progress records", async () => {
     await saveMealPlan({
       week_of: "2026-09-21",
@@ -75,6 +87,82 @@ describe("local repository", () => {
   it("emits a visible error when a write transaction fails", async () => {
     const db = await getLocalDB();
     db.close();
+    const report = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    window.addEventListener("aaf-local-storage-error", report);
+
+    await expect(putRecipe(recipeFixture())).rejects.toThrow();
+
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: expect.objectContaining({ message: expect.any(String) }) }),
+    );
+    window.removeEventListener("aaf-local-storage-error", report);
+    consoleError.mockRestore();
+  });
+
+  it("emits a visible error when reading the snapshot fails", async () => {
+    const db = await getLocalDB();
+    db.close();
+    const report = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    window.addEventListener("aaf-local-storage-error", report);
+
+    await expect(readSnapshot()).rejects.toThrow();
+
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: expect.objectContaining({ message: expect.any(String) }) }),
+    );
+    window.removeEventListener("aaf-local-storage-error", report);
+    consoleError.mockRestore();
+  });
+
+  it("emits a visible error when snapshot validation fails", async () => {
+    const db = await getLocalDB();
+    const tx = db.transaction("settings", "readwrite");
+    await tx.store.put({ key: "last_backup_at", value: undefined } as never);
+    await tx.done;
+    const report = vi.fn();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    window.addEventListener("aaf-local-storage-error", report);
+
+    await expect(readSnapshot()).rejects.toThrow();
+
+    expect(report).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: expect.objectContaining({ message: expect.any(String) }) }),
+    );
+    window.removeEventListener("aaf-local-storage-error", report);
+    consoleError.mockRestore();
+  });
+
+  it("rejects settings outside the non-secret setting key allowlist", () => {
+    expect(() =>
+      SettingSchema.parse({ key: "anthropic_api_key", value: "secret" }),
+    ).toThrow();
+    expect(
+      SettingSchema.parse({ key: "last_backup_at", value: "2026-09-20T12:00:00Z" }),
+    ).toEqual({ key: "last_backup_at", value: "2026-09-20T12:00:00Z" });
+  });
+
+  it("reports an aborted write transaction", async () => {
+    const db = await getLocalDB();
+    const transaction = db.transaction.bind(db);
+    vi.spyOn(db, "transaction").mockImplementation((storeNames, mode, options) => {
+      const tx = transaction(storeNames, mode, options);
+      const store = tx.objectStore("recipes") as IDBPObjectStore<
+        LocalDBSchema,
+        ["recipes"],
+        "recipes",
+        "readwrite"
+      >;
+      const put = store.put.bind(store);
+      vi.spyOn(store, "put").mockImplementation(async (...putArgs) => {
+        const result = await put(...putArgs);
+        void tx.done.catch(() => undefined);
+        tx.abort();
+        return result;
+      });
+      return tx;
+    });
     const report = vi.fn();
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     window.addEventListener("aaf-local-storage-error", report);

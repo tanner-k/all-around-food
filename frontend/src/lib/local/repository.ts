@@ -2,7 +2,7 @@ import { MealPlanSchema, type MealPlan } from "@/lib/meal-plan-schema";
 import { PantryItemSchema } from "@/lib/pantry-schema";
 import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
 import { ShoppingListItemSchema } from "@/lib/shopping-schema";
-import { getLocalDB, reportStorageIssue } from "./db";
+import { closeLocalDB, getLocalDB, reportStorageIssue } from "./db";
 import {
   CookProgressSchema,
   RecipeDraftSchema,
@@ -41,31 +41,37 @@ export function subscribeToLocalChanges(refresh: () => void): () => void {
 }
 
 export async function readSnapshot(): Promise<LibrarySnapshot> {
-  const db = await getLocalDB();
-  const tx = db.transaction(
-    ["recipes", "meal_plans", "shopping", "pantry", "cook_progress", "drafts", "settings"],
-    "readonly",
-  );
-  const [recipes, mealPlans, shopping, pantry, cookProgress, drafts, settings] =
-    await Promise.all([
-      tx.objectStore("recipes").getAll(),
-      tx.objectStore("meal_plans").getAll(),
-      tx.objectStore("shopping").getAll(),
-      tx.objectStore("pantry").getAll(),
-      tx.objectStore("cook_progress").getAll(),
-      tx.objectStore("drafts").getAll(),
-      tx.objectStore("settings").getAll(),
-    ]);
-  await tx.done;
-  return {
-    recipes: RecipeSchema.array().parse(recipes),
-    meal_plans: MealPlanSchema.array().parse(mealPlans),
-    shopping: ShoppingListItemSchema.array().parse(shopping),
-    pantry: PantryItemSchema.array().parse(pantry),
-    cook_progress: CookProgressSchema.array().parse(cookProgress),
-    drafts: RecipeDraftSchema.array().parse(drafts),
-    settings: SettingSchema.array().parse(settings),
-  };
+  try {
+    const db = await getLocalDB();
+    const tx = db.transaction(
+      ["recipes", "meal_plans", "shopping", "pantry", "cook_progress", "drafts", "settings"],
+      "readonly",
+    );
+    const [recipes, mealPlans, shopping, pantry, cookProgress, drafts, settings] =
+      await Promise.all([
+        tx.objectStore("recipes").getAll(),
+        tx.objectStore("meal_plans").getAll(),
+        tx.objectStore("shopping").getAll(),
+        tx.objectStore("pantry").getAll(),
+        tx.objectStore("cook_progress").getAll(),
+        tx.objectStore("drafts").getAll(),
+        tx.objectStore("settings").getAll(),
+      ]);
+    await tx.done;
+    return {
+      recipes: RecipeSchema.array().parse(recipes),
+      meal_plans: MealPlanSchema.array().parse(mealPlans),
+      shopping: ShoppingListItemSchema.array().parse(shopping),
+      pantry: PantryItemSchema.array().parse(pantry),
+      cook_progress: CookProgressSchema.array().parse(cookProgress),
+      drafts: RecipeDraftSchema.array().parse(drafts),
+      settings: SettingSchema.array().parse(settings),
+    };
+  } catch (error) {
+    await closeLocalDB();
+    reportStorageIssue("Unable to read local storage.", error);
+    throw error;
+  }
 }
 
 export async function putRecipe(input: Recipe): Promise<void> {
@@ -73,9 +79,9 @@ export async function putRecipe(input: Recipe): Promise<void> {
   try {
     const db = await getLocalDB();
     const tx = db.transaction("recipes", "readwrite");
-    await tx.store.put(recipe);
-    await tx.done;
+    await Promise.all([tx.store.put(recipe), tx.done]);
   } catch (error) {
+    await closeLocalDB();
     reportStorageIssue("Unable to save recipe locally.", error);
     throw error;
   }
@@ -87,9 +93,9 @@ export async function saveMealPlan(input: MealPlan): Promise<void> {
   try {
     const db = await getLocalDB();
     const tx = db.transaction("meal_plans", "readwrite");
-    await tx.store.put(plan);
-    await tx.done;
+    await Promise.all([tx.store.put(plan), tx.done]);
   } catch (error) {
+    await closeLocalDB();
     reportStorageIssue("Unable to save meal plan locally.", error);
     throw error;
   }
@@ -101,9 +107,9 @@ export async function saveCookProgress(input: CookProgress): Promise<void> {
   try {
     const db = await getLocalDB();
     const tx = db.transaction("cook_progress", "readwrite");
-    await tx.store.put(progress);
-    await tx.done;
+    await Promise.all([tx.store.put(progress), tx.done]);
   } catch (error) {
+    await closeLocalDB();
     reportStorageIssue("Unable to save cook progress locally.", error);
     throw error;
   }

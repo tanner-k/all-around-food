@@ -51,14 +51,21 @@ export const SettingsValueSchema: z.ZodType<JSONValue> = z.lazy(() =>
   ]),
 );
 
+export const SettingKeySchema = z.enum([
+  "last_backup_at",
+  "last_migration",
+  "storage_persistence_requested",
+]);
+
 export const SettingSchema = z.object({
-  key: z.string(),
+  key: SettingKeySchema,
   value: SettingsValueSchema,
 });
 
 export type CookProgress = z.infer<typeof CookProgressSchema>;
 export type RecipeDraft = z.infer<typeof RecipeDraftSchema>;
 export type LocalImport = z.infer<typeof LocalImportSchema>;
+export type SettingKey = z.infer<typeof SettingKeySchema>;
 export type Setting = z.infer<typeof SettingSchema>;
 
 export type LibrarySnapshot = {
