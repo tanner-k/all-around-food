@@ -3,6 +3,7 @@ import { z } from "zod";
 export const PlannedMealSchema = z.object({
   day_index: z.number().int().min(0).max(6),
   recipe_id: z.string(),
+  servings: z.number().positive().nullable().default(null),
 });
 
 export const MealPlanSchema = z.object({

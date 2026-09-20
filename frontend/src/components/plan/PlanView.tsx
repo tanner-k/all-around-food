@@ -62,7 +62,7 @@ export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
     const previous = meals;
     const next: PlannedMeal[] = [
       ...meals,
-      { day_index: dayIndex, recipe_id: recipeId },
+      { day_index: dayIndex, recipe_id: recipeId, servings: null },
     ];
     setMeals(next);
     setError(null);

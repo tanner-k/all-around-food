@@ -12,6 +12,7 @@ export const ShoppingListItemSchema = z.object({
   checked: z.boolean().default(false),
   source: ShoppingSourceSchema.default("manual"),
   source_recipe_id: z.string().nullable().default(null),
+  generated_week_of: z.string().nullable().default(null),
   pantry_covered: z.boolean().default(false),
   pantry_low: z.boolean().default(false),
   created_at: z.string(),

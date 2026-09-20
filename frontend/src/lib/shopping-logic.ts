@@ -218,6 +218,7 @@ export function aggregateRecipeIngredients(
       checked: false,
       source: "recipe",
       source_recipe_id: entry.sourceRecipeId,
+      generated_week_of: null,
       pantry_covered: false,
       pantry_low: false,
       created_at: nowIso,
