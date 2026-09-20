@@ -1,38 +1,11 @@
 # infra/
 
 ## Scope
-- Infrastructure-as-code (Terraform, CloudFormation)
-- Deploy scripts (`scripts/deploy.sh`, systemd units)
-- EC2 / cloud configuration
-- Secrets management policy (where they live, who has access)
-- Personal Mac Mini worker supervision templates in `worker/`
 
-## Not in scope
-- GitHub Actions workflows → `.github/workflows/` (at repo root)
-- Application code → `frontend/` `backend/`
-- Database schema → `data/`
+Personal Mac Mini worker supervision templates and installation checks live in `worker/`. Vercel is the frontend deployment target; no GitHub deployment workflow exists. The exact Vercel project, stable production origin, and Mac installation have not been verified in this worktree.
 
-## Stack
-Vercel
-
-The personal import worker runs as a macOS LaunchAgent from the backend's
-native Python 3.12 virtualenv. `worker/install-macos-worker.sh` preflights a
-specific checkout and generates a resolved plist with private logs; it never
-loads the agent. The Mac-only `.env` holds service-role and Anthropic secrets,
-while Vercel receives no worker secrets. The worker makes outbound connections
-only. It cannot run before FileVault unlock and user login, and does not change
-sleep or power settings.
-
-## Local skills / conventions
-- None yet — add as needed
+The worker runs as a macOS LaunchAgent from a native Python 3.12 virtualenv. `worker/install-macos-worker.sh` checks a specific checkout and writes a resolved plist with private logs; it does not load the agent. The Mac-only environment holds `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY_PARSING`, and `IMPORT_OWNER_USER_ID`. Vercel receives only the public Supabase URL and anon key. The worker makes outbound connections only. It cannot run before FileVault unlock and user login, and its installer does not change sleep or power settings.
 
 ## Conventions
-- Never commit secrets — use GitHub Actions secrets + SSM Parameter Store
-- All Terraform state in remote backend (S3 + DynamoDB lock), never local
-- One module per concern (`vpc/`, `ec2/`, `rds/`, `dns/`)
-- Tag every cloud resource with `Project=all-around-food`
 
-## Notes for agents
-- Run `terraform plan` and paste the output in the PR before applying
-- Destructive changes (RDS, VPC) require a second reviewer
-- The deploy SSH key lives only in GitHub Actions secrets (`EC2_SSH_KEY`)
+Do not commit secrets or deployment credentials. Test the generated plist and worker startup locally before installing. Verify the actual Mac's wake, offline, crash, and cleanup recovery before release. Keep the worker's queue protocol aligned with the deployed Supabase migration and frontend; stop any old worker before cutover. Do not run the legacy daily/Docker worker beside the leased Mac worker.

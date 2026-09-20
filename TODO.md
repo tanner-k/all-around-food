@@ -36,8 +36,8 @@
 
 ## Audit follow-ups (2026-06-17) — shared blockers
 > From the feature audit. These gate every parse/pricing feature below.
-- [ ] Provision `ANTHROPIC_API_KEY_PARSING` (all Claude parsing fails without it)
-- [ ] Add `frontend/.env.local.example` + `backend/.env.example` (document `BACKEND_URL`, `WHISPER_MODEL`, `YTDLP_BIN`, `FFMPEG_BIN`, `VIDEO_IMPORT_TIMEOUT_S`)
+- [ ] Provision `ANTHROPIC_API_KEY_PARSING` only in the private Mac worker environment before live imports
+- [ ] Verify public frontend Supabase configuration and private Mac worker environment against the release runbook
 - [ ] Resolve prod backend reachability — `BACKEND_URL` defaults to localhost, so proxied video/pricing routes fail off-box (ties to Phase D deploy)
 - [ ] Seed/ingest pricing data — `data/` is empty, so store comparison returns nothing
 
@@ -80,6 +80,13 @@
 ## Icebox
 - [ ] (ideas that aren't on the roadmap yet)
 
-## Local-first PWA — planned
+## Local-first PWA — implementation in progress, release pending
 - [ ] Implement the local-first installable PWA and Mac Mini import loop
   - Plan: [Downloadable Local-First Cooking App](docs/superpowers/plans/2026-09-19-local-first-pwa.md)
+  - [ ] Integrate `origin/dev` while retaining the backend/pricing suite and resolving the `0004` migration collision; inspect hosted migration history before applying SQL
+  - [ ] Obtain green CI on the merged release candidate, including production Chromium PWA tests and the separate backend/pricing checks
+  - [ ] Verify owner-only Supabase setup and additive migration in a disposable hosted project; stop the old worker before protocol cutover
+  - [ ] Copy and verify the existing cloud library into the target browser without deleting originals or Parquet archives
+  - [ ] Verify the Mac Mini worker, live website and accessible Instagram imports, and blocked-source fallback
+  - [ ] Verify an installed iPhone/iPad and desktop through offline cold launch, edits, cooking, plans, shopping, backup restore, and app update
+  - [ ] Confirm the stable production origin, deployment, branch checks, and recovery/rollback procedure before promoting this item to `CHANGELOG.md`

@@ -1,49 +1,21 @@
 # Architecture — all-around-food
 
-## One-line
-A planner-first cooking app — weekly meal planning, AI recipe import, smart shopping list, pantry inventory, and a hands-on cook mode.
+The personal app's everyday source of truth is IndexedDB in the browser profile that installed it. Next.js serves a cacheable `/app` shell; the service worker keeps a complete versioned shell and emitted static assets available offline. Hash routes open cookbook, edit, cook, plan, shopping, pantry, import, and settings screens. Recipe edits, cooking progress, meal occurrences, generated shopping, and pantry updates commit through the local repository. Backup export/restore covers all durable local stores, including drafts and cooking progress, but excludes pending upload blobs.
 
-## System diagram
-```
-┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-│   frontend   │ ───▶ │   backend    │ ───▶ │     data     │
-│ Next.js 16   │      │ FastAPI      │      │   Polars     │
-└──────────────┘      └──────────────┘      └──────────────┘
-                              │
-                              ▼
-                      ┌──────────────┐
-                      │    infra     │
-                      │   Vercel     │
-                      └──────────────┘
+```mermaid
+graph LR
+  PWA[Next.js PWA /app] --> IDB[(IndexedDB library)]
+  PWA --> SW[versioned service-worker cache]
+  PWA -- online owner import jobs --> SB[(Supabase Auth, queue, temporary Storage)]
+  MAC[Mac Mini Python worker] -- fenced claims and draft results --> SB
+  MAC --> AI[Anthropic and optional local video tools]
+  PWA -- owner-only one-time export --> SB
 ```
 
-> Replace this ASCII sketch with a real diagram (Excalidraw, Mermaid, etc.) once the shape settles.
+Supabase coordinates private, temporary imports. The online frontend uses only its public project URL and anon key. Owner access is enforced by Supabase policies and RPCs, not by a client-side owner claim. The worker uses private service-role and Anthropic keys on the Mac, claims jobs with a lease token, and publishes validated recipe drafts. The browser durably stores a draft before acknowledging its result, and explicit Save adds the recipe locally. The worker retries pending jobs and later cleanup when it reconnects. No routine cloud recipe mirror is part of this design. The initial owner-only cloud export is for non-destructive migration; old cloud records remain until a separately reviewed decision.
 
-## Components
+The separate FastAPI/Polars backend and pricing/evaluation/receipt OCR code remain in the repository for legacy and independent work. The personal `/app` core does not call them. Direct frontend Claude parsing routes return 410. Receipt OCR, pricing comparisons, SMS shopping text, and evaluations are outside the personal app navigation; their backend code and tests remain maintained separately.
 
-### frontend
-Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui. See [`../frontend/context.md`](../frontend/context.md).
+A browser profile, device, or origin has its own library. A backup file transfers data manually; there is no synchronization. Browser storage can be evicted or cleared. The UI requests persistence where the browser supports it and prompts for backups. Offline use requires a successfully cached shell and does not make online imports available while disconnected. An installed iOS home-screen cold launch and update behavior still require observation on a physical device.
 
-### backend
-Python 3.12 + FastAPI + Polars (file-backed). See [`../backend/context.md`](../backend/context.md).
-
-### data
-Parquet/CSV in data/ via Polars; migrate to Postgres later. See [`../data/context.md`](../data/context.md).
-
-### infra
-Vercel. See [`../infra/context.md`](../infra/context.md).
-
-## Decisions
-See [`./decisions/`](./decisions/) for the running ADR log.
-
-## Open questions
-- (Track unresolved design questions here. Move to an ADR once decided.)
-
-## Planned local-first direction (2026-09-19)
-
-[ADR 0008](./decisions/0008-local-first-pwa.md) proposes an installable React PWA
-with IndexedDB for everyday data and the user's Mac Mini for online imports.
-Supabase is retained for private import jobs and temporary results. See the
-[implementation plan](./superpowers/plans/2026-09-19-local-first-pwa.md) for
-migration, offline acceptance tests and rollout. This is a planned replacement;
-the application has not yet been converted to local storage.
+[ADR 0008](decisions/0008-local-first-pwa.md) remains Proposed until final architecture review. [The release record](testing/local-first-pwa-release.md) separates simulated and local checks from hosted, Mac, and physical-device gates. The migration is additive in this branch; it conflicts by version with `origin/dev`'s evaluation migration and by contract with open PR #10's destructive queue migration. Actual hosted migration history must be checked before rollout.

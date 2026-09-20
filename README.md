@@ -1,143 +1,71 @@
 # all-around-food
 
-> A planner-first cooking app — weekly meal planning, AI recipe import, smart shopping list, pantry inventory, and a hands-on cook mode.
+A personal cooking app for planning meals, saving recipes, shopping, tracking pantry stock, and cooking step by step. The `/app` experience stores its everyday library in this browser's IndexedDB and is designed to reopen offline after its PWA shell is ready. Online imports use a private Supabase queue and a separate Mac Mini worker. [ADR 0008](docs/decisions/0008-local-first-pwa.md) is still proposed; this release has not passed its hosted migration and physical-device gates.
 
 ## Stack
-- **Frontend:** Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
-- **Backend:** Python 3.12 + FastAPI + Polars (file-backed)
-- **Data:** Parquet/CSV in data/ via Polars; migrate to Postgres later
-- **Infra:** Vercel
 
-## Install
-```bash
-pnpm install && cd backend && uv sync
-```
+- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS 4, pnpm 10, Node 22
+- Local library: IndexedDB through `idb`, with JSON backup and restore
+- Online import: Supabase Auth/queue/temporary storage and a Python 3.12 Mac worker using Anthropic, yt-dlp, FFmpeg, and whisper.cpp where needed
+- Legacy/backend utilities: FastAPI, Polars/Parquet, pricing, evaluations, and receipt OCR remain in the repository; they are outside the personal offline loop
 
 ## Run locally
 
-**Prerequisites:**
-- Node 22, pnpm, Python 3.12, uv
-- An Anthropic API key (get one at https://console.anthropic.com)
-- Poppler for receipt PDF OCR (`brew install poppler` on macOS)
+Install dependencies, then start the frontend:
 
-**Step 1: Configure environment**
-
-Copy the env templates and add your API key:
-```bash
-cp frontend/.env.local.example frontend/.env.local
-cp backend/.env.example backend/.env
-# Edit frontend/.env.local and paste your Anthropic API key:
-# ANTHROPIC_API_KEY_PARSING=sk-ant-...
+```sh
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend dev
 ```
 
-> The key is named `ANTHROPIC_API_KEY_PARSING` (not `ANTHROPIC_API_KEY`) on
-> purpose — a project-specific name can't be shadowed by a global
-> `ANTHROPIC_API_KEY` exported in your shell, which Next.js would otherwise
-> prioritize over `.env.local`.
+Open `http://localhost:3000/app` for UI development. Add a recipe manually, plan a week, generate shopping, and update pantry without Supabase or a backend. The service worker is registered only in a production build. To verify offline use locally, stop the dev server, run `pnpm --dir frontend build` and `pnpm --dir frontend start`, then wait for **Offline ready** before disconnecting. The installed PWA opens `/app`; legacy cookbook, plan, shop, pantry, and import URLs redirect there.
 
-**Step 2: Start the backend (Terminal A)**
+Online import requires the public `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the frontend environment, an owner-configured Supabase project with the reviewed additive migration, and the Mac worker. Those values are public client configuration. Keep `ANTHROPIC_API_KEY_PARSING`, `SUPABASE_SERVICE_ROLE_KEY`, and `IMPORT_OWNER_USER_ID` only in the private Mac worker environment; see [backend/context.md](backend/context.md) and [infra/worker/README.md](infra/worker/README.md). No frontend Anthropic key is used. Direct `POST /api/import/parse` and `POST /api/pantry/receipt` return 410; the personal app imports through `/app#/import`, and receipt parsing is outside this milestone.
 
-```bash
+To develop the backend and worker separately:
+
+```sh
 cd backend
 uv sync
 uv run python -m allaroundfood
+# In another terminal, with private worker environment configured:
+uv run python -m allaroundfood.worker --watch
 ```
 
-FastAPI will start on http://localhost:8000. Check health: `curl http://localhost:8000/healthz`
+The backend is not required for the local `/app` cooking and planning flow. The Mac worker, hosted Supabase schema, and real website/video imports still need deployment verification.
 
-> **Video transcription (local whisper.cpp):** the Instagram/TikTok video
-> importer transcribes speech in-process via whisper.cpp (`pywhispercpp`) — no
-> separate service to run. Configure it with:
->
-> - `WHISPER_MODEL` — model name (default `base.en`). English `.en` models suit
->   English recipe videos. Footprint: `tiny.en` ≈ 75 MB, `base.en` ≈ 142 MB.
-> - `WHISPER_MODELS_DIR` (optional) — directory of pre-downloaded ggml `.bin`
->   model files, or where a named model is cached.
->
-> On first use the ggml model is downloaded from huggingface.co. In
-> network-restricted environments (including CI and some deploys) huggingface.co
-> may be blocked, so **provision the model as a file**: pre-download the ggml
-> model and point `WHISPER_MODELS_DIR` at it, or run first-use where egress is
-> allowed.
->
-> The startup log will warn if `yt-dlp` or `ffmpeg` aren't resolvable on PATH.
+## Keep your data
 
-**Step 3: Start the frontend (Terminal B)**
+Open `/app#/settings` to download a JSON backup and verify its counts. The backup includes recipes, plans, shopping, pantry, drafts, cooking progress, and settings. Pending import uploads are excluded. Restore with **Merge backup** on a new profile or device; **Replace local library** first downloads a pre-restore copy and requires confirmation. A different browser, profile, device, or origin has separate storage. Backup transfer is manual; there is no cross-device synchronization. Clearing site data or losing a device can erase local edits unless an external backup exists. Cloud migration copies and verifies the old library; it does not delete cloud originals.
 
-```bash
+## Verify
+
+```sh
+pnpm --dir frontend lint
+pnpm --dir frontend exec tsc --noEmit
+pnpm --dir frontend exec vitest run
+NEXT_PUBLIC_SUPABASE_URL=https://aaf-mock.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=public-test-key pnpm --dir frontend build
 cd frontend
-pnpm install
-pnpm dev
+NEXT_PUBLIC_SUPABASE_URL=https://aaf-mock.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=public-test-key pnpm test:pwa
 ```
 
-Next.js will start on http://localhost:3000.
+The production PWA tests require a build first. CI uses `https://aaf-mock.supabase.co` and `public-test-key` as public fixture values, then installs Chromium. Backend checks remain separate, including pricing tests:
 
-**Step 4: Import a recipe**
-
-- Open http://localhost:3000/import
-- Drop a recipe screenshot or paste a recipe URL (e.g., https://www.nytimes.com/recipes/...)
-- You'll see parsing progress, then a review screen with extracted title, ingredients, and steps
-- Click **Save** to add it to your cookbook
-
-**Step 5: Check how Claude graded it**
-
-- Visit http://localhost:3000/evaluations (dev dashboard)
-- See the eval stats and a table of recent parses with overall/accuracy/completeness grades
-- Expand a row to read judge strengths/weaknesses and field-level feedback
-
-**Troubleshooting**
-
-If `pnpm install` warns about build scripts, run:
-```bash
-pnpm approve-builds
-```
-
-For pricing adapter Playwright fallbacks, install Chromium once:
-```bash
+```sh
 cd backend
-uv run playwright install chromium
+uv run ruff check
+uv run mypy
+uv run pytest
 ```
 
-For real offline receipt OCR, download the local Qwen2-VL GGUF model and export its path:
-```bash
-bash scripts/download_qwen.sh
-export QWEN_GGUF_PATH="$HOME/.cache/allaroundfood/qwen2-vl-7b-instruct-q4_k_m.gguf"
-```
-
-## Develop
-```bash
-pnpm dev
-```
-
-## Test
-```bash
-pnpm test && cd backend && uv run pytest
-```
-
-## Build
-```bash
-pnpm build
-```
-
-## CLI
-_No CLI commands yet._
+Dated observed results and the remaining hosted, migration, Mac, and installed-device gates are in [the release checklist](docs/testing/local-first-pwa-release.md). No GitHub deployment workflow exists yet; Vercel setup and a stable production URL require verification before release. PRs target `dev`; `main` is the release branch.
 
 ## Recent updates
-Last 5 entries from [CHANGELOG.md](./CHANGELOG.md):
 
 <!-- BEGIN:RECENT-UPDATES -->
 - Text shopping list to any number via Apple Messages
-- Group by date (ISO `YYYY-MM-DD`).
-- Each entry = one shipped change, written in past tense.
-- The top 5 entries get pulled into `README.md`'s "Recent updates" section (between the `<!-- BEGIN:RECENT-UPDATES -->` / `<!-- END:RECENT-UPDATES -->` markers).
-- Never edit historical entries — append a follow-up entry instead.
 <!-- END:RECENT-UPDATES -->
 
 ## Project map
-See [CLAUDE.md](./CLAUDE.md) (identical to [AGENTS.md](./AGENTS.md)) for the agent-readable map of this repo.
 
-## Workflow
-- Branches: `main` (prod, protected) ← `dev` (staging) ← `feature/*`
-- Pre-commit: Prettier + ESLint via Husky
-- CI: every PR runs lint / typecheck / test / build
-- Deploy: no GitHub deploy workflow exists yet; see `docs/plans/polish-roadmap.md`
+See [CLAUDE.md](CLAUDE.md), kept identical to [AGENTS.md](AGENTS.md), and the folder `context.md` files.

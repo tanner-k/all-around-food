@@ -8,8 +8,11 @@ on:
 
 jobs:
   frontend:
-    name: Frontend · pnpm lint · pnpm build
+    name: Frontend · lint · typecheck · unit · PWA
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://aaf-mock.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: public-test-key
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,9 +43,25 @@ jobs:
         if: hashFiles('frontend/package.json') != ''
         run: cd frontend && pnpm lint
 
+      - name: Typecheck
+        if: hashFiles('frontend/package.json') != ''
+        run: cd frontend && pnpm exec tsc --noEmit
+
+      - name: Unit tests
+        if: hashFiles('frontend/package.json') != ''
+        run: cd frontend && pnpm exec vitest run
+
       - name: Build
         if: hashFiles('frontend/package.json') != ''
         run: cd frontend && pnpm build
+
+      - name: Install Chromium
+        if: hashFiles('frontend/package.json') != ''
+        run: cd frontend && pnpm exec playwright install --with-deps chromium
+
+      - name: Production PWA tests
+        if: hashFiles('frontend/package.json') != ''
+        run: cd frontend && pnpm test:pwa
 
   backend:
     name: Backend · ruff · mypy · pytest

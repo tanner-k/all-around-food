@@ -1,98 +1,67 @@
 # Project Map — all-around-food
 
-> **`CLAUDE.md` and `AGENTS.md` are identical.** Keep both in sync — update in the same commit.  
-> This file is the entry-point for any AI agent working in this repo.
+> **`CLAUDE.md` and `AGENTS.md` are identical.** Keep both in sync in the same commit.
 
 ## 1. What this project is
-A planner-first cooking app — weekly meal planning, AI recipe import, smart shopping list, pantry inventory, and a hands-on cook mode.
 
-## 2. Working state
-A project is "working" when **all** of the following are true:
+A planner-first personal cooking app: a local-first installable PWA for recipes, weekly meal planning, shopping, pantry, and cook mode. Online recipe imports use an owner-gated Supabase queue and a Mac Mini worker. [ADR 0008](docs/decisions/0008-local-first-pwa.md) remains Proposed until the release architecture is reviewed.
 
-- Visual shell matches the Cookbook App Flow design (typography, palette, top nav order)
-- Polars stub layer reads/writes data/recipes.parquet
-- `pnpm lint && pnpm build` green
-- `uv run ruff check && uv run mypy && uv run pytest` green
-- CI green on dev branch
-- No remaining `__PLACEHOLDER__` tokens
+## 2. Working and release state
 
-> Default if unsure: `npm run lint` clean · `npm test` green · `dev` branch deploys to staging without error · no `- [x]` lines linger in `TODO.md` (they should have been promoted to `CHANGELOG.md`).
+The local `/app` shell and library are implemented. A release is working only after frontend lint, typecheck, unit tests, production build, and PWA browser tests pass; backend ruff, mypy, and full pytest pass; CI passes on the release candidate; hosted Supabase migration and owner policy are verified; the existing library is copied and checked without deleting originals; and a real installed iPhone/iPad and desktop pass offline and update checks. Local test success does not imply those external gates passed. See [the release record](docs/testing/local-first-pwa-release.md).
 
 ## 3. Project map
-```
+
+```text
 all-around-food/
-├── README.md              ← what the project is + how to run it
-├── CLAUDE.md              ← this file (AI agent context)
-├── AGENTS.md              ← identical copy of CLAUDE.md
-├── TODO.md                ← open work; check off + promote when done
-├── CHANGELOG.md           ← shipped work, newest first
-├── .editorconfig          ← editor defaults
-├── .prettierrc            ← format rules
-├── .eslintrc.json         ← lint rules
-├── .gitignore
-├── .github/
-│   ├── PULL_REQUEST_TEMPLATE.md
-│   └── workflows/
-│       └── ci.yml             ← every PR / push to dev or main
-├── .husky/                ← git hooks
-│   └── pre-commit             ← lint-staged
-├── scripts/
-│   └── done.py            ← promotes TODO line → CHANGELOG entry
-├── frontend/              ← UI · see context.md
-├── backend/               ← API + business logic · see context.md
-│   └── src/allaroundfood/
-│       ├── pricing/       ← Grocery price tracking adapters, canonical product matching, analytics (see docs/plans/grocery-price-tracking.md)
-│       └── ocr/           ← Receipt OCR pipeline (Qwen2-VL GGUF). Independent of any pantry receipt-import flow. Writes to data/receipts.parquet + data/pricing/price_observations.parquet.
-├── data/                  ← schemas, migrations, seeds · see context.md
-├── infra/                 ← terraform, deploy scripts · see context.md
-└── docs/
-    ├── context.md
-    ├── architecture.md
-    └── decisions/         ← one ADR per architectural decision
-        ├── 0001-stack.md
-        ├── 0002-video-recipe-import.md
-        ├── 0003-grocery-pricing-scope.md       ← personal-use + unofficial adapter gate
-        ├── 0004-canonical-product-matching.md  ← local embeddings (bge-small-en-v1.5)
-        └── 0005-pricing-storage.md             ← Parquet-first; Postgres migration triggers
+├── README.md                 local run, backup, and verification
+├── CLAUDE.md / AGENTS.md     identical agent context
+├── TODO.md / CHANGELOG.md   open work / shipped work
+├── frontend/                 Next.js PWA, IndexedDB repository, backup, UI; see context.md
+├── backend/                  FastAPI legacy utilities and private import worker; see context.md
+├── data/                     legacy Parquet data and archives; see context.md
+├── supabase/                 additive owner-gated import migration and SQL tests
+├── infra/worker/             Mac LaunchAgent template and installer; see infra/context.md
+└── docs/                     architecture, decisions, plans, testing
 ```
 
 ## 4. Where to do what
-| If you're working on... | Go to... | Read first |
+
+| Work | Location | Read first |
 |---|---|---|
-| UI component, page, route | `frontend/` | `frontend/context.md` |
-| API endpoint, business logic | `backend/` | `backend/context.md` |
-| Schema, migration, seed | `data/` | `data/context.md` |
-| Terraform, deploy script | `infra/` | `infra/context.md` |
+| Local UI, IndexedDB, PWA | `frontend/` | `frontend/context.md` |
+| Import worker or legacy API | `backend/` | `backend/context.md` |
+| Legacy Parquet | `data/` | `data/context.md` |
+| Hosted import schema | `supabase/` | `supabase/README.md` |
+| Mac worker install | `infra/worker/` | `infra/context.md` |
 | Architecture decision | `docs/decisions/` | latest ADR |
-| Workflow / process question | `CLAUDE.md` (here) | this file |
 
 ## 5. Global skills / MCPs
-Apply across the whole repo:
 
-- claude-api (for recipe parsing via Anthropic SDK)
-- ui-ux-pro-max (design tokens + components)
-- mgrep (search)
+- claude-api for the private backend import worker
+- ui-ux-pro-max for UI components
+- mgrep for search when available; otherwise `rg`
 
-> Folder-specific skills live in each `context.md`.
+Folder-specific conventions live in each `context.md`.
 
 ## 6. Workflow rules
-1. **Branches:** `main` = prod (protected). `dev` = staging. All PRs target `dev`. `dev` → `main` is a release.
-2. **TODOs:** Add as `- [ ] …` in `TODO.md`. When complete, run `python3 scripts/done.py "description"` — it removes the line from `TODO.md` and appends it to `CHANGELOG.md` under today's date.
-3. **Docs first:** When you change a folder's scope, update its `context.md`. When you make an architectural decision, add an ADR in `docs/decisions/`.
-4. **Format on commit:** Husky pre-commit runs Prettier + ESLint via `lint-staged`. Do not bypass with `--no-verify`.
-5. **CI green to merge:** Every PR must pass `.github/workflows/ci.yml` (lint + typecheck + test + build).
-6. **Identical canon:** If you edit `CLAUDE.md`, copy the same change to `AGENTS.md` (and vice versa) in the same commit.
 
-## 7. Deploy
-No GitHub deploy workflow exists yet. Target state:
-- Frontend deploys through Vercel Git integration (`dev` = staging, `main` = production)
-- Backend API deploys separately to a reachable container/VM host (see `docs/plans/polish-roadmap.md`)
-- When deployment is implemented, update this section, `CLAUDE.md`, `AGENTS.md`, and `README.md` together
+1. `dev` is staging; `main` is release. PRs target `dev`; `dev` → `main` is a release. Branch protection is currently absent on both remote branches and remains a release preflight decision.
+2. Keep open work as `- [ ]` in `TODO.md`. Only when a task is shipped, run `python3 scripts/done.py "description"` to promote it to `CHANGELOG.md`.
+3. Update a folder's `context.md` when its scope changes. Add an ADR for architectural decisions; leave ADR 0008 Proposed until review.
+4. Husky pre-commit runs Prettier and ESLint through lint-staged. Do not bypass hooks.
+5. CI must pass before merge: frontend lint, typecheck, unit, production build, PWA Chromium; backend ruff, mypy, pytest including pricing; canon sync.
+6. Edit `CLAUDE.md` and `AGENTS.md` together and keep them byte-identical.
+7. Preserve the old cloud library and Parquet archives during migration. Do not merge the conflicting destructive PR #10 migration with the additive import migration before checking actual hosted migration history.
 
-## 8. Tech stack
-- Frontend: Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
-- Backend: Python 3.12 + FastAPI + Polars (file-backed)
-- Data: Parquet/CSV in data/ via Polars; migrate to Postgres later
-- Infra: Vercel
-- Package manager: pnpm
-- Node version: 22
+## 7. Deployment
+
+There is no GitHub deployment workflow. Vercel is the frontend target; the production origin and Vercel project are not yet verified here. The import worker is a separate Mac Mini LaunchAgent requiring user login and FileVault unlock. Vercel holds only public Supabase URL/anon configuration. Anthropic and service-role keys stay on the Mac. Do not claim a production release until the external checks in `docs/testing/local-first-pwa-release.md` are observed.
+
+## 8. Stack
+
+- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS 4, IndexedDB through `idb`
+- Backend: Python 3.12, FastAPI, Polars, private import worker
+- Hosted import coordination: Supabase Auth, Postgres queue/RPCs, temporary Storage
+- Infra: Vercel target and a personal Mac Mini worker
+- Package manager: pnpm 10; Node 22
