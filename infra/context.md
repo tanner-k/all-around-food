@@ -5,6 +5,7 @@
 - Deploy scripts (`scripts/deploy.sh`, systemd units)
 - EC2 / cloud configuration
 - Secrets management policy (where they live, who has access)
+- Personal Mac Mini worker supervision templates in `worker/`
 
 ## Not in scope
 - GitHub Actions workflows → `.github/workflows/` (at repo root)
@@ -13,6 +14,14 @@
 
 ## Stack
 Vercel
+
+The personal import worker runs as a macOS LaunchAgent from the backend's
+native Python 3.12 virtualenv. `worker/install-macos-worker.sh` preflights a
+specific checkout and generates a resolved plist with private logs; it never
+loads the agent. The Mac-only `.env` holds service-role and Anthropic secrets,
+while Vercel receives no worker secrets. The worker makes outbound connections
+only. It cannot run before FileVault unlock and user login, and does not change
+sleep or power settings.
 
 ## Local skills / conventions
 - None yet — add as needed
