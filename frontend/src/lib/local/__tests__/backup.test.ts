@@ -3,7 +3,7 @@ import { openDB } from "idb";
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
 import { closeLocalDB, getLocalDB, type LocalDBSchema } from "../db";
 import { exportBackup, restoreBackup } from "../backup";
-import { readSnapshot } from "../repository";
+import { addPlannedMeal, readSnapshot } from "../repository";
 
 async function reset() {
   await closeLocalDB();
@@ -40,6 +40,18 @@ describe("backup and restore", () => {
     const report = await restoreBackup(backup, "merge");
     expect(report.validation_errors).toEqual([]);
     expect(await readSnapshot()).toEqual(original);
+  });
+
+  it("retains occurrence IDs when exporting and restoring a plan", async () => {
+    await seed();
+    await addPlannedMeal("2026-09-21", 1, "recipe-1");
+    const before = (await readSnapshot()).meal_plans[0].meals.map((meal) => meal.id);
+    expect(before).toHaveLength(2);
+    expect(before.every(Boolean)).toBe(true);
+    const backup = await exportBackup();
+    await reset();
+    expect((await restoreBackup(backup, "merge")).validation_errors).toEqual([]);
+    expect((await readSnapshot()).meal_plans[0].meals.map((meal) => meal.id)).toEqual(before);
   });
 
   it("rejects an orphan reference and duplicate ID before any write", async () => {

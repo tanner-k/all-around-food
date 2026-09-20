@@ -1,6 +1,6 @@
 import type { IDBPTransaction } from "idb";
 import type { LocalDBSchema } from "./db";
-import { MealPlanSchema, type MealPlan } from "@/lib/meal-plan-schema";
+import { MealPlanSchema, withPlannedMealIds, type MealPlan } from "@/lib/meal-plan-schema";
 import { PantryItemSchema, type PantryItem, type PantryStatus } from "@/lib/pantry-schema";
 import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
 import { ShoppingListItemSchema, type ShoppingListItem } from "@/lib/shopping-schema";
@@ -94,7 +94,7 @@ export async function putRecipe(input: Recipe): Promise<void> {
 }
 
 export async function saveMealPlan(input: MealPlan): Promise<void> {
-  const plan = MealPlanSchema.parse(input);
+  const plan = withPlannedMealIds(MealPlanSchema.parse(input));
   try {
     const db = await getLocalDB();
     const tx = db.transaction("meal_plans", "readwrite");
@@ -205,33 +205,35 @@ export async function addPlannedMeal(weekOf: string, dayIndex: number, recipeId:
     const db = await getLocalDB();
     const tx = db.transaction("meal_plans", "readwrite");
     const previous = await tx.store.get(weekOf);
-    const meals = [...(previous?.meals ?? []), { day_index: dayIndex, recipe_id: recipeId, servings: null }];
+    const meals = [...(previous ? withPlannedMealIds(previous).meals : []), { id: crypto.randomUUID(), day_index: dayIndex, recipe_id: recipeId, servings: null }];
     await tx.store.put(MealPlanSchema.parse({ week_of: weekOf, meals, updated_at: new Date().toISOString() }));
     await tx.done;
   } catch (error) { await closeLocalDB(); storageFailure("Unable to update meal plan.", error); }
   notifyChange();
 }
 
-export async function removePlannedMeal(weekOf: string, index: number): Promise<void> {
+export async function removePlannedMeal(weekOf: string, occurrenceId: string): Promise<void> {
   try {
     const db = await getLocalDB();
     const tx = db.transaction("meal_plans", "readwrite");
     const previous = await tx.store.get(weekOf);
-    if (!previous?.meals[index]) { await tx.done; return; }
-    const meals = previous.meals.filter((_, mealIndex) => mealIndex !== index);
+    if (!previous) { await tx.done; return; }
+    const meals = withPlannedMealIds(previous).meals.filter((meal) => meal.id !== occurrenceId);
+    if (meals.length === previous.meals.length) { await tx.done; return; }
     await tx.store.put(MealPlanSchema.parse({ ...previous, meals, updated_at: new Date().toISOString() }));
     await tx.done;
   } catch (error) { await closeLocalDB(); storageFailure("Unable to update meal plan.", error); }
   notifyChange();
 }
 
-export async function setPlannedServings(weekOf: string, index: number, servings: number | null): Promise<void> {
+export async function setPlannedServings(weekOf: string, occurrenceId: string, servings: number | null): Promise<void> {
   try {
     const db = await getLocalDB();
     const tx = db.transaction("meal_plans", "readwrite");
     const previous = await tx.store.get(weekOf);
-    if (!previous?.meals[index]) { await tx.done; return; }
-    const meals = previous.meals.map((meal, mealIndex) => mealIndex === index ? { ...meal, servings } : meal);
+    if (!previous) { await tx.done; return; }
+    const meals = withPlannedMealIds(previous).meals.map((meal) => meal.id === occurrenceId ? { ...meal, servings } : meal);
+    if (!meals.some((meal) => meal.id === occurrenceId)) { await tx.done; return; }
     await tx.store.put(MealPlanSchema.parse({ ...previous, meals, updated_at: new Date().toISOString() }));
     await tx.done;
   } catch (error) { await closeLocalDB(); storageFailure("Unable to update meal servings.", error); }

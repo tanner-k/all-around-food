@@ -96,7 +96,7 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
     const weekOf = route.weekOf ?? currentMonday();
     const plan = snapshot.meal_plans.find((item) => item.week_of === weekOf) ?? { week_of: weekOf, meals: [], updated_at: new Date().toISOString() };
     return <><SectionHeader number="01" scene="THE WEEK" title={<>Plan your <em className="italic text-terra">week</em>.</>} description="Add recipes to each day, then turn them into a shopping list." />
-      <div className="mt-12"><PlanView weekOf={weekOf} initialPlan={plan} recipes={snapshot.recipes.map((item) => ({ id: item.id, title: item.title, servings: item.servings }))}
+      <div className="mt-12"><PlanView key={weekOf} weekOf={weekOf} initialPlan={plan} recipes={snapshot.recipes.map((item) => ({ id: item.id, title: item.title, servings: item.servings }))}
         onAdd={addPlannedMeal} onRemove={removePlannedMeal} onServingsChange={setPlannedServings} onGenerate={generateWeekShopping} /></div></>;
   }
 

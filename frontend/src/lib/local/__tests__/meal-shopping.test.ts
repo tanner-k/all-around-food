@@ -3,6 +3,7 @@ import { closeLocalDB, getLocalDB } from "../db";
 import { addPlannedMeal, setPlannedServings, removePlannedMeal, generateWeekShopping, completeShopping, addShoppingItem, addRecipesToShopping, setShoppingChecked, addPantryItem, setPantryStatus, readSnapshot } from "../repository";
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
 import { normalizeName } from "@/lib/normalize";
+import { plannedMealId } from "@/lib/meal-plan-schema";
 
 const WEEK = "2026-09-21";
 const OTHER_WEEK = "2026-09-28";
@@ -33,14 +34,40 @@ describe("local weekly shopping", () => {
     await seedRecipe();
     await addPlannedMeal(WEEK, 0, "recipe-1");
     await addPlannedMeal(WEEK, 0, "recipe-1");
-    await setPlannedServings(WEEK, 1, 2);
+    const [, second] = (await readSnapshot()).meal_plans[0].meals;
+    await setPlannedServings(WEEK, second.id!, 2);
     await generateWeekShopping(WEEK);
     const snapshot = await readSnapshot();
     expect(snapshot.meal_plans[0].meals).toHaveLength(2);
     expect(snapshot.shopping[0].quantity_text).toBe("6");
-    await removePlannedMeal(WEEK, 0);
+    await removePlannedMeal(WEEK, snapshot.meal_plans[0].meals[0].id!);
     await generateWeekShopping(WEEK);
     expect((await readSnapshot()).shopping[0].quantity_text).toBe("4");
+  });
+
+  it("keeps each planned occurrence stable across queued removals and serving edits", async () => {
+    await seedRecipe();
+    await addPlannedMeal(WEEK, 0, "recipe-1");
+    await addPlannedMeal(WEEK, 0, "recipe-1");
+    await addPlannedMeal(WEEK, 0, "recipe-1");
+    const [first, second, third] = (await readSnapshot()).meal_plans[0].meals;
+    expect(new Set([first.id, second.id, third.id]).size).toBe(3);
+    await removePlannedMeal(WEEK, first.id!);
+    await setPlannedServings(WEEK, second.id!, 3);
+    const meals = (await readSnapshot()).meal_plans[0].meals;
+    expect(meals.map((meal) => [meal.id, meal.servings])).toEqual([[second.id, 3], [third.id, null]]);
+  });
+
+  it("keeps pre-ID plan occurrences stable after their first mutation", async () => {
+    await seedRecipe();
+    const db = await getLocalDB();
+    await db.put("meal_plans", { week_of: WEEK, meals: [0, 1, 2].map(() => ({ day_index: 0, recipe_id: "recipe-1", servings: null })), updated_at: "2026-09-20T00:00:00Z" });
+    const before = (await readSnapshot()).meal_plans[0];
+    const secondId = plannedMealId(before, 1);
+    const thirdId = plannedMealId(before, 2);
+    await removePlannedMeal(WEEK, plannedMealId(before, 0));
+    await setPlannedServings(WEEK, secondId, 3);
+    expect((await readSnapshot()).meal_plans[0].meals.map((meal) => [meal.id, meal.servings])).toEqual([[secondId, 3], [thirdId, null]]);
   });
 
   it("regenerates just one week, preserving manual rows and unchanged checks", async () => {
@@ -73,7 +100,7 @@ describe("local weekly shopping", () => {
       preparation: null, optional: false, group: null, notes: null,
     }] });
     await addPlannedMeal(WEEK, 0, "recipe-1");
-    await setPlannedServings(WEEK, 0, 2);
+    await setPlannedServings(WEEK, (await readSnapshot()).meal_plans[0].meals[0].id!, 2);
     const pantry = await addPantryItem("eggs");
     await generateWeekShopping(WEEK);
     let item = (await readSnapshot()).shopping[0];

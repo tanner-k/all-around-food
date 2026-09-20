@@ -35,9 +35,9 @@ test("planner, shopping, and pantry remain usable through an offline restart", a
     await page.goto("/app#/plan", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Plan your week." })).toBeVisible();
     await page.getByRole("button", { name: "+ Add recipe" }).first().click();
-    await page.getByRole("button", { name: "Eggs on toast" }).click();
+    await page.getByRole("button", { name: "Eggs on toast", exact: true }).click();
     await page.getByRole("button", { name: "+ Add recipe" }).first().click();
-    await page.getByRole("button", { name: "Eggs on toast" }).click();
+    await page.getByRole("button", { name: "Eggs on toast", exact: true }).click();
     await expect(page.getByText("Eggs on toast")).toHaveCount(2);
     await page.getByRole("spinbutton", { name: "Eggs on toast servings" }).last().fill("2");
     await page.getByRole("button", { name: "Review shopping →" }).click();
