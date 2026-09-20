@@ -33,6 +33,17 @@ alter table public.parse_jobs add constraint parse_jobs_source_url_limit
 alter table public.parse_jobs add constraint parse_jobs_uuid_id
   check (id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$');
 
+-- Rows left `processing` by the pre-lease worker carry no lease or token, and
+-- every predicate below tests `lease_until < now()`, which NULL never satisfies.
+-- Once the old worker is stopped they would be stranded until expiry, so hand
+-- eligible ones back to the queue and make exhausted ones visibly failed.
+-- Completed rows, their results and every source library are untouched.
+update public.parse_jobs
+   set status = case when attempts >= 3 then 'error' else 'pending' end,
+       error = case when attempts >= 3 then 'Import failed after 3 attempts' else error end,
+       claim_token = null, lease_until = null, updated_at = now()
+ where status = 'processing' and claim_token is null and lease_until is null;
+
 -- The original all-operations owner policy remains useful for SELECT, but
 -- privileges prevent direct mutations. The insert policy also gates the owner.
 drop policy if exists "owner" on public.parse_jobs;

@@ -308,7 +308,8 @@ function addQuantity(
 ): void {
   if (quantity.value === null || !Number.isFinite(quantity.value)) {
     const text = quantity.as_written.trim();
-    if (text) demand.terms.push({ kind: "text", value: text, needsReview });
+    // Text amounts cannot be scaled, so a serving change needs a human check.
+    if (text) demand.terms.push({ kind: "text", value: text, needsReview: needsReview || factor !== 1 });
     return;
   }
 

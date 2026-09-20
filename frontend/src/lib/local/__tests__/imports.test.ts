@@ -44,7 +44,7 @@ function job(id: string, status: ParseJob["status"] = "pending"): ParseJob {
     result_recipe_json: status === "done" ? { ...recipeFixture(), id } : null,
     result_warnings: status === "done" ? ["Check servings"] : [],
     lease_until: null, claim_token: null, acknowledged_at: null,
-    expires_at: clock, created_at: clock, updated_at: clock,
+    expires_at: new Date(Date.now() + 7 * 86_400_000).toISOString(), created_at: clock, updated_at: clock,
   };
 }
 
@@ -381,6 +381,24 @@ describe("durable local recipe imports", () => {
     expect((await records())).toMatchObject({ draft: undefined, recipe: saved, import: { state: "saved" } });
     await (await getLocalDB()).put("recipes", { ...saved, title: "Edited again" });
     expect((await acceptDraft(jobId, recipeFixture())).title).toBe("Edited again");
+  });
+
+  it("saves a restored draft whose transient import row was not backed up", async () => {
+    await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
+    await receiveImportDraft(job(jobId, "done"));
+    const db = await getLocalDB();
+    await db.delete("imports", jobId); // backups keep drafts, never pending imports
+    enqueueTextJob.mockClear();
+    ackJob.mockClear();
+
+    const saved = await acceptDraft(jobId, { ...recipeFixture(), id: "ignored", title: "Restored toast" });
+    expect(saved).toMatchObject({ id: jobId, title: "Restored toast" });
+    expect(await records()).toMatchObject({ draft: undefined, import: undefined, recipe: saved });
+    expect(enqueueTextJob).not.toHaveBeenCalled();
+    expect(ackJob).not.toHaveBeenCalled(); // no remote acknowledgement for a restored draft
+
+    await db.put("recipes", { ...saved, title: "Edited after saving" });
+    expect((await acceptDraft(jobId, recipeFixture())).title).toBe("Edited after saving");
   });
 
   it("rolls back a failed Save without losing the draft", async () => {

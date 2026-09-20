@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { X } from "lucide-react";
 import type { Recipe } from "@/lib/recipe-schema";
 import { CookStepView } from "./CookStepView";
@@ -25,14 +25,24 @@ interface CookModeProps {
   onSetPantryStatus: (id: string, status: PantryStatus) => Promise<void>;
 }
 
+type CookView = Pick<CookProgress, "step" | "layout" | "timer_end_at" | "paused_seconds">;
+
+function viewOf(progress: CookProgress): CookView {
+  const { step, layout, timer_end_at, paused_seconds } = progress;
+  return { step, layout, timer_end_at, paused_seconds };
+}
+
 export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete, onSetPantryStatus }: CookModeProps) {
-  const [currentStep, setCurrentStep] = useState(progress.step);
+  const [view, setView] = useState<CookView>(() => viewOf(progress));
   const [done, setDone] = useState(Boolean(progress.completed_at));
-  const [layout, setLayout] = useState<Layout>(progress.layout);
-  const [timerEndAt, setTimerEndAt] = useState(progress.timer_end_at);
-  const [pausedSeconds, setPausedSeconds] = useState(progress.paused_seconds);
   const [now, setNow] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const latest = useRef(progress);
+  const pendingWrites = useRef(0);
+  const currentStep = view.step;
+  const layout = view.layout;
+  const timerEndAt = view.timer_end_at;
+  const pausedSeconds = view.paused_seconds;
   const timerRunning = timerEndAt !== null && now > 0 && timerEndAt > now;
   const timerSeconds = timerEndAt !== null ? now > 0 ? Math.max(0, Math.ceil((timerEndAt - now) / 1000)) : -1 : pausedSeconds ?? -1;
 
@@ -45,11 +55,24 @@ export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete,
     return () => { clearTimeout(firstTick); clearInterval(interval); window.removeEventListener("focus", tick); };
   }, [timerEndAt]);
 
+  // Adopt progress another view committed. Incoming snapshots are never written
+  // back, so two views of one session converge instead of echoing stale state.
   useEffect(() => {
-    const next = { ...progress, step: currentStep, layout, timer_end_at: timerEndAt, paused_seconds: pausedSeconds };
-    if (next.step === progress.step && next.layout === progress.layout && next.timer_end_at === progress.timer_end_at && next.paused_seconds === progress.paused_seconds) return;
-    void onSaveProgress(next).catch((error: unknown) => setSaveError(error instanceof Error ? error.message : "Unable to save progress."));
-  }, [currentStep, layout, timerEndAt, pausedSeconds, onSaveProgress, progress]);
+    latest.current = progress;
+    if (pendingWrites.current > 0) return;
+    setView(viewOf(progress));
+    setDone((current) => current || Boolean(progress.completed_at));
+  }, [progress]);
+
+  // Only a user action persists, and only the fields this view owns.
+  function apply(patch: Partial<CookView>) {
+    const next = { ...view, ...patch };
+    setView(next);
+    pendingWrites.current += 1;
+    void onSaveProgress({ ...latest.current, ...next })
+      .catch((error: unknown) => setSaveError(error instanceof Error ? error.message : "Unable to save progress."))
+      .finally(() => { pendingWrites.current -= 1; });
+  }
 
   // Mobile sheet state
   const [ingredientsOpen, setIngredientsOpen] = useState(false);
@@ -62,40 +85,36 @@ export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete,
   );
 
   function handleLayoutChange(next: Layout) {
-    setLayout(next);
+    apply({ layout: next });
   }
 
   function handlePrev() {
-    setCurrentStep((s) => Math.max(0, s - 1));
+    apply({ step: Math.max(0, currentStep - 1) });
   }
 
   function handleNext() {
     if (currentStep >= total - 1) {
       setDone(true);
     } else {
-      setCurrentStep((s) => s + 1);
+      apply({ step: currentStep + 1 });
     }
   }
 
   function handleStartTimer(minutes: number) {
-    setTimerEndAt(Date.now() + minutes * 60_000);
-    setPausedSeconds(null);
+    apply({ timer_end_at: Date.now() + minutes * 60_000, paused_seconds: null });
     setNow(Date.now());
   }
 
   function handleTimerPause() {
     if (timerEndAt !== null) {
-      setPausedSeconds(Math.max(0, Math.ceil((timerEndAt - Date.now()) / 1000)));
-      setTimerEndAt(null);
+      apply({ paused_seconds: Math.max(0, Math.ceil((timerEndAt - Date.now()) / 1000)), timer_end_at: null });
     } else if (pausedSeconds !== null) {
-      setTimerEndAt(Date.now() + pausedSeconds * 1000);
-      setPausedSeconds(null);
+      apply({ timer_end_at: Date.now() + pausedSeconds * 1000, paused_seconds: null });
     }
   }
 
   function handleTimerReset() {
-    setTimerEndAt(null);
-    setPausedSeconds(null);
+    apply({ timer_end_at: null, paused_seconds: null });
     setTimerSheetOpen(false);
   }
 

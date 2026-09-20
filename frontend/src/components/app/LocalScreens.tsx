@@ -29,6 +29,12 @@ function blankRecipe(): Recipe {
   });
 }
 
+/** Mounted only for the new-entry route, so every visit allocates its own id. */
+function NewRecipeEditor({ onSave }: { onSave: (recipe: Recipe) => Promise<void> }) {
+  const [draft] = useState(blankRecipe);
+  return <RecipeEditForm key={draft.id} recipe={draft} isNew onSave={onSave} />;
+}
+
 function MissingRecipe() {
   return <div className="mx-auto max-w-xl rounded-2xl border border-line bg-paper p-8 text-center">
     <h1 className="font-serif text-3xl text-ink">Recipe unavailable</h1>
@@ -38,7 +44,6 @@ function MissingRecipe() {
 }
 
 export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot: LibrarySnapshot }) {
-  const [manualRecipe] = useState(blankRecipe);
   const recipe = "recipeId" in route ? snapshot.recipes.find((item) => item.id === route.recipeId) : undefined;
   const progress = recipe ? snapshot.cook_progress.find((item) => item.recipe_id === recipe.id) : undefined;
 
@@ -79,10 +84,13 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
 
   if (route.view === "edit") {
     if (route.recipeId && !recipe) return <MissingRecipe />;
-    return <RecipeEditForm key={recipe?.id ?? manualRecipe.id} recipe={recipe ?? manualRecipe} isNew={!route.recipeId} onSave={async (saved) => {
+    const save = async (saved: Recipe) => {
       await putRecipe(saved);
       window.location.hash = localHref("recipe", saved.id).split("#")[1];
-    }} />;
+    };
+    return recipe
+      ? <RecipeEditForm key={recipe.id} recipe={recipe} isNew={false} onSave={save} />
+      : <NewRecipeEditor onSave={save} />;
   }
 
   if (route.view === "cook") {

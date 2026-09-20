@@ -31,6 +31,37 @@ it("loads the local cookbook and follows hash navigation in both directions", as
   await waitFor(() => expect(screen.getByRole("link", { name: /Toast/ })).toBeInTheDocument());
 });
 
+function goTo(hash: string) {
+  act(() => { window.location.hash = hash; window.dispatchEvent(new Event("hashchange")); });
+}
+
+async function fillAndSaveNewRecipe(title: string) {
+  await screen.findByRole("heading", { name: "New recipe" });
+  fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: title } });
+  fireEvent.change(screen.getByPlaceholderText("e.g. olive oil"), { target: { value: "bread" } });
+  fireEvent.change(document.querySelectorAll("textarea")[1], { target: { value: "Toast it." } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await screen.findByRole("heading", { name: title });
+}
+
+it("gives every manual recipe its own id within one mounted app", async () => {
+  render(<LocalApp />);
+  await screen.findByRole("link", { name: "+ Add recipe" });
+
+  goTo("#/cookbook/new");
+  await fillAndSaveNewRecipe("First recipe");
+
+  goTo("#/cookbook");
+  await screen.findByRole("link", { name: /First recipe/ });
+  goTo("#/cookbook/new");
+  await fillAndSaveNewRecipe("Second recipe");
+
+  const { recipes } = await readSnapshot();
+  expect(recipes.map((item) => item.title).sort()).toEqual(["First recipe", "Second recipe"]);
+  expect(new Set(recipes.map((item) => item.id)).size).toBe(2);
+  expect(recipes.every((item) => item.ingredients[0].name === "bread")).toBe(true);
+});
+
 it("keeps a missing local recipe in the shell", async () => {
   window.location.hash = "#/cookbook/missing";
   render(<LocalApp />);

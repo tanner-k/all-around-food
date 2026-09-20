@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { MealPlanSchema, type MealPlan } from "@/lib/meal-plan-schema";
 import { PantryItemSchema, type PantryItem } from "@/lib/pantry-schema";
-import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
+import { RecipeSchema, withEditedAmount, type Recipe } from "@/lib/recipe-schema";
 import { aggregatePlannedIngredients } from "@/lib/shopping-logic";
 
 function recipe(input: Partial<Recipe> & Pick<Recipe, "id" | "ingredients">): Recipe {
@@ -299,5 +299,56 @@ describe("aggregatePlannedIngredients", () => {
       pantry_covered: false,
       pantry_low: false,
     });
+  });
+});
+
+describe("corrected amounts", () => {
+  it("drops parsed numbers when the written amount is edited", () => {
+    const original = { value: 2, unit: "cups", as_written: "2 cups" };
+    expect(withEditedAmount(original, "2 cups")).toBe(original);
+    expect(withEditedAmount(original, "3 cups")).toEqual({
+      value: null,
+      unit: null,
+      as_written: "3 cups",
+    });
+  });
+
+  it("never sums a corrected amount as its old number and flags unsafe scaling", () => {
+    const corrected = withEditedAmount(
+      { value: 2, unit: "cups", as_written: "2 cups" },
+      "3 cups",
+    );
+    const recipes = [
+      recipe({
+        id: "loaf",
+        servings: 2,
+        ingredients: [
+          {
+            name: "Flour",
+            quantity: corrected,
+            preparation: null,
+            optional: false,
+            group: null,
+            notes: null,
+          },
+        ],
+      }),
+    ];
+
+    const unscaled = aggregatePlannedIngredients(
+      plan([{ day_index: 0, recipe_id: "loaf", servings: null }]),
+      recipes,
+      [],
+    );
+    expect(unscaled[0]).toMatchObject({ quantity_text: "3 cups", needs_review: false });
+
+    const scaled = aggregatePlannedIngredients(
+      plan([{ day_index: 0, recipe_id: "loaf", servings: 4 }]),
+      recipes,
+      [],
+    );
+    expect(scaled[0]).toMatchObject({ quantity_text: "3 cups", needs_review: true });
+    expect(scaled[0]?.quantity_text).not.toContain("2");
+    expect(scaled[0]?.quantity_text).not.toContain("4 cups");
   });
 });

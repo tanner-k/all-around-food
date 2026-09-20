@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Recipe } from "@/lib/recipe-schema";
+import { withEditedAmount, type Recipe } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
 
 interface RecipeReviewProps {
@@ -163,7 +163,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
                   ingredients: recipe.ingredients.map((item, index) => index === idx ? { ...item, name: e.target.value } : item),
                 })} className="min-w-0 flex-1 rounded border border-line bg-paper px-2 py-1 text-ink" />
                 <input aria-label={`Ingredient ${idx + 1} amount`} disabled={saving} value={ing.quantity.as_written} onChange={(e) => change({ ...recipe,
-                  ingredients: recipe.ingredients.map((item, index) => index === idx ? { ...item, quantity: { ...item.quantity, as_written: e.target.value } } : item),
+                  ingredients: recipe.ingredients.map((item, index) => index === idx ? { ...item, quantity: withEditedAmount(item.quantity, e.target.value) } : item),
                 })} className="w-24 rounded border border-line bg-paper px-2 py-1 text-ink" />
               </> : <><span className="text-ink">{ing.name}</span><span className="bg-terra-soft text-terra px-1.5 py-0.5 rounded-md text-xs font-medium">{ing.quantity.as_written}</span></>}
               {ing.preparation && (

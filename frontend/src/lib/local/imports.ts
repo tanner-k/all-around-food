@@ -329,13 +329,17 @@ export async function acceptDraft(jobId: string, editedRecipe: Recipe): Promise<
     }
     const draft = await tx.objectStore("drafts").get(jobId);
     const imported = await tx.objectStore("imports").get(jobId);
-    if (!draft || !imported) {
+    if (!draft) {
       tx.abort();
       throw new Error("Import draft is unavailable");
     }
     await recipes.put(recipe);
     await tx.objectStore("drafts").delete(jobId);
-    await tx.objectStore("imports").put({ ...imported, state: "saved", upload: null });
+    // Backups keep drafts but not transient imports, so a restored draft has no
+    // import row to close. Never invent one: that would fake a remote job.
+    if (imported) {
+      await tx.objectStore("imports").put({ ...imported, state: "saved", upload: null });
+    }
     await committed;
     return recipe;
   });

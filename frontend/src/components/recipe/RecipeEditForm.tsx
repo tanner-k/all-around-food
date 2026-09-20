@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { Recipe, Ingredient, Step } from "@/lib/recipe-schema";
+import { withEditedAmount, type Recipe, type Ingredient, type Step } from "@/lib/recipe-schema";
 import { localHref } from "@/lib/local/navigation";
 
 interface RecipeEditFormProps {
@@ -257,7 +257,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
                 value={ing.quantity.as_written}
                 onChange={(e) =>
                   updateIngredient(i, {
-                    quantity: { ...ing.quantity, as_written: e.target.value },
+                    quantity: withEditedAmount(ing.quantity, e.target.value),
                   })
                 }
                 placeholder="e.g. 2 Tbsp"
