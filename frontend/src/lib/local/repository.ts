@@ -108,7 +108,17 @@ export async function saveCookProgress(input: CookProgress): Promise<void> {
   try {
     const db = await getLocalDB();
     const tx = db.transaction("cook_progress", "readwrite");
-    await Promise.all([tx.store.put(progress), tx.done]);
+    const existing = await tx.store.get(progress.recipe_id);
+    if (existing?.session_id && progress.session_id && existing.session_id !== progress.session_id) {
+      await tx.done;
+      return;
+    }
+    await tx.store.put({
+      ...progress,
+      session_id: existing?.session_id ?? progress.session_id,
+      completed_at: existing?.completed_at ?? progress.completed_at,
+    });
+    await tx.done;
   } catch (error) {
     await closeLocalDB();
     reportStorageIssue("Unable to save cook progress locally.", error);

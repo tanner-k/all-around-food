@@ -64,7 +64,7 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
   if (route.view === "recipe") {
     if (!recipe) return <MissingRecipe />;
     return <RecipeDetail recipe={recipe} onMarkCooked={async () => {
-      const session = await beginCookSession(recipe.id, true);
+      const session = await beginCookSession(recipe.id);
       await completeCookSession(recipe.id, session.session_id!);
     }} onStartCook={async () => {
       await beginCookSession(recipe.id, true);

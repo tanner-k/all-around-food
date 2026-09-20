@@ -1,7 +1,7 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { closeLocalDB } from "@/lib/local/db";
-import { putRecipe } from "@/lib/local/repository";
+import { putRecipe, readSnapshot } from "@/lib/local/repository";
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
 import { LocalApp } from "../LocalApp";
 
@@ -35,4 +35,34 @@ it("keeps a missing local recipe in the shell", async () => {
   window.location.hash = "#/cookbook/missing";
   render(<LocalApp />);
   expect(await screen.findByText("This recipe is not in your local cookbook.")).toBeInTheDocument();
+});
+
+it("keeps a completed manual cook idempotent after reload and starts a fresh cook explicitly", async () => {
+  await putRecipe(recipeFixture());
+  window.location.hash = "#/cookbook/recipe-1";
+  const firstRender = render(<LocalApp />);
+  await screen.findByRole("heading", { name: "Toast" });
+
+  fireEvent.click(screen.getByRole("button", { name: "Mark cooked" }));
+  await screen.findByRole("button", { name: "Cooked ✓" });
+  await expect(readSnapshot()).resolves.toMatchObject({
+    recipes: [expect.objectContaining({ times_made: 1 })],
+  });
+  const firstSession = (await readSnapshot()).cook_progress[0].session_id;
+  firstRender.unmount();
+
+  render(<LocalApp />);
+  await screen.findByRole("heading", { name: "Toast" });
+  fireEvent.click(screen.getByRole("button", { name: "Mark cooked" }));
+  await screen.findByRole("button", { name: "Cooked ✓" });
+  await expect(readSnapshot()).resolves.toMatchObject({
+    recipes: [expect.objectContaining({ times_made: 1 })],
+  });
+
+  fireEvent.click(screen.getByRole("link", { name: "Start cook mode →" }));
+  await waitFor(() => expect(window.location.hash).toBe("#/cookbook/recipe-1/cook"));
+  await waitFor(() => expect(readSnapshot()).resolves.toMatchObject({
+    cook_progress: [expect.objectContaining({ session_id: expect.any(String), completed_at: null })],
+  }));
+  expect((await readSnapshot()).cook_progress[0].session_id).not.toBe(firstSession);
 });

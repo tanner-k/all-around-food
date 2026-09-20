@@ -92,6 +92,28 @@ describe("local repository", () => {
     expect((await readSnapshot()).recipes[0].times_made).toBe(2);
   });
 
+  it("preserves a completed session and ignores an obsolete session's progress save", async () => {
+    await putRecipe(recipeFixture());
+    const first = await beginCookSession("recipe-1");
+    const staleProgress = { ...first, step: 1, completed_at: null };
+
+    expect(await completeCookSession("recipe-1", first.session_id!)).toBe(true);
+    await saveCookProgress(staleProgress);
+
+    expect((await readSnapshot()).cook_progress[0]).toEqual(
+      expect.objectContaining({ session_id: first.session_id, completed_at: expect.any(String) }),
+    );
+    expect(await completeCookSession("recipe-1", first.session_id!)).toBe(false);
+    expect((await readSnapshot()).recipes[0].times_made).toBe(1);
+
+    const fresh = await beginCookSession("recipe-1", true);
+    await saveCookProgress(staleProgress);
+
+    expect((await readSnapshot()).cook_progress[0]).toEqual(
+      expect.objectContaining({ session_id: fresh.session_id, step: 0, completed_at: null }),
+    );
+  });
+
   it("rejects a write when its database transaction cannot start", async () => {
     const db = await getLocalDB();
     db.close();
