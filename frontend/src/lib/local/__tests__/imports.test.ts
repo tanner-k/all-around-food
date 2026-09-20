@@ -67,7 +67,7 @@ async function deleteLocalDB() {
 
 beforeEach(async () => {
   await deleteLocalDB();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   currentUser = owner;
   createClient.mockReturnValue({ auth: { getUser: async () => ({ data: { user: currentUser ? { id: currentUser } : null }, error: null }) } });
   enqueueUrlJob.mockImplementation(async (_url, id) => job(id));
@@ -158,6 +158,99 @@ describe("durable local recipe imports", () => {
     expect(retryJob).toHaveBeenCalledWith(jobId);
   });
 
+  it("keeps the original ID when the retry RPC succeeds but the local update aborts", async () => {
+    await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
+    await flushLocalImports();
+    getJob.mockResolvedValueOnce({ ...job(jobId, "error"), error: "Parser unavailable" });
+    await flushLocalImports();
+    const db = await getLocalDB();
+    const transaction = db.transaction.bind(db);
+    vi.spyOn(db, "transaction").mockImplementation((storeNames, mode, options) => {
+      const tx = transaction(storeNames, mode, options);
+      const store = tx.objectStore("imports") as IDBPObjectStore<
+        LocalDBSchema, ["imports"], "imports", "readwrite"
+      >;
+      const put = store.put.bind(store);
+      vi.spyOn(store, "put").mockImplementation(async (...args) => {
+        const key = await put(...args);
+        void tx.done.catch(() => undefined);
+        tx.abort();
+        return key;
+      });
+      return tx;
+    });
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(retryLocalImport(jobId)).rejects.toThrow();
+    expect(retryJob).toHaveBeenCalledTimes(1);
+    expect((await records()).import).toMatchObject({ id: jobId, state: "error" });
+    expect(await (await getLocalDB()).getAll("imports")).toHaveLength(1);
+
+    vi.restoreAllMocks();
+    retryJob.mockRejectedValueOnce(new Error("import cannot be retried"));
+    getJob.mockResolvedValueOnce(job(jobId, "pending"));
+    expect(await retryLocalImport(jobId)).toMatchObject({ id: jobId, state: "submitted" });
+    expect(retryJob).toHaveBeenCalledTimes(2);
+    expect(await (await getLocalDB()).getAll("imports")).toHaveLength(1);
+  });
+
+  it("reconciles a lost retry RPC response before deciding whether a new job is needed", async () => {
+    await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
+    await flushLocalImports();
+    getJob.mockResolvedValueOnce({ ...job(jobId, "error"), error: "Parser unavailable" });
+    await flushLocalImports();
+    retryJob.mockRejectedValueOnce(new Error("response lost"));
+    getJob.mockResolvedValueOnce(job(jobId, "processing"));
+
+    expect(await retryLocalImport(jobId)).toMatchObject({ id: jobId, state: "submitted" });
+    expect(await (await getLocalDB()).getAll("imports")).toHaveLength(1);
+  });
+
+  it("creates a replacement only for a confirmed exhausted remote error", async () => {
+    await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
+    await flushLocalImports();
+    getJob.mockResolvedValueOnce({ ...job(jobId, "error"), error: "Parser unavailable" });
+    await flushLocalImports();
+    retryJob.mockRejectedValueOnce(new Error("import cannot be retried"));
+    getJob.mockResolvedValueOnce({ ...job(jobId, "error"), attempts: 3, error: "Parser unavailable" });
+
+    expect(await retryLocalImport(jobId)).toMatchObject({ id: replacementId, state: "queued" });
+    expect((await records()).import).toMatchObject({ state: "replaced", replacement_id: replacementId });
+  });
+
+  it("keeps a retryable remote error when the retry RPC fails transiently", async () => {
+    await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
+    await flushLocalImports();
+    getJob.mockResolvedValueOnce({ ...job(jobId, "error"), error: "Parser unavailable" });
+    await flushLocalImports();
+    retryJob.mockRejectedValueOnce(new Error("network lost"));
+    getJob.mockResolvedValueOnce({ ...job(jobId, "error"), error: "Parser unavailable" });
+
+    await expect(retryLocalImport(jobId)).rejects.toThrow("network lost");
+    expect((await records()).import).toMatchObject({ state: "error" });
+    expect((await records()).import?.replacement_id).toBeUndefined();
+    expect(await (await getLocalDB()).getAll("imports")).toHaveLength(1);
+  });
+
+  it("links an expired retry once across concurrent calls and later reopen", async () => {
+    await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
+    await flushLocalImports();
+    getJob.mockRejectedValueOnce(new Error("Import expired; submit again"));
+    await flushLocalImports();
+
+    const [first, second] = await Promise.all([retryLocalImport(jobId), retryLocalImport(jobId)]);
+    expect(first.id).toBe(replacementId);
+    expect(second.id).toBe(first.id);
+    expect((await records()).import).toMatchObject({ state: "replaced", replacement_id: replacementId });
+    expect(await (await getLocalDB()).getAll("imports")).toHaveLength(2);
+
+    await closeLocalDB();
+    expect((await retryLocalImport(jobId)).id).toBe(replacementId);
+    await flushLocalImports();
+    expect(enqueueUrlJob).toHaveBeenCalledTimes(2);
+    expect(enqueueUrlJob).toHaveBeenNthCalledWith(2, "https://example.com/toast", replacementId, owner);
+  });
+
   it("asks for media reselection if an expired screenshot has already uploaded", async () => {
     await queueLocalImport({ kind: "screenshot", upload: new Blob(["png"], { type: "image/png" }), owner_id: owner });
     await flushLocalImports();
@@ -220,6 +313,27 @@ describe("durable local recipe imports", () => {
     await receiveImportDraft(job(jobId, "done"));
     expect((await records()).draft?.recipe.title).toBe("My toast");
     expect((await records()).import?.acknowledged).toBe(true);
+  });
+
+  it("keeps Save committed while a prior acknowledgement RPC is pending", async () => {
+    await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
+    let finishAck!: () => void;
+    let ackStarted!: () => void;
+    const started = new Promise<void>((resolve) => { ackStarted = resolve; });
+    ackJob.mockImplementationOnce(async () => {
+      ackStarted();
+      await new Promise<void>((resolve) => { finishAck = resolve; });
+      return job(jobId, "done");
+    });
+
+    const delivery = receiveImportDraft(job(jobId, "done"));
+    await started;
+    await acceptDraft(jobId, recipeFixture());
+    finishAck();
+    await delivery;
+
+    expect((await records())).toMatchObject({ draft: undefined, import: { state: "saved", acknowledged: true } });
+    expect((await records()).recipe).toBeDefined();
   });
 
   it("saves edited recipe and clears draft atomically; repeated Save preserves later edits", async () => {

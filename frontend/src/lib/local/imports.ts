@@ -80,7 +80,14 @@ async function acknowledge(record: LocalImport): Promise<void> {
     return; // The draft is durable; next visible flush retries the owner-checked RPC.
   }
   // The RPC is idempotent; if this write fails, the next flush repeats it.
-  await replaceImport({ ...record, acknowledged: true });
+  await writeLocal("Unable to update local import.", async () => {
+    const db = await getLocalDB();
+    const tx = db.transaction("imports", "readwrite");
+    const current = await tx.store.get(record.id);
+    if (current && !current.acknowledged) await tx.store.put({ ...current, acknowledged: true });
+    await tx.done;
+  });
+  notifyChange();
 }
 
 /** A done result is a draft only. Duplicate delivery never replaces local review edits. */
@@ -137,7 +144,7 @@ async function flushPending(): Promise<void> {
       await acknowledge(record);
       continue;
     }
-    if (record.state === "error") continue; // User must explicitly retry.
+    if (record.state === "error" || record.state === "replaced") continue; // User must explicitly retry errors; replaced IDs are retired.
     let current = record;
     if (!current.owner_id) {
       current = { ...current, owner_id: owner };
@@ -181,24 +188,83 @@ async function markRemoteError(record: LocalImport, error: string): Promise<void
 export async function retryLocalImport(id: string): Promise<LocalImport> {
   const db = await getLocalDB();
   const record = LocalImportSchema.parse(await db.get("imports", id));
+  if (record.state === "replaced" && record.replacement_id)
+    return LocalImportSchema.parse(await db.get("imports", record.replacement_id));
   if (record.state !== "error") throw new Error("Import is not waiting for retry");
   const owner = await signedInOwner();
   if (!canSyncLocalImports() || !owner || record.owner_id !== owner)
     throw new Error("Sign in to retry this import");
   if (record.error !== "Import expired; submit again") {
+    let remote: ParseJob | undefined;
+    let retryError: unknown;
     try {
-      await retryJob(id);
-      const retried = { ...record, state: "submitted" as const, error: null };
-      await replaceImport(retried);
-      return retried;
-    } catch {
-      // An exhausted/missing remote row needs a new UUID, if its source remains.
+      remote = await retryJob(id);
+    } catch (error) {
+      retryError = error;
+      try {
+        remote = await getJob(id); // The RPC may have succeeded before its response was lost.
+      } catch (lookupError) {
+        if (!(lookupError instanceof Error && lookupError.message === "Import expired; submit again"))
+          throw error;
+      }
     }
+    if (remote?.status === "pending" || remote?.status === "processing")
+      return markRetried(id);
+    if (remote?.status === "done") {
+      await receiveImportDraft(remote);
+      return LocalImportSchema.parse(await (await getLocalDB()).get("imports", id));
+    }
+    if (remote?.status === "error" && remote.attempts < 3 && Date.parse(remote.expires_at) > Date.now())
+      throw retryError ?? new Error("Import retry remains in error");
   }
-  if (record.kind === "screenshot" && !record.upload)
-    throw new Error("Select the screenshot again to retry this import");
-  return queueLocalImport({ kind: record.kind, owner_id: record.owner_id,
-    source_url: record.source_url, payload_text: record.payload_text, upload: record.upload });
+  return replaceExpired(id);
+}
+
+async function markRetried(id: string): Promise<LocalImport> {
+  const updated = await writeLocal("Unable to update local import.", async () => {
+    const db = await getLocalDB();
+    const tx = db.transaction("imports", "readwrite");
+    const current = LocalImportSchema.parse(await tx.store.get(id));
+    const next = current.state === "error"
+      ? { ...current, state: "submitted" as const, error: null }
+      : current;
+    if (next !== current) await tx.store.put(next);
+    await tx.done;
+    return next;
+  });
+  notifyChange();
+  return updated;
+}
+
+async function replaceExpired(id: string): Promise<LocalImport> {
+  const replacement = await writeLocal("Unable to retry import locally.", async () => {
+    const db = await getLocalDB();
+    const tx = db.transaction("imports", "readwrite");
+    const committed = tx.done;
+    void committed.catch(() => undefined);
+    const current = LocalImportSchema.parse(await tx.store.get(id));
+    if (current.state === "replaced" && current.replacement_id) {
+      const existing = LocalImportSchema.parse(await tx.store.get(current.replacement_id));
+      await committed;
+      return existing;
+    }
+    if (current.state !== "error") {
+      await committed;
+      return current;
+    }
+    if (current.kind === "screenshot" && !current.upload) {
+      tx.abort();
+      throw new Error("Select the screenshot again to retry this import");
+    }
+    const next = LocalImportSchema.parse({ ...current, id: crypto.randomUUID(), state: "queued",
+      acknowledged: false, error: null, replacement_id: null, created_at: new Date().toISOString() });
+    await tx.store.add(next);
+    await tx.store.put({ ...current, state: "replaced", replacement_id: next.id, upload: null });
+    await committed;
+    return next;
+  });
+  notifyChange();
+  return replacement;
 }
 
 /** One IndexedDB transaction makes explicit Save idempotent across taps and tabs. */

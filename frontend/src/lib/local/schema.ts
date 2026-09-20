@@ -28,9 +28,10 @@ export const LocalImportSchema = z.object({
   source_url: z.string().nullable(),
   payload_text: z.string().nullable(),
   upload: z.instanceof(Blob).nullable(),
-  state: z.enum(["queued", "submitted", "draft", "saved", "error"]),
+  state: z.enum(["queued", "submitted", "draft", "saved", "error", "replaced"]),
   acknowledged: z.boolean(),
   error: z.string().nullable(),
+  replacement_id: z.string().nullable().optional(),
   created_at: z.string(),
 });
 
