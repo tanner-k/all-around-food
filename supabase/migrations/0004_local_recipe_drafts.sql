@@ -181,7 +181,8 @@ begin
   return query select j.id, j.storage_path from public.parse_jobs j
     where j.storage_path is not null
       and ((j.status = 'done' and j.acknowledged_at is not null)
-        or j.status = 'error');
+        or (j.status = 'error' and (j.attempts >= 3
+          or j.error = 'Import expired; submit again')));
 end $$;
 revoke all on function public.cleanup_import_jobs() from public, anon, authenticated;
 grant execute on function public.cleanup_import_jobs() to service_role;
@@ -191,7 +192,9 @@ returns void language plpgsql security definer set search_path = '' as $$
 begin
   if auth.role() <> 'service_role' then raise exception 'service role required'; end if;
   update public.parse_jobs set storage_path = null where id = p_id and storage_path = p_path
-    and ((status = 'done' and acknowledged_at is not null) or status = 'error');
+    and ((status = 'done' and acknowledged_at is not null)
+      or (status = 'error' and (attempts >= 3
+        or error = 'Import expired; submit again')));
 end $$;
 revoke all on function public.forget_import_storage(text,text) from public, anon, authenticated;
 grant execute on function public.forget_import_storage(text,text) to service_role;

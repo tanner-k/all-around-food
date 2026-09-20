@@ -13,7 +13,7 @@ const DoneJobSchema = z.object({
   status: z.literal("done"),
   result_recipe_json: RecipeSchema,
   result_warnings: z.array(z.string()),
-  updated_at: z.string().datetime(),
+  updated_at: z.string().datetime({ offset: true }),
 });
 
 export function importDraftFromJob(job: unknown): z.infer<typeof ImportDraftSchema> {

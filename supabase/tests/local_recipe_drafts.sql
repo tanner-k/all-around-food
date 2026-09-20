@@ -138,6 +138,53 @@ do $$ declare j public.parse_jobs; i int; begin
 end $$;
 reset role;
 
+-- Failed images remain available while the owner can still retry them.
+insert into public.parse_jobs(id,user_id,kind,storage_path)
+values ('dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  current_setting('app.test.owner')::uuid,'screenshot',
+  current_setting('app.test.owner') || '/dddddddd-dddd-4ddd-8ddd-dddddddddddd.png');
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+do $$ declare j public.parse_jobs; begin
+  select * into j from public.claim_parse_jobs(1);
+  if j.id <> 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' then
+    raise exception 'image job was not claimed'; end if;
+  perform public.fail_import_job(j.id,j.claim_token,'Image parse failed');
+  if exists (select 1 from public.cleanup_import_jobs()
+    where job_id='dddddddd-dddd-4ddd-8ddd-dddddddddddd') then
+    raise exception 'retryable image was queued for cleanup'; end if;
+end $$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub',current_setting('app.test.owner'),true);
+do $$ declare j public.parse_jobs; begin
+  select * into j from public.retry_import_job('dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+  if j.status <> 'pending' or j.storage_path is null then
+    raise exception 'retry lost image payload'; end if;
+end $$;
+reset role;
+set local role service_role;
+select set_config('request.jwt.claim.role','service_role',true);
+do $$ declare j public.parse_jobs; i int; begin
+  for i in 2..3 loop
+    select * into j from public.claim_parse_jobs(1);
+    if j.id <> 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' or j.attempts <> i then
+      raise exception 'image retry attempt % failed',i; end if;
+    perform public.fail_import_job(j.id,j.claim_token,'Image parse failed');
+    if i < 3 then
+      update public.parse_jobs set status='pending', error=null where id=j.id;
+    end if;
+  end loop;
+  if not exists (select 1 from public.cleanup_import_jobs()
+    where job_id='dddddddd-dddd-4ddd-8ddd-dddddddddddd') then
+    raise exception 'exhausted image was not queued for cleanup'; end if;
+  perform public.forget_import_storage(j.id,j.storage_path);
+  if (select storage_path from public.parse_jobs where id=j.id) is not null then
+    raise exception 'exhausted image path was retained'; end if;
+end $$;
+reset role;
+
 -- Expired payloads become visible tombstones; acknowledged draft JSON is wiped.
 set local role service_role;
 select set_config('request.jwt.claim.role','service_role',true);
