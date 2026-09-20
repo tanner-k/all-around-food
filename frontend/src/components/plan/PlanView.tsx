@@ -1,155 +1,85 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { addFromRecipesAction } from "@/app/(app)/shop/actions";
-import {
-  addPlannedMealAction,
-  removePlannedMealAction,
-} from "@/app/(app)/plan/actions";
-import type { MealPlan, PlannedMeal } from "@/lib/meal-plan-schema";
-import { formatMonthDay, weekDays } from "@/lib/week";
+import { useRef, useState } from "react";
+import type { MealPlan } from "@/lib/meal-plan-schema";
+import { formatMonthDay, parseISODate, weekDays } from "@/lib/week";
+import { localHref } from "@/lib/local/navigation";
 import { DayColumn } from "./DayColumn";
 import { RecipePickerModal } from "./RecipePickerModal";
 
-interface RecipeOption {
-  id: string;
-  title: string;
-}
-
+interface RecipeOption { id: string; title: string; servings: number | null }
 interface PlanViewProps {
   weekOf: string;
   initialPlan: MealPlan;
   recipes: RecipeOption[];
+  onAdd: (weekOf: string, dayIndex: number, recipeId: string) => Promise<void>;
+  onRemove: (weekOf: string, index: number) => Promise<void>;
+  onServingsChange: (weekOf: string, index: number, servings: number | null) => Promise<void>;
+  onGenerate: (weekOf: string) => Promise<void>;
 }
 
-export function PlanView({ weekOf, initialPlan, recipes }: PlanViewProps) {
-  const router = useRouter();
-  const [meals, setMeals] = useState<PlannedMeal[]>(initialPlan.meals);
+function adjacentWeek(weekOf: string, offset: number): string {
+  const date = parseISODate(weekOf);
+  date.setDate(date.getDate() + offset * 7);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+export function PlanView({ weekOf, initialPlan, recipes, onAdd, onRemove, onServingsChange, onGenerate }: PlanViewProps) {
   const [picker, setPicker] = useState<{ dayIndex: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
+  const pendingWrite = useRef<Promise<void>>(Promise.resolve());
+  const recipesById = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+  const meals = initialPlan.meals;
 
-  const titleById = new Map(recipes.map((r) => [r.id, r.title]));
-  const days = weekDays(weekOf);
-
-  function mealsForDay(
-    dayIndex: number
-  ): { title: string; recipeId: string }[] {
-    return meals.flatMap((meal) =>
-      meal.day_index === dayIndex
-        ? [
-            {
-              title: titleById.get(meal.recipe_id) ?? "Unknown recipe",
-              recipeId: meal.recipe_id,
-            },
-          ]
-        : []
-    );
+  function run(action: () => Promise<void>): Promise<void> {
+    setError(null);
+    const next = pendingWrite.current.then(action);
+    pendingWrite.current = next.catch((cause) => {
+      setError(cause instanceof Error ? cause.message : "Could not update this week.");
+    });
+    return pendingWrite.current;
   }
 
   async function handlePick(recipeId: string) {
     if (!picker) return;
     const dayIndex = picker.dayIndex;
     setPicker(null);
-    // The planned-meal id collapses duplicate (day, recipe) pairs, so adding
-    // the same recipe to the same day is a no-op — reflect that optimistically.
-    const already = meals.some(
-      (m) => m.day_index === dayIndex && m.recipe_id === recipeId
-    );
-    if (already) return;
-
-    const previous = meals;
-    const next: PlannedMeal[] = [
-      ...meals,
-      { day_index: dayIndex, recipe_id: recipeId, servings: null },
-    ];
-    setMeals(next);
-    setError(null);
-    const result = await addPlannedMealAction(weekOf, dayIndex, recipeId);
-    if ("error" in result) {
-      setMeals(previous);
-      setError(result.error);
-    }
-  }
-
-  async function handleRemove(dayIndex: number, recipeId: string) {
-    const previous = meals;
-    setMeals(
-      meals.filter(
-        (m) => !(m.day_index === dayIndex && m.recipe_id === recipeId)
-      )
-    );
-    setError(null);
-    const result = await removePlannedMealAction(weekOf, dayIndex, recipeId);
-    if ("error" in result) {
-      setMeals(previous);
-      setError(result.error);
-    }
+    await run(() => onAdd(weekOf, dayIndex, recipeId));
   }
 
   async function handleReviewShopping() {
     if (meals.length === 0 || reviewing) return;
     setReviewing(true);
     setError(null);
-    const recipeIds = [...new Set(meals.map((m) => m.recipe_id))];
-    const result = await addFromRecipesAction(recipeIds);
-    if (result.ok) {
-      router.push("/shop");
-    } else {
-      setError(result.error);
-    }
-    setReviewing(false);
+    try {
+      await pendingWrite.current;
+      await onGenerate(weekOf);
+      window.location.hash = localHref("shop").split("#")[1];
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not build shopping list."); }
+    finally { setReviewing(false); }
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-sm text-ink-mute">
-        Week of {formatMonthDay(weekOf)} · {meals.length}{" "}
-        {meals.length === 1 ? "recipe" : "recipes"} planned
-      </p>
-
-      {error && (
-        <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
-          {error}
-        </p>
-      )}
-
+      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-ink-mute">
+        <p>Week of {formatMonthDay(weekOf)} · {meals.length} {meals.length === 1 ? "recipe" : "recipes"} planned</p>
+        <div className="flex gap-2"><a href={localHref("plan", adjacentWeek(weekOf, -1))} className="rounded-lg border border-line px-3 py-2 text-ink">Previous week</a><a href={localHref("plan", adjacentWeek(weekOf, 1))} className="rounded-lg border border-line px-3 py-2 text-ink">Next week</a></div>
+      </div>
+      {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</p>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
-        {days.map((day) => (
-          <DayColumn
-            key={day.index}
-            day={day}
-            meals={mealsForDay(day.index)}
-            onAdd={(dayIndex) => setPicker({ dayIndex })}
-            onRemove={(dayIndex, recipeId) =>
-              void handleRemove(dayIndex, recipeId)
-            }
-          />
-        ))}
+        {weekDays(weekOf).map((day) => <DayColumn key={day.index} day={day}
+          meals={meals.flatMap((meal, index) => meal.day_index === day.index ? [{ index, title: recipesById.get(meal.recipe_id)?.title ?? "Unknown recipe", servings: meal.servings, baseServings: recipesById.get(meal.recipe_id)?.servings ?? null }] : [])}
+          onAdd={(dayIndex) => setPicker({ dayIndex })}
+          onRemove={(index) => void run(() => onRemove(weekOf, index))}
+          onServingsChange={(index, servings) => void run(() => onServingsChange(weekOf, index, servings))} />)}
       </div>
-
-      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-3 border-t border-line pt-5">
-        <p className="text-sm text-ink-mute">
-          Plan your week, then turn it into a shopping list.
-        </p>
-        <button
-          type="button"
-          onClick={handleReviewShopping}
-          disabled={meals.length === 0 || reviewing}
-          className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] disabled:opacity-50 min-h-11"
-        >
-          {reviewing ? "Building list…" : "Review shopping →"}
-        </button>
+      <div className="flex flex-col justify-between gap-3 border-t border-line pt-5 sm:flex-row sm:flex-wrap sm:items-center">
+        <p className="text-sm text-ink-mute">Plan your week, then turn it into a shopping list.</p>
+        <button type="button" onClick={() => void handleReviewShopping()} disabled={meals.length === 0 || reviewing}
+          className="min-h-11 rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] disabled:opacity-50">{reviewing ? "Building list…" : "Review shopping →"}</button>
       </div>
-
-      {picker && (
-        <RecipePickerModal
-          recipes={recipes}
-          onPick={(recipeId) => void handlePick(recipeId)}
-          onClose={() => setPicker(null)}
-        />
-      )}
+      {picker && <RecipePickerModal recipes={recipes} onPick={(id) => void handlePick(id)} onClose={() => setPicker(null)} />}
     </div>
   );
 }

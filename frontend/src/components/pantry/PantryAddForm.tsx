@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 interface PantryAddFormProps {
-  onAdd: (name: string) => Promise<void>;
+  onAdd: (name: string) => Promise<boolean>;
 }
 
 export function PantryAddForm({ onAdd }: PantryAddFormProps) {
@@ -16,8 +16,7 @@ export function PantryAddForm({ onAdd }: PantryAddFormProps) {
     if (!name || busy) return;
     setBusy(true);
     try {
-      await onAdd(name);
-      setValue("");
+      if (await onAdd(name)) setValue("");
     } finally {
       setBusy(false);
     }

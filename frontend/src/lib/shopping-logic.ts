@@ -222,6 +222,7 @@ export function aggregateRecipeIngredients(
       generated_week_of: null,
       pantry_covered: false,
       pantry_low: false,
+      needs_review: false,
       created_at: nowIso,
     };
     items.push(computePantryFlags(base, index));

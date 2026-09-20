@@ -15,6 +15,14 @@ it("does not call auth for local shell, cookbook redirects, or assets", async ()
   expect(updateSession).not.toHaveBeenCalled();
 });
 
+it("opens the local root and legacy planning routes without a session", async () => {
+  for (const path of ["/", "/plan", "/shop", "/pantry"]) {
+    const response = await middleware(new NextRequest(`https://food.example${path}`));
+    expect(response.status).toBe(200);
+  }
+  expect(updateSession).not.toHaveBeenCalled();
+});
+
 it("keeps the online export behind auth middleware", async () => {
   await middleware(new NextRequest("https://food.example/api/export"));
   expect(updateSession).toHaveBeenCalledTimes(1);

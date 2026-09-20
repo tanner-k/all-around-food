@@ -23,7 +23,7 @@ async function seed() {
   await tx.objectStore("recipes").put(recipeFixture());
   await tx.objectStore("meal_plans").put({ week_of: "2026-09-21", meals: [{ day_index: 0, recipe_id: "recipe-1", servings: null }], updated_at: "2026-09-20T12:00:00Z" });
   await tx.objectStore("pantry").put({ id: "pantry-1", name: "bread", status: "in_stock", aisle: "Bakery", aisle_overridden: false, notes: null, created_at: "2026-09-20T12:00:00Z", updated_at: "2026-09-20T12:00:00Z" });
-  await tx.objectStore("shopping").put({ id: "shop-1", name: "bread", quantity_text: null, aisle: "Bakery", checked: false, source: "recipe", source_recipe_id: "recipe-1", generated_week_of: "2026-09-21", pantry_covered: false, pantry_low: false, created_at: "2026-09-20T12:00:00Z" });
+  await tx.objectStore("shopping").put({ id: "shop-1", name: "bread", quantity_text: null, aisle: "Bakery", checked: false, source: "recipe", source_recipe_id: "recipe-1", generated_week_of: "2026-09-21", pantry_covered: false, pantry_low: false, needs_review: false, created_at: "2026-09-20T12:00:00Z" });
   await tx.objectStore("drafts").put({ id: "draft-1", recipe: recipeFixture(), warnings: [], received_at: "2026-09-20T12:00:00Z" });
   await tx.objectStore("cook_progress").put({ recipe_id: "recipe-1", step: 1, layout: "step", timer_end_at: null, paused_seconds: null });
   await tx.objectStore("settings").put({ key: "last_migration", value: "2026-09-20T12:00:00Z" });

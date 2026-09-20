@@ -119,6 +119,7 @@ export async function addManualItem(
     generated_week_of: null,
     pantry_covered: false,
     pantry_low: false,
+    needs_review: false,
     created_at: new Date().toISOString(),
   };
   const flagged = computePantryFlags(base, pantryIndex(pantry));
@@ -402,6 +403,7 @@ export async function importTextList(
       generated_week_of: null,
       pantry_covered: false,
       pantry_low: false,
+      needs_review: false,
       created_at: nowIso,
     };
     items.push(computePantryFlags(base, index));

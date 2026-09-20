@@ -6,9 +6,14 @@ import { RecipeDetail } from "@/components/recipe/RecipeDetail";
 import { RecipeEditForm } from "@/components/recipe/RecipeEditForm";
 import { CookMode } from "@/components/cook/CookMode";
 import { DataSettings } from "@/components/settings/DataSettings";
+import { LocalImports } from "./LocalImports";
+import { PlanView } from "@/components/plan/PlanView";
+import { ShoppingListView } from "@/components/shopping/ShoppingListView";
+import { PantryView } from "@/components/pantry/PantryView";
+import { currentMonday } from "@/lib/week";
 import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
 import { localHref, type LocalRoute } from "@/lib/local/navigation";
-import { beginCookSession, completeCookSession, putRecipe, saveCookProgress, setPantryStatus } from "@/lib/local/repository";
+import { addPantryItem, addPlannedMeal, addRecipesToShopping, addShoppingItem, beginCookSession, completeCookSession, completeShopping, generateWeekShopping, putRecipe, removePantryItem, removePlannedMeal, removeShoppingItem, saveCookProgress, setPantryStatus, setPlannedServings, setShoppingChecked } from "@/lib/local/repository";
 import type { LibrarySnapshot } from "@/lib/local/schema";
 
 function blankRecipe(): Recipe {
@@ -87,17 +92,21 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
       onComplete={(sessionId) => completeCookSession(recipe.id, sessionId)} onSetPantryStatus={setPantryStatus} />;
   }
 
-  if (route.view === "import") return <>
-    <SectionHeader number="05" scene="NEW RECIPE" title={<>Save a <em className="italic text-terra">recipe</em>.</>} description="Manual entry works offline. Online imports are available when connected." />
-    <div className="mt-12 rounded-2xl border border-line bg-paper p-8"><a href={localHref("edit")} className="inline-flex min-h-11 items-center rounded-full bg-terra px-5 text-sm font-semibold text-white">Enter a recipe manually</a><p className="mt-4 text-sm text-ink-mute">Website, video, screenshot, and text import will appear here once online import is connected.</p><a href={localHref("settings")} className="mt-4 inline-block text-sm text-terra underline">Local data and backups</a></div>
-  </>;
+  if (route.view === "plan") {
+    const weekOf = route.weekOf ?? currentMonday();
+    const plan = snapshot.meal_plans.find((item) => item.week_of === weekOf) ?? { week_of: weekOf, meals: [], updated_at: new Date().toISOString() };
+    return <><SectionHeader number="01" scene="THE WEEK" title={<>Plan your <em className="italic text-terra">week</em>.</>} description="Add recipes to each day, then turn them into a shopping list." />
+      <div className="mt-12"><PlanView weekOf={weekOf} initialPlan={plan} recipes={snapshot.recipes.map((item) => ({ id: item.id, title: item.title, servings: item.servings }))}
+        onAdd={addPlannedMeal} onRemove={removePlannedMeal} onServingsChange={setPlannedServings} onGenerate={generateWeekShopping} /></div></>;
+  }
 
-  const labels = {
-    plan: ["01", "THE WEEK", "Plan your week.", "Your local meal plan will appear here."],
-    shop: ["03", "SHOPPING", "What you actually need.", "Your local shopping list will appear here."],
-    pantry: ["04", "YOUR KITCHEN", "What's on hand.", "Your local pantry will appear here."],
-  } as const;
-  const [number, scene, title, empty] = labels[route.view];
-  return <><SectionHeader number={number} scene={scene} title={title} description="Stored on this device for offline use." />
-    <div className="mt-12 rounded-2xl border border-line bg-paper p-8 text-ink-mute">{empty}</div></>;
+  if (route.view === "shop") return <><SectionHeader number="03" scene="SHOPPING" title={<>What you <em className="italic text-terra">actually</em> need.</>} description="Grouped by store section. Pantry stock is flagged." />
+    <div className="mt-12"><ShoppingListView items={snapshot.shopping} recipeOptions={snapshot.recipes.map(({ id, title }) => ({ id, title }))}
+      onAdd={addShoppingItem} onAddRecipes={addRecipesToShopping} onCheck={setShoppingChecked} onDelete={removeShoppingItem} onComplete={completeShopping} /></div></>;
+
+  if (route.view === "pantry") return <><SectionHeader number="04" scene="YOUR KITCHEN" title={<>What&apos;s <em className="italic text-terra">on hand</em>.</>} description="Track ingredients. Mark what is running low so your shopping list stays current." />
+    <div className="mt-12"><PantryView items={snapshot.pantry} onAdd={addPantryItem} onStatusChange={setPantryStatus} onDelete={removePantryItem} /></div></>;
+
+  if (route.view === "import") return <LocalImports drafts={snapshot.drafts} />;
+
 }

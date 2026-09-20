@@ -18,7 +18,7 @@ export function ShoppingRow({ item, onCheck, onDelete }: ShoppingRowProps) {
         aria-label={item.name}
         onClick={() => onCheck(item.id, !item.checked)}
         className={[
-          "flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center rounded-[3px] border-[1.5px] transition-colors",
+          "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border-[1.5px] transition-colors",
           item.checked
             ? "border-terra bg-terra text-white"
             : "border-line-strong bg-paper",
@@ -54,6 +54,10 @@ export function ShoppingRow({ item, onCheck, onDelete }: ShoppingRowProps) {
         </span>
       )}
 
+      {item.needs_review && (
+        <span className="rounded-full bg-warn/20 px-2 py-0.5 text-[11px] font-medium text-ink">check amount</span>
+      )}
+
       {item.pantry_low && (
         <span className="rounded-full bg-terra-soft px-2 py-0.5 text-[11px] font-medium text-terra">
           low
@@ -68,7 +72,7 @@ export function ShoppingRow({ item, onCheck, onDelete }: ShoppingRowProps) {
         type="button"
         onClick={() => onDelete(item.id)}
         aria-label={`Remove ${item.name}`}
-        className="px-1 text-lg leading-none text-ink-mute transition-colors hover:text-terra"
+        className="min-h-11 min-w-11 text-lg leading-none text-ink-mute transition-colors hover:text-terra"
       >
         ×
       </button>
