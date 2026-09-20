@@ -1,9 +1,9 @@
-"""Port of ``frontend/src/lib/claude.ts`` recipe parsers to Python.
+"""Worker-side Claude recipe parsers.
 
-The worker is the single Claude-parsing process. These functions faithfully
-mirror the TypeScript source: identical system prompts, model IDs
-(``claude-haiku-4-5``), ``max_tokens``, forced ``tool_choice`` on the
-``extract_recipe`` tool, and the URL/VIDEO prompt variants.
+The worker is the single Claude-parsing process. These functions define the
+system prompts, model IDs (``claude-haiku-4-5``), ``max_tokens``, forced
+``tool_choice`` on the ``extract_recipe`` tool, and the URL/VIDEO prompt
+variants.
 
 The Anthropic tool ``input_schema`` is built from ``Recipe.model_json_schema()``
 (not hand-written), and tool output is validated back into ``models.Recipe``.

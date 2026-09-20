@@ -1,5 +1,9 @@
 # Plan: Polish Roadmap — close the gap to a "working" project
 
+> Superseded by [`personal-supabase-pivot.md`](./personal-supabase-pivot.md) and
+> [`supabase-cutover.md`](./supabase-cutover.md). Keep this file as historical
+> context for the hosted-backend roadmap it replaced.
+
 **Status:** Proposed
 **Date:** 2026-06-29
 **Owner:** Tanner

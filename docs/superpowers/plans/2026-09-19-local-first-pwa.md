@@ -80,7 +80,7 @@ Paths are repository-relative. New and existing files are distinguished in each 
 | Views | Existing recipe, cook, plan, shopping, pantry components | Preserve UI; replace server mutations with local callbacks |
 | Installation | `frontend/public/sw.js`, `frontend/scripts/build-pwa-manifest.mjs`, `ServiceWorkerRegister.tsx` | Complete precache, offline readiness, controlled updates |
 | Import delivery | `frontend/src/lib/db/parseJobs.ts`, `frontend/src/lib/local/imports.ts`, existing import components | Authenticated jobs, resumable delivery, local drafts |
-| Import protocol | `supabase/migrations/0004_local_recipe_drafts.sql`, `frontend/src/lib/import-schema.ts` | Temporary results, restricted RPCs, leases, acknowledgement |
+| Import protocol | `supabase/migrations/0005_local_recipe_drafts.sql`, `frontend/src/lib/import-schema.ts` | Temporary results, restricted RPCs, leases, acknowledgement |
 | Processing | Existing Python worker, Supabase access, parser, video and config modules | Draft results, recovery, source extraction and cleanup |
 | Mac operation | Existing `infra/worker/` docs/plist plus `install-macos-worker.sh` | Native worker supervision without mandatory Docker Desktop |
 
@@ -236,7 +236,7 @@ type BackupEnvelope = {
 
 ### Task 6: Make the import protocol private and recoverable
 
-**Create:** `supabase/migrations/0004_local_recipe_drafts.sql`, `supabase/tests/local_recipe_drafts.sql`, `frontend/src/lib/import-schema.ts`.
+**Create:** `supabase/migrations/0005_local_recipe_drafts.sql`, `supabase/tests/local_recipe_drafts.sql`, `frontend/src/lib/import-schema.ts`.
 **Modify:** Python Supabase helpers, `frontend/src/lib/db/parseJobs.ts` and its tests.
 
 **Protocol fields:** Keep existing statuses. Add `result_recipe_json jsonb`, `result_warnings jsonb` array, `lease_until timestamptz`, `claim_token uuid`, `acknowledged_at timestamptz`, `expires_at timestamptz`. Retain legacy `result_recipe_id` for migration compatibility. Permit recipe kind `text`; do not persist keys or long-term transcripts in jobs.

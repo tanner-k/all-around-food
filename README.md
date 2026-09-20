@@ -63,7 +63,7 @@ Dated observed results and the remaining hosted, migration, Mac, and installed-d
 ## Recent updates
 
 <!-- BEGIN:RECENT-UPDATES -->
-- Text shopping list to any number via Apple Messages
+- Legacy feature: text shopping list to any number via Apple Messages
 <!-- END:RECENT-UPDATES -->
 
 ## Project map

@@ -1,10 +1,12 @@
 -- 0003_claim_and_payload.sql — parse queue: pasted-text payload + atomic claim
 -- (Phase 3/4, ADR 0007; see docs/plans/import-queue-worker.md)
 --
--- Two small additions to the Phase 1 `parse_jobs` table:
+-- Three small additions to the Phase 1 `parse_jobs` table:
 --   1. `payload_text` — a home for pasted-text imports (shopping lists) that have
 --      neither a `source_url` nor an uploaded `storage_path`.
---   2. `claim_parse_jobs(...)` — an atomic claim function the worker calls to move
+--   2. `recover_stale_parse_jobs(...)` — moves abandoned `processing` rows back
+--      to `pending`, or to `error` once they have exhausted attempts.
+--   3. `claim_parse_jobs(...)` — an atomic claim function the worker calls to move
 --      pending jobs to `processing` without two concurrent `--once` runs grabbing
 --      the same row. Uses `for update skip locked`; also enforces a poison-job
 --      retry cap so a permanently failing job is not reclaimed forever.
@@ -19,7 +21,39 @@ alter table public.parse_jobs
 
 
 -- ---------------------------------------------------------------------------
--- 2. Atomic claim: flip up to p_limit pending jobs to 'processing' and return
+-- 2. Stale processing recovery. If a worker is killed after claiming a job, the
+--    row can otherwise stay `processing` forever. Under the retry cap, send it
+--    back to `pending`; at/over the cap, mark it `error` so the UI can offer a
+--    manual retry instead of pretending it is still running.
+-- ---------------------------------------------------------------------------
+create or replace function public.recover_stale_parse_jobs(
+    p_stale_after_minutes int default 30,
+    p_max_attempts int default 3
+)
+returns setof public.parse_jobs
+language sql
+security definer
+set search_path = public
+as $$
+    update public.parse_jobs j
+       set status = case
+               when attempts >= p_max_attempts then 'error'
+               else 'pending'
+           end,
+           error = case
+               when attempts >= p_max_attempts
+                   then 'Worker timed out after the maximum retry attempts.'
+               else error
+           end,
+           updated_at = now()
+     where status = 'processing'
+       and updated_at < now() - make_interval(mins => p_stale_after_minutes)
+    returning j.*;
+$$;
+
+
+-- ---------------------------------------------------------------------------
+-- 3. Atomic claim: flip up to p_limit pending jobs to 'processing' and return
 --    them. `for update skip locked` lets overlapping worker runs claim disjoint
 --    sets. `attempts` is bumped here (on claim) so the retry cap holds even if a
 --    run crashes mid-job; a job is eligible only while attempts < p_max_attempts.

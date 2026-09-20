@@ -1,7 +1,8 @@
-# Supabase (Phase 1 — personal re-architecture)
+# Supabase import coordination and legacy schema
 
-Schema, storage, and the one-time data migration for moving All Around Food off
-Parquet `*Store` files and onto Supabase Postgres (see
+Supabase retains the legacy cloud library, owner-only export, evaluation stats,
+and the temporary recipe-import queue. The personal `/app` library now lives in
+IndexedDB; existing cloud and Parquet records are preserved during migration (see
 [`docs/plans/personal-supabase-pivot.md`](../docs/plans/personal-supabase-pivot.md)
 and [ADR 0007](../docs/decisions/0007-personal-supabase-rearchitecture.md)).
 
@@ -12,7 +13,10 @@ supabase/
 ├── README.md                  ← this file
 └── migrations/
     ├── 0001_init.sql          ← extensions, all tables, indexes, RLS policies
-    └── 0002_storage.sql       ← private `imports` bucket + storage RLS policies
+    ├── 0002_storage.sql       ← private `imports` bucket + storage RLS policies
+    ├── 0003_claim_and_payload.sql ← deployed legacy queue history
+    ├── 0004_evaluation_stats.sql ← owner-scoped evaluation view
+    └── 0005_local_recipe_drafts.sql ← token-fenced transient drafts
 ```
 
 ## Required environment
@@ -21,12 +25,12 @@ supabase/
 |---|---|---|
 | `SUPABASE_URL` | migration script, frontend, worker | Project URL, e.g. `https://xxxx.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | **migration script + worker only** | Bypasses RLS. **Never** ship to the browser/Vercel. |
-| `SUPABASE_ANON_KEY` | frontend (PWA) + keep-alive workflow | Public anon key; safe in the client, gated by RLS. |
+| `SUPABASE_ANON_KEY` | frontend online imports/export + keep-alive workflow | Public anon key; safe in the client, gated by RLS. |
 | `OWNER_USER_ID` | **migration script only** | uuid of the Supabase auth user that will own every migrated row. Create that user first (**Dashboard → Authentication → Users**), then copy its uuid. Required for a real run; not needed for `--dry-run`. |
 
 ## Applying the migrations
 
-Run numbered migrations in order through `0004_local_recipe_drafts.sql`. Pick one method:
+Run numbered migrations in order through `0005_local_recipe_drafts.sql`. Check `supabase_migrations.schema_migrations` in each target first: dev uses version `0004` for evaluation stats. If a target already recorded version `0004` for local drafts, reconcile that database explicitly before applying anything. Pick one method:
 
 ### Supabase CLI (recommended)
 
@@ -41,7 +45,8 @@ supabase db push          # applies everything under supabase/migrations/
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0001_init.sql
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0002_storage.sql
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0003_claim_and_payload.sql
-psql "$SUPABASE_DB_URL" -f supabase/migrations/0004_local_recipe_drafts.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0004_evaluation_stats.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0005_local_recipe_drafts.sql
 ```
 
 `$SUPABASE_DB_URL` is the connection string from
@@ -50,7 +55,7 @@ psql "$SUPABASE_DB_URL" -f supabase/migrations/0004_local_recipe_drafts.sql
 ### Supabase SQL editor
 
 Open **SQL Editor** in the dashboard, paste the contents of `0001_init.sql`,
-run it, then do the same for `0002_storage.sql` through `0004_local_recipe_drafts.sql` in order.
+run it, then do the same for `0002_storage.sql` through `0005_local_recipe_drafts.sql` in order.
 
 Apply each migration once. Track applied files before using the SQL editor or `psql`.
 
@@ -86,7 +91,7 @@ guard prevents accidental execution without the disposable-project flag.
 
 ## Migrating existing Parquet data
 
-After the schema is applied, load the existing `data/*.parquet` rows:
+For legacy Supabase migration only, the existing Parquet import script remains available. It is not the browser IndexedDB copy step. After the schema is applied, load existing `data/*.parquet` rows only when that separate migration is intended:
 
 ```bash
 # from the repo root, with the migrate dep group installed (see below)
@@ -142,3 +147,14 @@ A free-tier Supabase project auto-pauses after ~1 week of inactivity. The
 12:00 UTC, plus manual `workflow_dispatch`) and makes one authenticated REST read
 so the project stays active; it fails if the API does not return 2xx. It needs
 two GitHub repo secrets: `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
+
+Set those in **GitHub → Settings → Secrets and variables → Actions**:
+
+```text
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_ANON_KEY=<anon-key>
+```
+
+Manual check: open **Actions → Supabase keepalive → Run workflow**. A passing run
+confirms the URL/key pair can read through the REST API. Keep the service-role
+key out of this workflow; only the local worker and migration script need it.

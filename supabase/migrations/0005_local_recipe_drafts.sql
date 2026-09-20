@@ -45,6 +45,9 @@ grant select on public.parse_jobs to authenticated;
 grant insert (id, user_id, kind, source_url, storage_path, payload_text)
   on public.parse_jobs to authenticated;
 
+-- The deployed 0003 recovery RPC predates token-fenced leases and must not remain.
+drop function if exists public.recover_stale_parse_jobs(int,int);
+
 -- Legacy claim function must not remain callable by signed-in browsers.
 revoke all on function public.claim_parse_jobs(int,int) from public, anon, authenticated;
 drop function public.claim_parse_jobs(int,int);

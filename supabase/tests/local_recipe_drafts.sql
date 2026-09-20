@@ -1,4 +1,4 @@
--- Run only against a disposable Supabase database with migrations 0001-0004.
+-- Run only against a disposable Supabase database with migrations 0001-0005.
 -- Requires AAF_TEST_DISPOSABLE_PROJECT=YES, AAF_TEST_OWNER_ID and
 -- AAF_TEST_OTHER_ID (two actual auth.users in that disposable project).
 \set disposable NO
@@ -11,6 +11,8 @@ select 1 / case when :'disposable' = 'YES' then 1 else 0 end as disposable_proje
 select 1 / case when :'owner' <> :'other' and
   (select count(*) from auth.users where id in (:'owner'::uuid, :'other'::uuid)) = 2
   then 1 else 0 end as test_accounts_guard;
+select 1 / case when to_regprocedure('public.recover_stale_parse_jobs(integer,integer)') is null
+  then 1 else 0 end as no_unfenced_recovery_guard;
 select set_config('app.test.owner', :'owner', false);
 select set_config('app.test.other', :'other', false);
 begin;

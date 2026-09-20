@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import {
   addPantryItem,
+  listPantryItems,
   updatePantryStatus,
   updatePantryItem,
   deletePantryItem,
@@ -26,6 +27,17 @@ function message(err: unknown): string {
 function revalidatePantry(): void {
   revalidatePath("/pantry");
   revalidatePath("/shop");
+}
+
+/** Read pantry items for client flows that need a fresh snapshot. */
+export async function listPantryItemsAction(): Promise<
+  ActionResultWith<{ items: PantryItem[] }>
+> {
+  try {
+    return { ok: true, items: await listPantryItems() };
+  } catch (err) {
+    return { error: message(err) };
+  }
 }
 
 /** Add an item to the pantry. Returns the created item so the UI can append it. */

@@ -1,4 +1,4 @@
-"""Port of ``gradeRecipeParse`` from ``frontend/src/lib/claude.ts``.
+"""Worker-side LLM-as-judge grading for recipe parses.
 
 LLM-as-judge grading of a recipe parse (model ``claude-sonnet-4-6``, forced
 ``submit_verdict`` tool). The judge system prompt is ported verbatim; it embeds
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
         ToolUseBlock,
     )
 
-# ── Model / request constants (mirror claude.ts) ─────────────────────────────
+# ── Model / request constants ────────────────────────────────────────────────
 JUDGE_MODEL = "claude-sonnet-4-6"
 JUDGE_MAX_TOKENS = 4096
 

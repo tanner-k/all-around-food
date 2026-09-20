@@ -5,6 +5,7 @@ const mockBackendPort = 4317;
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: "pwa-*.spec.ts",
   timeout: 30_000,
   expect: {
     timeout: 5_000,
@@ -20,7 +21,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
-      command: `BACKEND_URL=http://127.0.0.1:${mockBackendPort} pnpm dev --hostname 127.0.0.1 --port ${appPort}`,
+      command: `BACKEND_URL=http://127.0.0.1:${mockBackendPort} NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:${mockBackendPort} NEXT_PUBLIC_SUPABASE_ANON_KEY=public-test-key pnpm dev --hostname 127.0.0.1 --port ${appPort}`,
       url: `http://127.0.0.1:${appPort}/prices`,
       reuseExistingServer: !process.env.CI,
     },

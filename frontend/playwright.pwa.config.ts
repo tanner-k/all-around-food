@@ -1,8 +1,7 @@
 import { defineConfig } from "@playwright/test";
-import { fileURLToPath } from "node:url";
 
 const port = 3217;
-const nextBin = fileURLToPath(new URL("./node_modules/next/dist/bin/next", import.meta.url));
+const nextBin = "./node_modules/next/dist/bin/next";
 const shellQuote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 
 export default defineConfig({

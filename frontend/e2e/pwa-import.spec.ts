@@ -79,6 +79,7 @@ test("an offline request resumes through mocked Supabase, survives review reload
   await page.reload();
   await expect(page.getByRole("heading", { name: "My Toast" })).toBeVisible();
   await page.getByRole("button", { name: "Save to cookbook" }).click();
+  await expect(page).toHaveURL(/#\/cookbook\/[^/]+$/);
   await expect(page.getByRole("heading", { name: "My Toast" })).toBeVisible();
   await page.goto("/app#/cookbook");
   await expect(page.getByRole("link", { name: /My Toast/ })).toBeVisible();

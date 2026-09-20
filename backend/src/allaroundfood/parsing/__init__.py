@@ -1,4 +1,4 @@
-"""Recipe parsing + LLM-as-judge (port of ``frontend/src/lib/claude.ts``)."""
+"""Recipe parsing + LLM-as-judge for the local worker."""
 
 from __future__ import annotations
 

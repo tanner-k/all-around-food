@@ -82,7 +82,7 @@ describe("GET /api/export", () => {
     expect(backup.library.meal_plans).toEqual([{ week_of: "2026-09-21", updated_at: "2026-09-20T12:00:00Z", meals: [{ day_index: 3, recipe_id: "recipe-500", servings: null }] }]);
     expect(backup.library.pantry[0]).toMatchObject({ id: "pantry-1", name: "bread", status: "low", aisle: "Bakery" });
     expect(backup.library.pantry[0]).not.toHaveProperty("legacy_only");
-    expect(backup.library.shopping).toEqual([shopping]);
+    expect(backup.library.shopping).toEqual([{ ...shopping, needs_review: false }]);
   });
 
   it("reports orphan plan and recipe references rather than silently dropping rows", async () => {
