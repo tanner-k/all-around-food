@@ -16,6 +16,8 @@ import {
   queueLocalImport,
   receiveImportDraft,
   retryLocalImport,
+  updateImportDraft,
+  reselectScreenshotImport,
 } from "../imports";
 
 const { enqueueUrlJob, enqueueImageJob, enqueueTextJob, getJob, ackJob, retryJob, createClient } = vi.hoisted(() => ({
@@ -313,6 +315,30 @@ describe("durable local recipe imports", () => {
     await receiveImportDraft(job(jobId, "done"));
     expect((await records()).draft?.recipe.title).toBe("My toast");
     expect((await records()).import?.acknowledged).toBe(true);
+  });
+
+  it("persists review edits and duplicate delivery keeps them", async () => {
+    await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
+    await receiveImportDraft(job(jobId, "done"));
+    await updateImportDraft(jobId, { ...recipeFixture(), title: "My toast" });
+    await closeLocalDB();
+    await receiveImportDraft(job(jobId, "done"));
+    expect((await records()).draft?.recipe.title).toBe("My toast");
+    expect((await records()).recipe).toBeUndefined();
+  });
+
+  it("replaces a screenshot needing reselection in one local commit", async () => {
+    await queueLocalImport({ kind: "screenshot", upload: new Blob(["png"], { type: "image/png" }), owner_id: owner });
+    await flushLocalImports();
+    getJob.mockRejectedValueOnce(new Error("Import expired; submit again"));
+    await flushLocalImports();
+    const next = await reselectScreenshotImport(jobId, new Blob(["again"], { type: "image/png" }));
+    expect(next).toMatchObject({ id: replacementId, state: "queued", owner_id: owner, upload: expect.any(Blob) });
+    expect((await records()).import).toMatchObject({ state: "replaced", replacement_id: replacementId });
+    await closeLocalDB();
+    await flushLocalImports();
+    expect(enqueueImageJob).toHaveBeenCalledTimes(2);
+    expect(enqueueImageJob).toHaveBeenNthCalledWith(2, expect.any(File), "screenshot", replacementId, owner);
   });
 
   it("keeps Save committed while a prior acknowledgement RPC is pending", async () => {

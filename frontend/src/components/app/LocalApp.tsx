@@ -5,8 +5,10 @@ import { readSnapshot, subscribeToLocalChanges } from "@/lib/local/repository";
 import { parseLocalRoute, type LocalRoute } from "@/lib/local/navigation";
 import type { LibrarySnapshot } from "@/lib/local/schema";
 import { LocalScreens } from "./LocalScreens";
+import { useLocalImportSync } from "./useLocalImportSync";
 
 export function LocalApp() {
+  useLocalImportSync();
   const [route, setRoute] = useState<LocalRoute>({ view: "plan" });
   const [snapshot, setSnapshot] = useState<LibrarySnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);

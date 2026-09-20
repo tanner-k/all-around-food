@@ -6,14 +6,35 @@ import { InlineAmountText } from "./InlineAmountText";
 
 interface RecipeReviewProps {
   recipe: Recipe;
-  onSave: (recipe: Recipe) => void;
+  onSave: (recipe: Recipe) => void | Promise<void>;
+  onChange?: (recipe: Recipe) => void;
+  warnings?: string[];
+  saveLabel?: string;
 }
 
 
-export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProps) {
+export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings = [], saveLabel = "Save" }: RecipeReviewProps) {
   const [recipe, setRecipe] = useState(initialRecipe);
   const [editing, setEditing] = useState(false);
   const [showAllIngredients, setShowAllIngredients] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function change(next: Recipe) {
+    setRecipe(next);
+    onChange?.(next);
+  }
+
+  async function save() {
+    if (!recipe.title.trim() || !recipe.ingredients.some((item) => item.name.trim()) || !recipe.steps.some((step) => step.instruction.trim())) {
+      setError("Add a title, an ingredient, and a step before saving.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try { await onSave(recipe); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save recipe"); setSaving(false); }
+  }
 
   const meta = [
     recipe.cook_time_min != null && `${recipe.cook_time_min} min`,
@@ -29,6 +50,10 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
 
   return (
     <div className="flex flex-col gap-6">
+      {warnings.length > 0 && <div className="rounded-xl border border-terra/40 bg-terra-soft p-4 text-sm text-ink" role="note">
+        <p className="font-semibold">Check these details before saving</p>
+        <ul className="mt-2 list-disc pl-5">{warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
+      </div>}
       {/* Hero placeholder */}
       <div className="aspect-video w-full rounded-2xl bg-paper-2" />
 
@@ -37,10 +62,9 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
         <div className="flex flex-col gap-2 flex-1 min-w-0">
           {editing ? (
             <input
+              aria-label="Recipe title"
               value={recipe.title}
-              onChange={(e) =>
-                setRecipe((r) => ({ ...r, title: e.target.value }))
-              }
+              onChange={(e) => change({ ...recipe, title: e.target.value })}
               className="font-serif text-2xl md:text-4xl text-ink bg-transparent border-b border-terra focus:outline-none w-full"
             />
           ) : (
@@ -62,6 +86,11 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
               ))}
             </div>
           )}
+          {editing && <label className="flex items-center gap-2 text-sm text-ink-soft">Servings
+            <input type="number" min="1" value={recipe.servings ?? ""}
+              onChange={(event) => change({ ...recipe, servings: event.target.value ? Number(event.target.value) : null })}
+              className="w-20 rounded border border-line bg-paper px-2 py-1 text-ink" />
+          </label>}
         </div>
 
         {/* Parsed badge */}
@@ -79,10 +108,14 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
           {displayIngredients.map((ing, idx) => (
             <li key={idx} className="flex items-baseline gap-2">
               <span className="text-ink-mute">·</span>
-              <span className="text-ink">{ing.name}</span>
-              <span className="bg-terra-soft text-terra px-1.5 py-0.5 rounded-md text-xs font-medium">
-                {ing.quantity.as_written}
-              </span>
+              {editing ? <>
+                <input aria-label={`Ingredient ${idx + 1} name`} value={ing.name} onChange={(e) => change({ ...recipe,
+                  ingredients: recipe.ingredients.map((item, index) => index === idx ? { ...item, name: e.target.value } : item),
+                })} className="min-w-0 flex-1 rounded border border-line bg-paper px-2 py-1 text-ink" />
+                <input aria-label={`Ingredient ${idx + 1} amount`} value={ing.quantity.as_written} onChange={(e) => change({ ...recipe,
+                  ingredients: recipe.ingredients.map((item, index) => index === idx ? { ...item, quantity: { ...item.quantity, as_written: e.target.value } } : item),
+                })} className="w-24 rounded border border-line bg-paper px-2 py-1 text-ink" />
+              </> : <><span className="text-ink">{ing.name}</span><span className="bg-terra-soft text-terra px-1.5 py-0.5 rounded-md text-xs font-medium">{ing.quantity.as_written}</span></>}
               {ing.preparation && (
                 <span className="text-ink-mute text-xs">{ing.preparation}</span>
               )}
@@ -111,12 +144,14 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
               <span className="font-serif italic text-terra text-2xl leading-none flex-shrink-0 mt-0.5">
                 {step.order}.
               </span>
-              <p className="text-sm text-ink leading-relaxed">
+              {editing ? <textarea aria-label={`Step ${step.order} instruction`} value={step.instruction} onChange={(e) => change({ ...recipe,
+                steps: recipe.steps.map((item) => item.order === step.order ? { ...item, instruction: e.target.value } : item),
+              })} className="min-h-20 w-full rounded border border-line bg-paper p-2 text-sm text-ink" /> : <p className="text-sm text-ink leading-relaxed">
                 <InlineAmountText
                   instruction={step.instruction}
                   ingredients={recipe.ingredients}
                 />
-              </p>
+              </p>}
             </li>
           ))}
         </ol>
@@ -137,6 +172,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
       )}
 
       {/* Action buttons */}
+      {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
       <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
         <button
           type="button"
@@ -147,10 +183,11 @@ export function RecipeReview({ recipe: initialRecipe, onSave }: RecipeReviewProp
         </button>
         <button
           type="button"
-          onClick={() => onSave(recipe)}
+          onClick={() => void save()}
+          disabled={saving}
           className="rounded-full bg-terra px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] min-h-11"
         >
-          Save
+          {saving ? "Saving…" : saveLabel}
         </button>
       </div>
     </div>

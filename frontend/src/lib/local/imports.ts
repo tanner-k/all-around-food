@@ -9,6 +9,12 @@ import { LocalImportSchema, type LocalImport } from "./schema";
 export type LocalImportInput = Pick<LocalImport, "kind"> & Partial<Pick<LocalImport,
   "owner_id" | "source_url" | "payload_text" | "upload">>;
 
+function validateScreenshot(upload: Blob): void {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(upload.type))
+    throw new Error("Upload a JPEG, PNG, or WebP image");
+  if (upload.size > 10 * 1024 * 1024) throw new Error("Image exceeds 10 MB");
+}
+
 /** The caller may supply its known signed-in owner even while offline. An unbound item binds on first online flush. */
 export async function queueLocalImport(input: LocalImportInput): Promise<LocalImport> {
   const record = LocalImportSchema.parse({
@@ -18,11 +24,7 @@ export async function queueLocalImport(input: LocalImportInput): Promise<LocalIm
     error: null, created_at: new Date().toISOString(),
   });
   if (record.kind === "screenshot" && !record.upload) throw new Error("Select a screenshot to import");
-  if (record.kind === "screenshot" && record.upload &&
-      !["image/jpeg", "image/png", "image/webp"].includes(record.upload.type))
-    throw new Error("Upload a JPEG, PNG, or WebP image");
-  if (record.kind === "screenshot" && record.upload && record.upload.size > 10 * 1024 * 1024)
-    throw new Error("Image exceeds 10 MB");
+  if (record.kind === "screenshot" && record.upload) validateScreenshot(record.upload);
   if ((record.kind === "url" || record.kind === "video") && !record.source_url)
     throw new Error("Enter a recipe URL");
   if (record.kind === "text" && !record.payload_text?.trim()) throw new Error("Enter recipe text");
@@ -37,6 +39,45 @@ export async function queueLocalImport(input: LocalImportInput): Promise<LocalIm
 export async function listLocalImports(): Promise<LocalImport[]> {
   const db = await getLocalDB();
   return LocalImportSchema.array().parse(await db.getAll("imports"));
+}
+
+/** Persist each review edit; a late edit cannot recreate a draft after Save. */
+export async function updateImportDraft(jobId: string, editedRecipe: Recipe): Promise<void> {
+  const recipe = RecipeSchema.parse({ ...editedRecipe, id: jobId });
+  const changed = await writeLocal("Unable to save import review edits locally.", async () => {
+    const db = await getLocalDB();
+    const tx = db.transaction("drafts", "readwrite");
+    const draft = await tx.store.get(jobId);
+    if (draft) await tx.store.put({ ...draft, recipe });
+    await tx.done;
+    return Boolean(draft);
+  });
+  if (changed) notifyChange();
+}
+
+/** Retire the expired screenshot and queue its replacement atomically. */
+export async function reselectScreenshotImport(id: string, upload: Blob): Promise<LocalImport> {
+  validateScreenshot(upload);
+  const next = await writeLocal("Unable to queue replacement screenshot locally.", async () => {
+    const db = await getLocalDB();
+    const tx = db.transaction("imports", "readwrite");
+    const committed = tx.done;
+    void committed.catch(() => undefined);
+    const current = LocalImportSchema.parse(await tx.store.get(id));
+    if (current.kind !== "screenshot" || current.state !== "error") {
+      tx.abort();
+      throw new Error("Screenshot is not waiting for reselection");
+    }
+    const replacement = LocalImportSchema.parse({ ...current, id: crypto.randomUUID(),
+      state: "queued", upload, error: null, acknowledged: false,
+      replacement_id: null, created_at: new Date().toISOString() });
+    await tx.store.add(replacement);
+    await tx.store.put({ ...current, state: "replaced", replacement_id: replacement.id });
+    await committed;
+    return replacement;
+  });
+  notifyChange();
+  return next;
 }
 
 /** A foreground caller owns the timer (five seconds) and stops it on hidden/offline. */
