@@ -15,6 +15,7 @@ from tempfile import TemporaryDirectory
 from typing import Any, Literal
 from urllib.parse import urlparse
 
+from allaroundfood.config import settings as app_settings
 from allaroundfood.models import VideoImportResult
 from allaroundfood.transcription import (
     Transcriber,
@@ -56,9 +57,7 @@ class VideoImportBinaryStatus:
     def missing(self) -> tuple[str, ...]:
         """Return the friendly names of any binaries that could not be resolved."""
         return tuple(
-            name
-            for name, path in (("yt-dlp", self.ytdlp), ("ffmpeg", self.ffmpeg))
-            if path is None
+            name for name, path in (("yt-dlp", self.ytdlp), ("ffmpeg", self.ffmpeg)) if path is None
         )
 
 
@@ -91,11 +90,16 @@ class VideoImportSettings:
     def from_env(cls) -> VideoImportSettings:
         """Build settings from environment variables."""
         return cls(
-            ytdlp_bin=os.environ.get("YTDLP_BIN", "yt-dlp"),
-            ffmpeg_bin=os.environ.get("FFMPEG_BIN", "ffmpeg"),
-            timeout_s=int(os.environ.get("VIDEO_IMPORT_TIMEOUT_S", "180")),
-            whisper_model=os.environ.get("WHISPER_MODEL", "base.en"),
-            whisper_models_dir=os.environ.get("WHISPER_MODELS_DIR"),
+            ytdlp_bin=os.environ.get("YTDLP_BIN", app_settings.ytdlp_bin),
+            ffmpeg_bin=os.environ.get("FFMPEG_BIN", app_settings.ffmpeg_bin),
+            timeout_s=int(
+                os.environ.get("VIDEO_IMPORT_TIMEOUT_S", str(app_settings.video_import_timeout_s))
+            ),
+            whisper_model=os.environ.get("WHISPER_MODEL", app_settings.whisper_model),
+            whisper_models_dir=os.environ.get(
+                "WHISPER_MODELS_DIR",
+                str(app_settings.whisper_models_dir) if app_settings.whisper_models_dir else None,
+            ),
         )
 
 
@@ -105,9 +109,7 @@ async def fetch_video_text(
     transcriber: Transcriber | None = None,
 ) -> VideoImportResult:
     """Fetch caption and transcript text for a supported social video URL."""
-    return await asyncio.to_thread(
-        _fetch_video_text_sync, source_url, settings, transcriber
-    )
+    return await asyncio.to_thread(_fetch_video_text_sync, source_url, settings, transcriber)
 
 
 def _fetch_video_text_sync(
@@ -139,9 +141,7 @@ def _fetch_video_text_sync(
         except VideoImportError:
             if not caption:
                 raise
-            logger.warning(
-                "Transcription failed; falling back to caption-only import."
-            )
+            logger.warning("Transcription failed; falling back to caption-only import.")
             transcript = ""
 
     cleaned_transcript = _clean_transcript(transcript)
@@ -188,6 +188,7 @@ def _download_video(
     metadata_path = tmp_path / "metadata.json"
     cmd = [
         settings.ytdlp_bin,
+        "--no-config",
         "--no-playlist",
         "--write-info-json",
         "--skip-download",
@@ -207,7 +208,10 @@ def _download_video(
 
     cmd = [
         settings.ytdlp_bin,
+        "--no-config",
         "--no-playlist",
+        "--max-filesize",
+        "100M",
         "-f",
         "bv*+ba/best",
         "-o",
@@ -229,9 +233,7 @@ def _download_video(
     return video_path, metadata
 
 
-def _extract_audio(
-    video_path: Path, tmp_path: Path, settings: VideoImportSettings
-) -> Path:
+def _extract_audio(video_path: Path, tmp_path: Path, settings: VideoImportSettings) -> Path:
     """Extract mono 16 kHz WAV audio with ffmpeg."""
     audio_path = tmp_path / "audio.wav"
     cmd = [
@@ -321,6 +323,8 @@ def _read_metadata(info_json: Path | None) -> dict[str, Any]:
     if info_json is None or not info_json.exists():
         return {}
     try:
+        if info_json.stat().st_size > 1_000_000:
+            return {}
         value = json.loads(info_json.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}

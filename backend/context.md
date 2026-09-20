@@ -34,6 +34,15 @@ cd backend
 uv run python -m allaroundfood
 ```
 
+The personal import worker runs separately with `python -m allaroundfood.worker --watch`.
+Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY_PARSING`,
+and `IMPORT_OWNER_USER_ID` in its Mac environment. It returns recipe drafts for
+website, video, screenshot, and pasted-text jobs through fenced queue RPCs;
+manual recipe editing does not depend on it. `RUN_EVALS` defaults to false.
+Acknowledged or expired uploads are removed in a later watch cycle. If the Mac
+is offline, that cleanup waits until it reconnects; no source is removed before
+the draft is durably published and acknowledged or expired.
+
 ## Notes for agents
 - Keep FastAPI route modules grouped by resource.
 - Validation at the edge (request → typed input) — never trust the client

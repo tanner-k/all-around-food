@@ -48,13 +48,16 @@ class Settings(BaseSettings):
     anthropic_api_key_parsing: SecretStr | None = None
 
     # Run the LLM-as-judge eval pipeline after a recipe parse (fire-and-forget).
-    run_evals: bool = True
+    run_evals: bool = False
+    import_owner_user_id: str | None = None
 
     # ── Video import binaries + whisper.cpp (consolidated onto Settings) ──
     whisper_model: str = "base.en"
     whisper_models_dir: Path | None = None
     ffmpeg_bin: str = "ffmpeg"
     ytdlp_bin: str = "yt-dlp"
+    video_import_timeout_s: int = 180
+    worker_stale_after_minutes: int = 10  # Accepted for older local .env files; SQL owns leases.
 
     # Poison-job retry cap: a job stops being reclaimed once attempts >= this.
     worker_max_attempts: int = 3

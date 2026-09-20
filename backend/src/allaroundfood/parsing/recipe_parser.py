@@ -12,9 +12,14 @@ The Anthropic tool ``input_schema`` is built from ``Recipe.model_json_schema()``
 from __future__ import annotations
 
 import base64 as _base64
+import ipaddress
+import json
 import re
+import socket
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
 
@@ -48,10 +53,14 @@ CRITICAL RULES:
 4. For each Step, populate `inline_amounts` with the names of ingredients referenced — this drives the inline-amount display.
 5. Convert temperatures to Fahrenheit (temperature_f). If only Celsius given, convert.
 6. `id` should be left as empty string "" — the application will assign a UUID at save time. `created_at` should be the current ISO datetime.
-7. Self-rate your parse on a 0.0–1.0 scale in `parse_confidence`. Be honest: if the image is blurry or partial, rate lower."""  # noqa: E501
+7. Self-rate your parse on a 0.0–1.0 scale in `parse_confidence`. Be honest: if the image is blurry or partial, rate lower.
+8. Do not invent ingredients, amounts, or steps. Leave unknown amounts null. If no ingredients or steps are supported by the source, return empty lists."""  # noqa: E501
 
 WORKER_SYSTEM_URL_EXTRA = """
-2. The text was extracted from a webpage. Look for ingredient lists, step lists, nutrition tables."""  # noqa: E501
+2. The text was extracted from a webpage. Look for ingredient lists, step lists, nutrition tables. Do not invent missing ingredients, amounts, or steps."""  # noqa: E501
+
+WORKER_SYSTEM_TEXT_EXTRA = """
+2. The text was pasted by the user. Extract only ingredients and steps supported by the text. Do not invent missing ingredients, amounts, or steps."""  # noqa: E501
 
 WORKER_SYSTEM_VIDEO_EXTRA = """
 2. The text was extracted from a short-form recipe video. It may include captions, transcript snippets, creator descriptions, OCR text, hashtags, or comments. Reconstruct the recipe only from the provided text; do not invent missing ingredients or steps."""  # noqa: E501
@@ -111,10 +120,15 @@ def _worker_tool() -> ToolParam:
     # ``input_schema`` is a broad ``dict[str, Any]`` from pydantic; the Anthropic
     # ToolParam TypedDict wants its narrower ``InputSchema`` shape, so cast (the
     # TS source does the same: ``recipeJsonSchema as Anthropic.Tool[...]``).
+    schema = Recipe.model_json_schema()
+    # Permit an explicit "no evidence" tool result. Recipe.model_validate below
+    # still rejects an empty draft, so it becomes a recoverable job error.
+    for field in ("ingredients", "steps"):
+        schema["properties"][field].pop("minItems", None)
     tool: dict[str, Any] = {
         "name": "extract_recipe",
         "description": "Extract the full recipe into structured JSON",
-        "input_schema": Recipe.model_json_schema(),
+        "input_schema": schema,
     }
     return cast("ToolParam", tool)
 
@@ -202,20 +216,124 @@ def _strip_html(raw_html: str) -> str:
     return stripped.strip()[:STRIPPED_TEXT_CAP]
 
 
+def _check_public_url(url: str) -> str:
+    """Resolve and return a public address to pin for this request."""
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username:
+        raise ValueError("Only public HTTP(S) recipe links are supported")
+    if parsed.port not in {None, 80, 443}:
+        raise ValueError("Only public HTTP(S) recipe links are supported")
+    try:
+        addresses = [ipaddress.ip_address(parsed.hostname)]
+    except ValueError:
+        try:
+            addresses = [
+                ipaddress.ip_address(row[4][0])
+                for row in socket.getaddrinfo(
+                    parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80)
+                )
+            ]
+        except OSError as exc:
+            raise ValueError(
+                "Recipe website could not be resolved; paste its text or a screenshot"
+            ) from exc
+    if not addresses or any(not address.is_global for address in addresses):
+        raise ValueError("Only public recipe websites are supported; paste text or a screenshot")
+    return str(addresses[0])
+
+
+def _fetch_public_html(url: str) -> str:
+    """Fetch bounded HTML with a fresh public-destination check on redirects."""
+    deadline = time.monotonic() + FETCH_TIMEOUT_S
+    current = url
+    with httpx.Client(timeout=FETCH_TIMEOUT_S, follow_redirects=False, trust_env=False) as http:
+        for _ in range(6):
+            address = _check_public_url(current)
+            original = urlsplit(current)
+            address_host = f"[{address}]" if ":" in address else address
+            pinned_url = urlunsplit(
+                (original.scheme, address_host, original.path, original.query, original.fragment)
+            )
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ValueError("Recipe website took too long; paste its text or a screenshot")
+            with http.stream(
+                "GET",
+                pinned_url,
+                timeout=remaining,
+                headers={"Host": original.netloc},
+                extensions={"sni_hostname": original.hostname},
+            ) as response:
+                if response.status_code in {301, 302, 303, 307, 308}:
+                    location = response.headers.get("location")
+                    if not location:
+                        raise ValueError("Recipe website redirected without a destination")
+                    current = urljoin(current, location)
+                    continue
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    raise ValueError(
+                        "Recipe website blocked access; paste its text or a screenshot"
+                    ) from exc
+                body = bytearray()
+                for chunk in response.iter_bytes():
+                    if time.monotonic() > deadline:
+                        raise ValueError(
+                            "Recipe website took too long; paste its text or a screenshot"
+                        )
+                    body.extend(chunk)
+                    if len(body) > 1_000_000:
+                        raise ValueError(
+                            "Recipe website is too large; paste its text or a screenshot"
+                        )
+                return body.decode("utf-8", errors="replace")
+    raise ValueError("Recipe website redirected too many times; paste its text or a screenshot")
+
+
+def _schema_recipe_text(raw_html: str) -> str:
+    """Read supported Recipe JSON-LD, including @graph/list wrappers."""
+    scripts = re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        raw_html,
+        flags=re.I | re.S,
+    )
+
+    def recipes(value: Any) -> list[dict[str, Any]]:
+        if isinstance(value, list):
+            return [recipe for item in value for recipe in recipes(item)]
+        if isinstance(value, dict):
+            found = [value] if "Recipe" in str(value.get("@type", "")) else []
+            return found + recipes(value.get("@graph", []))
+        return []
+
+    for script in scripts:
+        try:
+            for item in recipes(json.loads(script)):
+                parts = [
+                    item.get("name"),
+                    item.get("description"),
+                    item.get("recipeIngredient"),
+                    item.get("recipeInstructions"),
+                ]
+                return json.dumps(parts, ensure_ascii=False)[:STRIPPED_TEXT_CAP]
+        except json.JSONDecodeError:
+            continue
+    return ""
+
+
 # ── parseRecipeFromUrl ───────────────────────────────────────────────────────
 def parse_recipe_from_url(url: str) -> RecipeParseResult:
     """Fetch a webpage (10s timeout), strip HTML, and parse (URL prompt variant)."""
+    raw_html = _fetch_public_html(url)
+    stripped_text = (_schema_recipe_text(raw_html) + "\n" + _strip_html(raw_html)).strip()[
+        :STRIPPED_TEXT_CAP
+    ]
+    if not stripped_text:
+        raise ValueError("Recipe website had no readable text; paste its text or a screenshot")
     client = get_client()
 
-    with httpx.Client(timeout=FETCH_TIMEOUT_S, follow_redirects=True) as http:
-        res = http.get(url)
-        raw_html = res.text
-
-    stripped_text = _strip_html(raw_html)
-
-    system_text = WORKER_SYSTEM_BASE.replace(
-        _RULE_TWO_IMAGE, WORKER_SYSTEM_URL_EXTRA.strip()
-    ) + (
+    system_text = WORKER_SYSTEM_BASE.replace(_RULE_TWO_IMAGE, WORKER_SYSTEM_URL_EXTRA.strip()) + (
         f"\n\nSource URL: {url}. Use the hostname for `source_attribution` if no "
         "explicit byline appears (e.g. 'NYT Cooking', 'Bon Appétit'). Populate "
         "`source_url` with the URL."
@@ -224,7 +342,9 @@ def parse_recipe_from_url(url: str) -> RecipeParseResult:
     response = _run_worker(client, system_text, stripped_text)
 
     tool_input = _extract_tool_use_input(response, "URL worker response")
-    recipe = Recipe.model_validate(tool_input)
+    recipe = Recipe.model_validate(tool_input).model_copy(update={"source_url": url})
+    if not recipe.source_attribution:
+        recipe = recipe.model_copy(update={"source_attribution": urlsplit(url).hostname})
 
     worker_prompt = "\n\n".join(
         [
@@ -238,6 +358,19 @@ def parse_recipe_from_url(url: str) -> RecipeParseResult:
     )
 
 
+def parse_recipe_from_text(text: str) -> RecipeParseResult:
+    """Parse user-supplied text without source fetching."""
+    stripped_text = text.strip()[:STRIPPED_TEXT_CAP]
+    if not stripped_text:
+        raise ValueError("Paste recipe text with ingredients and steps")
+    system_text = WORKER_SYSTEM_BASE.replace(_RULE_TWO_IMAGE, WORKER_SYSTEM_TEXT_EXTRA.strip())
+    response = _run_worker(get_client(), system_text, stripped_text)
+    recipe = Recipe.model_validate(_extract_tool_use_input(response, "text worker response"))
+    return RecipeParseResult(
+        recipe, "SYSTEM:\n" + system_text + "\n\nUSER:\n" + stripped_text[:500], stripped_text
+    )
+
+
 # ── parseRecipeFromVideoText ─────────────────────────────────────────────────
 def parse_recipe_from_video_text(
     caption: str, transcript: str, source_url: str
@@ -248,19 +381,15 @@ def parse_recipe_from_video_text(
     if not caption.strip() and not transcript.strip():
         raise RuntimeError("No video transcript or caption text was available")
 
-    stripped_text = (
-        "\n\n".join(
-            [
-                f"CAPTION:\n{caption.strip() or '(none)'}",
-                f"TRANSCRIPT:\n{transcript.strip() or '(none)'}",
-            ]
-        )
+    stripped_text = "\n\n".join(
+        [
+            f"CAPTION:\n{caption.strip() or '(none)'}",
+            f"TRANSCRIPT:\n{transcript.strip() or '(none)'}",
+        ]
     )
     stripped_text = re.sub(r"\s+\n", "\n", stripped_text).strip()[:STRIPPED_TEXT_CAP]
 
-    system_text = WORKER_SYSTEM_BASE.replace(
-        _RULE_TWO_IMAGE, WORKER_SYSTEM_VIDEO_EXTRA.strip()
-    ) + (
+    system_text = WORKER_SYSTEM_BASE.replace(_RULE_TWO_IMAGE, WORKER_SYSTEM_VIDEO_EXTRA.strip()) + (
         f"\n\nSource URL: {source_url}. Populate `source_url` with the URL. Use the "
         "platform or creator name for `source_attribution` when available."
     )
@@ -268,7 +397,9 @@ def parse_recipe_from_video_text(
     response = _run_worker(client, system_text, stripped_text)
 
     tool_input = _extract_tool_use_input(response, "video worker response")
-    recipe = Recipe.model_validate(tool_input)
+    recipe = Recipe.model_validate(tool_input).model_copy(update={"source_url": source_url})
+    if not recipe.source_attribution:
+        recipe = recipe.model_copy(update={"source_attribution": urlsplit(source_url).hostname})
 
     worker_prompt = "\n\n".join(
         [

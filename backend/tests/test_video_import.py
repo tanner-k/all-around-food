@@ -95,6 +95,8 @@ def test_fetch_video_text_runs_pipeline(
     )
 
     assert [cmd[0] for cmd in commands] == ["yt-dlp", "yt-dlp", "ffmpeg"]
+    assert "--max-filesize" in commands[1]
+    assert "--no-config" in commands[1]
     assert result.platform == "instagram"
     assert result.caption == "Caption ingredients: pasta and tomatoes"
     assert "mix the eggs and flour" in result.transcript
@@ -106,6 +108,7 @@ def test_fetch_video_text_allows_caption_without_transcript(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A transcription failure falls back to caption-only when a caption exists."""
+    temp_paths: list[Path] = []
 
     def fake_run(
         cmd: list[str],
@@ -118,6 +121,7 @@ def test_fetch_video_text_allows_caption_without_transcript(
         if cmd[0] == "yt-dlp":
             output_template = Path(cmd[cmd.index("-o") + 1])
             tmp_path = output_template.parent
+            temp_paths.append(tmp_path)
             (tmp_path / "source.mp4").write_bytes(b"video")
             (tmp_path / "source.info.json").write_text(
                 json.dumps({"description": "Caption has the whole recipe"}),
@@ -138,6 +142,7 @@ def test_fetch_video_text_allows_caption_without_transcript(
     assert result.platform == "tiktok"
     assert result.caption == "Caption has the whole recipe"
     assert result.transcript == ""
+    assert temp_paths and all(not path.exists() for path in temp_paths)
 
 
 def test_fetch_video_text_reraises_when_no_caption(

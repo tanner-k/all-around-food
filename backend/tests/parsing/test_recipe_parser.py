@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
 import pytest
 
 from allaroundfood.models import Recipe
@@ -13,6 +12,7 @@ from allaroundfood.parsing.recipe_parser import (
     STRIPPED_TEXT_CAP,
     WORKER_MODEL,
     parse_recipe_from_image,
+    parse_recipe_from_text,
     parse_recipe_from_url,
     parse_recipe_from_video_text,
 )
@@ -39,6 +39,10 @@ class TestParseRecipeFromImage:
         assert call["tools"][0]["name"] == "extract_recipe"
         # Schema is built from pydantic, not hand-written.
         assert "properties" in call["tools"][0]["input_schema"]
+        # The model may report insufficient evidence with empty arrays; the
+        # shared Recipe validator rejects those outputs after the tool call.
+        assert "minItems" not in call["tools"][0]["input_schema"]["properties"]["ingredients"]
+        assert "minItems" not in call["tools"][0]["input_schema"]["properties"]["steps"]
 
     def test_image_block_is_base64_encoded(self, make_client: Any) -> None:
         messages = make_client(valid_recipe_input())
@@ -51,9 +55,9 @@ class TestParseRecipeFromImage:
         # base64 of b"rawbytes"
         import base64
 
-        assert image_block["source"]["data"] == base64.standard_b64encode(
-            b"rawbytes"
-        ).decode("ascii")
+        assert image_block["source"]["data"] == base64.standard_b64encode(b"rawbytes").decode(
+            "ascii"
+        )
 
     def test_worker_prompt_mentions_image(self, make_client: Any) -> None:
         make_client(valid_recipe_input())
@@ -69,27 +73,9 @@ class TestParseRecipeFromImage:
 
 class TestParseRecipeFromUrl:
     def _patch_fetch(self, monkeypatch: pytest.MonkeyPatch, html: str) -> None:
-        class _FakeResponse:
-            text = html
+        monkeypatch.setattr(recipe_parser, "_fetch_public_html", lambda url: html)
 
-        class _FakeClient:
-            def __init__(self, *a: Any, **k: Any) -> None:
-                pass
-
-            def __enter__(self) -> _FakeClient:
-                return self
-
-            def __exit__(self, *a: Any) -> None:
-                return None
-
-            def get(self, url: str) -> _FakeResponse:
-                return _FakeResponse()
-
-        monkeypatch.setattr(httpx, "Client", _FakeClient)
-
-    def test_html_strip_and_cap(
-        self, make_client: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_html_strip_and_cap(self, make_client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         # Build HTML whose visible text far exceeds the 30k cap.
         filler = "word " * 20_000  # ~100k chars of visible text
         html = (
@@ -113,9 +99,7 @@ class TestParseRecipeFromUrl:
     def test_user_message_is_stripped_text(
         self, make_client: Any, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        self._patch_fetch(
-            monkeypatch, "<html><body><p>Hello  world</p></body></html>"
-        )
+        self._patch_fetch(monkeypatch, "<html><body><p>Hello  world</p></body></html>")
         messages = make_client(valid_recipe_input())
 
         result = parse_recipe_from_url("https://foo.test/r")
@@ -124,9 +108,7 @@ class TestParseRecipeFromUrl:
         assert call["messages"][0]["content"] == result.stripped_text
         assert result.stripped_text == "Hello world"
 
-    def test_url_prompt_variant(
-        self, make_client: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_url_prompt_variant(self, make_client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
         self._patch_fetch(monkeypatch, "<body>text</body>")
         messages = make_client(valid_recipe_input())
 
@@ -163,9 +145,7 @@ class TestParseRecipeFromVideoText:
 
     def test_none_placeholders(self, make_client: Any) -> None:
         make_client(valid_recipe_input())
-        result = parse_recipe_from_video_text(
-            caption="only caption", transcript="", source_url="u"
-        )
+        result = parse_recipe_from_video_text(caption="only caption", transcript="", source_url="u")
         assert result.stripped_text is not None
         assert "TRANSCRIPT:\n(none)" in result.stripped_text
 
@@ -179,3 +159,87 @@ class TestGetClient:
         with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY_PARSING is not set"):
             recipe_parser.get_client()
         monkeypatch.setattr(recipe_parser, "_client", None)
+
+
+def test_pasted_text_uses_no_invention_prompt(make_client: Any) -> None:
+    messages = make_client(valid_recipe_input())
+    parse_recipe_from_text("1 cup rice. Boil rice.")
+    assert "do not invent" in messages.calls[0]["system"][0]["text"].lower()
+
+
+def test_private_url_rejected_before_client_or_claude(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(recipe_parser, "get_client", lambda: pytest.fail("Claude called"))
+    with pytest.raises(ValueError, match="public"):
+        parse_recipe_from_url("http://127.0.0.1/recipe")
+
+
+def test_jsonld_recipe_is_passed_to_parser(
+    make_client: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    html = (
+        '<script type="application/ld+json">'
+        '{"@context":"https://schema.org","@type":"Recipe",'
+        '"name":"Bean Stew","recipeIngredient":["beans"],'
+        '"recipeInstructions":["Simmer beans"]}'
+        "</script><p>Unrelated page</p>"
+    )
+    monkeypatch.setattr(recipe_parser, "_fetch_public_html", lambda url: html)
+    messages = make_client(valid_recipe_input())
+    parse_recipe_from_url("https://recipes.example/stew")
+    sent = messages.calls[0]["messages"][0]["content"]
+    assert "Bean Stew" in sent
+    assert "Simmer beans" in sent
+
+
+def test_dns_private_address_is_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        recipe_parser.socket,
+        "getaddrinfo",
+        lambda *args: [(None, None, None, None, ("10.0.0.7", 443))],
+    )
+    with pytest.raises(ValueError, match="public"):
+        recipe_parser._check_public_url("https://recipes.example/private")
+
+
+def test_redirect_to_loopback_is_blocked_before_second_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fetched: list[tuple[str, dict[str, Any]]] = []
+
+    class Response:
+        status_code = 302
+        headers = {"location": "http://127.0.0.1/private"}
+
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+    class Client:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> Client:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+        def stream(self, method: str, url: str, **kwargs: Any) -> Response:
+            fetched.append((url, kwargs))
+            return Response()
+
+    monkeypatch.setattr(recipe_parser.httpx, "Client", Client)
+    check = recipe_parser._check_public_url
+    monkeypatch.setattr(
+        recipe_parser,
+        "_check_public_url",
+        lambda url: check("http://127.0.0.1") if "127.0.0.1" in url else "93.184.216.34",
+    )
+    with pytest.raises(ValueError, match="public"):
+        recipe_parser._fetch_public_html("https://recipes.example/start")
+    assert fetched[0][0] == "https://93.184.216.34/start"
+    assert fetched[0][1]["headers"] == {"Host": "recipes.example"}
+    assert fetched[0][1]["extensions"] == {"sni_hostname": "recipes.example"}
+    assert len(fetched) == 1
