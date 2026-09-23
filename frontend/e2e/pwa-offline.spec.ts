@@ -1,5 +1,6 @@
 import { expect, test, chromium } from "@playwright/test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createServer, request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,6 +18,63 @@ const recipe = {
 const backup = JSON.stringify({
   format: "all-around-food", version: 1, exported_at: "2026-01-01T00:00:00.000Z",
   library: { recipes: [recipe], meal_plans: [], shopping: [], pantry: [], cook_progress: [], drafts: [], settings: [] },
+});
+
+test("protected preview installs with its session and rejects a sign-in redirect", async ({ baseURL }) => {
+  const upstream = new URL(baseURL!);
+  let redirectAsset = false;
+  let redirected = 0;
+  const proxy = createServer((incoming, outgoing) => {
+    if (!incoming.headers.cookie?.includes("preview_session=ok") ||
+        (redirectAsset && incoming.url?.startsWith("/icons/icon-192.png"))) {
+      // Count the worker's fetch, not an earlier browser icon request.
+      if (incoming.headers["sec-fetch-dest"] === "empty") redirected++;
+      outgoing.writeHead(302, { location: "/signin" }).end();
+      return;
+    }
+    const forwarded = httpRequest(upstream, {
+      method: incoming.method,
+      path: incoming.url,
+      headers: { ...incoming.headers, host: upstream.host },
+    }, (response) => {
+      outgoing.writeHead(response.statusCode!, response.headers);
+      response.pipe(outgoing);
+    });
+    forwarded.on("error", () => outgoing.writeHead(502).end());
+    incoming.pipe(forwarded);
+  });
+  await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+  const address = proxy.address();
+  if (!address || typeof address === "string") throw new Error("Proxy address unavailable");
+  const origin = `http://127.0.0.1:${address.port}`;
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const context = await browser.newContext({ baseURL: origin });
+    try {
+      await context.addCookies([{ name: "preview_session", value: "ok", url: origin }]);
+      const page = context.pages()[0] ?? await context.newPage();
+      await page.goto("/app#/settings");
+      await expect(page.getByRole("status", { name: "Offline ready" })).toBeVisible();
+      expect(await page.evaluate(async () => (await caches.keys()).some((name) => name.startsWith("aaf-shell-")))).toBe(true);
+    } finally {
+      await context.close();
+    }
+    redirectAsset = true;
+    const rejected = await browser.newContext({ baseURL: origin });
+    try {
+      await rejected.addCookies([{ name: "preview_session", value: "ok", url: origin }]);
+      const page = await rejected.newPage();
+      await page.goto("/app#/settings");
+      await expect.poll(() => redirected).toBeGreaterThan(0);
+      await expect.poll(() => page.evaluate(async () => caches.keys())).toEqual([]);
+      await expect(page.getByRole("status", { name: "Offline ready" })).toHaveCount(0);
+    } finally {
+      await rejected.close();
+    }
+  } finally {
+    await browser.close();
+    await new Promise<void>((resolve) => proxy.close(() => resolve()));
+  }
 });
 
 test("installed shell opens an unvisited recipe offline and recovers online after cache eviction", async ({ baseURL }) => {

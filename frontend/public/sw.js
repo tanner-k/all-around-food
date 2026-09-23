@@ -36,7 +36,7 @@ self.addEventListener("install", (event) => {
     const cache = await caches.open(cacheName);
     try {
       const responses = await Promise.all(release.assets.map(async (path) => {
-        const response = await fetch(path, { cache: "reload", credentials: "omit", redirect: "error" });
+        const response = await fetch(path, { cache: "reload", credentials: "same-origin", redirect: "error" });
         if (!response.ok || response.type !== "basic" ||
             (path === "/app" && !response.headers.get("content-type")?.includes("text/html"))) {
           throw new Error(`Required PWA asset failed: ${path}`);
