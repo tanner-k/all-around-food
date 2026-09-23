@@ -9,9 +9,11 @@ import { normalizeName } from "@/lib/normalize";
 import { closeLocalDB, getLocalDB, reportStorageIssue } from "./db";
 import {
   CookProgressSchema,
+  CookProgressPatchSchema,
   RecipeDraftSchema,
   SettingSchema,
   type CookProgress,
+  type CookProgressPatch,
   type LibrarySnapshot,
   type Setting,
 } from "./schema";
@@ -107,8 +109,8 @@ export async function saveMealPlan(input: MealPlan): Promise<void> {
   notifyChange();
 }
 
-export async function saveCookProgress(input: CookProgress): Promise<void> {
-  const progress = CookProgressSchema.parse(input);
+export async function saveCookProgress(input: CookProgressPatch): Promise<void> {
+  const progress = CookProgressPatchSchema.parse(input);
   try {
     const db = await getLocalDB();
     const tx = db.transaction("cook_progress", "readwrite");
@@ -117,11 +119,12 @@ export async function saveCookProgress(input: CookProgress): Promise<void> {
       await tx.done;
       return;
     }
-    await tx.store.put({
+    await tx.store.put(CookProgressSchema.parse({
+      ...existing,
       ...progress,
       session_id: existing?.session_id ?? progress.session_id,
-      completed_at: existing?.completed_at ?? progress.completed_at,
-    });
+      completed_at: existing?.completed_at ?? progress.completed_at ?? existing?.completed_at,
+    }));
     await tx.done;
   } catch (error) {
     await closeLocalDB();

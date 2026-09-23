@@ -10,7 +10,7 @@ import { CookDoneView } from "./CookDoneView";
 import { IngredientsSheet } from "./IngredientsSheet";
 import { TimerSheet } from "./TimerSheet";
 import { formatTime } from "@/lib/format-time";
-import type { CookProgress } from "@/lib/local/schema";
+import type { CookProgress, CookProgressPatch } from "@/lib/local/schema";
 import type { PantryItem, PantryStatus } from "@/lib/pantry-schema";
 import { localHref } from "@/lib/local/navigation";
 
@@ -20,7 +20,7 @@ interface CookModeProps {
   recipe: Recipe;
   progress: CookProgress;
   pantry: PantryItem[];
-  onSaveProgress: (progress: CookProgress) => Promise<void>;
+  onSaveProgress: (progress: CookProgressPatch) => Promise<void>;
   onComplete: (sessionId: string) => Promise<boolean>;
   onSetPantryStatus: (id: string, status: PantryStatus) => Promise<void>;
 }
@@ -37,7 +37,6 @@ export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete,
   const [done, setDone] = useState(Boolean(progress.completed_at));
   const [now, setNow] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const latest = useRef(progress);
   const pendingWrites = useRef(0);
   const currentStep = view.step;
   const layout = view.layout;
@@ -58,18 +57,16 @@ export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete,
   // Adopt progress another view committed. Incoming snapshots are never written
   // back, so two views of one session converge instead of echoing stale state.
   useEffect(() => {
-    latest.current = progress;
     if (pendingWrites.current > 0) return;
     setView(viewOf(progress));
     setDone((current) => current || Boolean(progress.completed_at));
   }, [progress]);
 
-  // Only a user action persists, and only the fields this view owns.
+  // Persist only this action's fields; the repository merges them atomically.
   function apply(patch: Partial<CookView>) {
-    const next = { ...view, ...patch };
-    setView(next);
+    setView((current) => ({ ...current, ...patch }));
     pendingWrites.current += 1;
-    void onSaveProgress({ ...latest.current, ...next })
+    void onSaveProgress({ recipe_id: progress.recipe_id, session_id: progress.session_id, ...patch })
       .catch((error: unknown) => setSaveError(error instanceof Error ? error.message : "Unable to save progress."))
       .finally(() => { pendingWrites.current -= 1; });
   }

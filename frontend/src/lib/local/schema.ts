@@ -14,6 +14,10 @@ export const CookProgressSchema = z.object({
   completed_at: z.string().nullable().optional(),
 });
 
+export const CookProgressPatchSchema = CookProgressSchema.partial().extend({
+  recipe_id: CookProgressSchema.shape.recipe_id,
+});
+
 export const RecipeDraftSchema = z.object({
   id: z.string(),
   recipe: RecipeSchema,
@@ -66,6 +70,7 @@ export const SettingSchema = z.object({
 });
 
 export type CookProgress = z.infer<typeof CookProgressSchema>;
+export type CookProgressPatch = z.infer<typeof CookProgressPatchSchema>;
 export type RecipeDraft = z.infer<typeof RecipeDraftSchema>;
 export type LocalImport = z.infer<typeof LocalImportSchema>;
 export type SettingKey = z.infer<typeof SettingKeySchema>;

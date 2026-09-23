@@ -79,6 +79,36 @@ describe("local repository", () => {
     ]);
   });
 
+  it("merges concurrent step and timer patches in either order", async () => {
+    for (const [recipeId, patches] of [
+      ["step-first", [{ step: 2 }, { timer_end_at: 12345 }]],
+      ["timer-first", [{ timer_end_at: 12345 }, { step: 2 }]],
+    ] as const) {
+      const session = await beginCookSession(recipeId);
+      await Promise.all(patches.map((patch) => saveCookProgress({
+        recipe_id: recipeId,
+        session_id: session.session_id,
+        ...patch,
+      })));
+      expect((await readSnapshot()).cook_progress.find((row) => row.recipe_id === recipeId)).toEqual(
+        expect.objectContaining({ step: 2, timer_end_at: 12345 }),
+      );
+    }
+  });
+
+  it("ignores a stale session patch after a new session starts", async () => {
+    const first = await beginCookSession("recipe-1");
+    await putRecipe(recipeFixture());
+    await completeCookSession("recipe-1", first.session_id!);
+    const next = await beginCookSession("recipe-1", true);
+
+    await saveCookProgress({ recipe_id: "recipe-1", session_id: first.session_id, step: 3 });
+
+    expect((await readSnapshot()).cook_progress[0]).toEqual(
+      expect.objectContaining({ session_id: next.session_id, step: 0, completed_at: null }),
+    );
+  });
+
   it("counts a cooking session only once across repeated completion calls", async () => {
     await putRecipe(recipeFixture());
     const session = await beginCookSession("recipe-1");
