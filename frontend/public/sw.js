@@ -33,19 +33,33 @@ async function cleanUnusedReleases() {
 
 self.addEventListener("install", (event) => {
   event.waitUntil((async () => {
-    const cache = await caches.open(cacheName);
     try {
+      const cache = await caches.open(cacheName);
       const responses = await Promise.all(release.assets.map(async (path) => {
-        const response = await fetch(path, { cache: "reload", credentials: "same-origin", redirect: "error" });
-        if (!response.ok || response.type !== "basic" ||
-            (path === "/app" && !response.headers.get("content-type")?.includes("text/html"))) {
-          throw new Error(`Required PWA asset failed: ${path}`);
+        try {
+          const response = await fetch(path, { cache: "reload", credentials: "same-origin", redirect: "error" });
+          if (!response.ok || response.type !== "basic" ||
+              (path === "/app" && !response.headers.get("content-type")?.includes("text/html"))) {
+            throw new Error(`HTTP ${response.status}, response type ${response.type}`);
+          }
+          return response;
+        } catch (error) {
+          throw new Error(`Required PWA asset failed: ${path}: ${error instanceof Error ? error.message : String(error)}`);
         }
-        return response;
       }));
-      await Promise.all(release.assets.map((path, index) => cache.put(path, responses[index])));
+      await Promise.all(release.assets.map(async (path, index) => {
+        try {
+          await cache.put(path, responses[index]);
+        } catch (error) {
+          throw new Error(`Caching PWA asset failed: ${path}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }));
     } catch (error) {
-      await caches.delete(cacheName);
+      try {
+        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        for (const client of clients) client.postMessage({ type: "PWA_INSTALL_FAILED", detail: error instanceof Error ? error.message : String(error) });
+      } catch { /* Preserve the original install failure. */ }
+      await caches.delete(cacheName).catch(() => undefined);
       throw error;
     }
     // The first installation activates normally. Updates wait for the user's choice.

@@ -57,11 +57,18 @@ export default function ServiceWorkerRegister() {
       if (event.data?.type === "PWA_RELEASE_QUERY") {
         event.ports[0]?.postMessage({ buildId: pageBuildId.current });
       }
+      if (event.data?.type === "PWA_INSTALL_FAILED" &&
+          event.source instanceof ServiceWorker &&
+          event.source.scriptURL === new URL("/sw.js", location.origin).href &&
+          typeof event.data.detail === "string") {
+        setError(`Offline setup failed. ${event.data.detail} Reconnect and reload to retry.`);
+      }
     };
     const reportReady = (result: { ready: boolean; buildId?: string }) => {
       if (stopped) return;
       if (!pageBuildId.current && result.ready) pageBuildId.current = result.buildId ?? null;
       setReady(result.ready);
+      if (result.ready) setError(null);
     };
     const onControllerChange = () => {
       if (requestedUpdate.current) {
@@ -77,7 +84,7 @@ export default function ServiceWorkerRegister() {
       const worker = registration?.installing;
       worker?.addEventListener("statechange", () => {
         if (worker.state === "installed" && navigator.serviceWorker.controller) setWaiting(worker);
-        if (worker.state === "redundant" && !registration?.active) setError("Offline setup failed. Reconnect and reload to retry.");
+        if (worker.state === "redundant" && !registration?.active) setError((current) => current ?? "Offline setup failed. Reconnect and reload to retry.");
       });
     };
     const maybeRequestPersistence = async () => {
@@ -115,8 +122,8 @@ export default function ServiceWorkerRegister() {
         const active = (await navigator.serviceWorker.ready).active;
         if (active && !stopped) reportReady(await checkReady(active));
         void registration.update().catch(() => undefined);
-      } catch {
-        if (!stopped) setError("Offline setup failed. Reconnect and reload to retry.");
+      } catch (error) {
+        if (!stopped) setError((current) => current ?? `Offline setup failed. ${error instanceof Error ? error.message : String(error)} Reconnect and reload to retry.`);
       }
     };
     if (document.readyState === "complete") void register();

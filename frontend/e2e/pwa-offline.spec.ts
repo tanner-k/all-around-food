@@ -68,6 +68,7 @@ test("protected preview installs with its session and rejects a sign-in redirect
       await expect.poll(() => redirected).toBeGreaterThan(0);
       await expect.poll(() => page.evaluate(async () => caches.keys())).toEqual([]);
       await expect(page.getByRole("status", { name: "Offline ready" })).toHaveCount(0);
+      await expect(page.getByRole("alert").filter({ hasText: "Offline setup failed" })).toContainText("/icons/icon-192.png");
     } finally {
       await rejected.close();
     }
