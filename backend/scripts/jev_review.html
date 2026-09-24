@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Jev recipe experiment</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#27362e;background:#f6f4ee}
+*{box-sizing:border-box}body{max-width:1200px;margin:auto;padding:28px}
+h1{font:2.6rem Georgia,serif;margin-bottom:8px}h2{font:1.7rem Georgia,serif}
+p{line-height:1.55}.sub,small{color:#57665c}.stats{display:flex;gap:12px;flex-wrap:wrap}
+.stat,article,details{background:white;border:1px solid #d9ded3;border-radius:12px;padding:16px}
+.stat{flex:1;min-width:150px}.stat strong{display:block;font-size:1.6rem}
+.controls{position:sticky;top:0;background:#f6f4ee;padding:16px 0;display:flex;gap:12px;
+flex-wrap:wrap;align-items:center;z-index:1}select,button{font:inherit;padding:8px;border-radius:7px;
+border:1px solid #a9b7a9;background:white;color:inherit}button{cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+article{border-left:5px solid #708677}article[data-label=ingredient]{border-left-color:#388355}
+article[data-label=cooking_step]{border-left-color:#b77531}article[data-label=irrelevant]{opacity:.75}
+article[data-label=mixed]{border-left-color:#956fbe}.badge{font-size:.8rem;padding:4px 8px;
+background:#edf1eb;border-radius:20px;display:inline-block;margin-right:6px}
+article p,pre{white-space:pre-wrap;overflow-wrap:anywhere}article p{margin:12px 0}
+details{margin-top:12px}summary{cursor:pointer}pre{font: .9rem/1.55 ui-monospace,monospace}
+table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{text-align:left;padding:9px;
+border-bottom:1px solid #e2e7df;vertical-align:top}.tablewrap{overflow:auto}
+@media(max-width:720px){body{padding:16px}.grid{grid-template-columns:1fr}h1{font-size:2rem}}
+</style>
+<h1>Recipe text, organized by Jev</h1>
+<p class="sub">Caption and CPU transcript → neighboring-text decisions → block labels.</p>
+<p>This is an experiment, not a saved recipe. All block wording comes from the source.
+Probabilities are model outputs, not measured recipe accuracy. Mixed and uncertain content needs review.</p>
+<div class="stats" id="stats"></div>
+<div class="controls"><label>Source <select id="source"><option value="">All sources</option></select></label>
+<label>Label <select id="label"><option value="">All labels</option></select></label>
+<label><input type="checkbox" id="uncertain"> Needs review only</label>
+<button id="download">Download results JSON</button><span id="count"></span></div>
+<main id="blocks" class="grid"></main>
+<h2>Original source text</h2><div id="sources"></div>
+<h2>Grouping decisions</h2><p id="threshold" class="sub"></p>
+<div class="tablewrap"><table><thead><tr><th>Source / pair</th><th>Neighboring fragments</th>
+<th>Join probability</th><th>Action</th></tr></thead><tbody id="boundaries"></tbody></table></div>
+<h2>API usage</h2><div class="tablewrap"><table><thead><tr><th>Stage</th><th>Questions</th>
+<th>Seconds</th><th>Model</th><th>Input / output tokens</th></tr></thead><tbody id="calls"></tbody></table></div>
+<script id="result" type="application/json">__RESULT_JSON__</script>
+<script>
+const data=JSON.parse(document.getElementById('result').textContent);
+const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;
+if(cls)n.className=cls;return n};
+const total=data.calls.reduce((n,c)=>n+c.seconds,0);
+const tokens=data.calls.reduce((n,c)=>n+c.usage.input_tokens+c.usage.output_tokens,0);
+for(const [value,title] of [[data.segments.length,'source segments'],[data.blocks.length,'labeled blocks'],
+[data.calls.length,'API requests'],[total.toFixed(2)+'s','Jev request time'],[tokens,'total tokens']]){
+const box=el('div',undefined,'stat');box.append(el('strong',value),el('span',title));document.getElementById('stats').append(box)}
+for(const name of Object.keys(data.sources))document.getElementById('source').append(new Option(name,name));
+for(const label of [...new Set(data.blocks.map(b=>b.classification.choice))].sort())
+document.getElementById('label').append(new Option(label.replaceAll('_',' '),label));
+function render(){const root=document.getElementById('blocks');root.replaceChildren();
+for(const b of data.blocks){const c=b.classification;
+if(document.getElementById('source').value&&b.source!==document.getElementById('source').value)continue;
+if(document.getElementById('label').value&&c.choice!==document.getElementById('label').value)continue;
+const hasUncertainJoin=data.boundaries.some(x=>x.uncertain&&b.segments.some(s=>s.id===x.right||s.id===x.left));
+if(document.getElementById('uncertain').checked&&c.confidence>=.7&&c.choice!=='mixed'&&!hasUncertainJoin)continue;
+const card=el('article');card.dataset.label=c.choice;
+card.append(el('span',c.choice.replaceAll('_',' '),'badge'),el('span',b.source,'badge'),el('p',b.text),
+el('small',`${b.id} · source characters ${b.start}–${b.end} · confidence ${c.confidence.toFixed(2)}`));
+const detail=el('details');detail.append(el('summary','Label probabilities and source segments'),
+el('pre',JSON.stringify({probabilities:c.probabilities,segments:b.segments.map(s=>s.id)},null,2)));
+card.append(detail);root.append(card)}document.getElementById('count').textContent=root.children.length+' blocks shown'}
+for(const id of ['source','label','uncertain'])document.getElementById(id).addEventListener('change',render);
+for(const [name,text] of Object.entries(data.sources)){const d=el('details');d.append(el('summary',name),el('pre',text));
+document.getElementById('sources').append(d)}
+const segments=Object.fromEntries(data.segments.map(s=>[s.id,s]));
+document.getElementById('threshold').textContent=`Provisional merge threshold: ${data.proposed_grouping_threshold}. Explicit list/paragraph boundaries are preserved. Block-size limits can keep a high-probability pair separate.`;
+for(const b of data.boundaries){const tr=el('tr');for(const text of [b.source+' / '+b.left+' → '+b.right,
+segments[b.left].text+'\n→ '+segments[b.right].text,b.probability.toFixed(3),
+(b.merged?'Joined':'Kept separate')+(b.uncertain?' · review':'')])tr.append(el('td',text));
+document.getElementById('boundaries').append(tr)}
+for(const c of data.calls){const tr=el('tr');for(const text of [c.stage,c.question_count,c.seconds.toFixed(2),c.model,
+c.usage.input_tokens+' / '+c.usage.output_tokens])tr.append(el('td',text));document.getElementById('calls').append(tr)}
+document.getElementById('download').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],
+{type:'application/json'}));const a=el('a');a.href=url;a.download='jev-recipe-results.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+render();
+</script></html>

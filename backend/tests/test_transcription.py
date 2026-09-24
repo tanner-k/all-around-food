@@ -64,3 +64,20 @@ def test_whispercpp_transcriber_wraps_errors(
 
     with pytest.raises(TranscriptionError):
         transcriber.transcribe(Path("audio.wav"))
+
+
+def test_cpu_transcription_disables_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The prototype benchmark must not silently use the Mac GPU."""
+    from pywhispercpp import model
+
+    captured: dict[str, object] = {}
+
+    def create_model(**kwargs: object) -> _StubModel:
+        captured.update(kwargs)
+        return _StubModel([_StubSegment("Mix well.")])
+
+    monkeypatch.setattr(model, "Model", create_model)
+    transcriber = WhisperCppTranscriber(cpu_only=True)
+    assert transcriber.transcribe(Path("audio.wav")) == "Mix well."
+    assert captured["context_params"] == {"use_gpu": False}
+    assert captured["n_threads"] == 4

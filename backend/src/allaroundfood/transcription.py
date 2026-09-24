@@ -43,9 +43,11 @@ class WhisperCppTranscriber:
         self,
         model: str = "base.en",
         models_dir: Path | None = None,
+        cpu_only: bool = False,
     ) -> None:
         self._model = model
         self._models_dir = models_dir
+        self._cpu_only = cpu_only
         self._client: Any = None  # loaded lazily
 
     def _load(self) -> Any:
@@ -61,6 +63,8 @@ class WhisperCppTranscriber:
         }
         if self._models_dir is not None:
             kwargs["models_dir"] = str(self._models_dir)
+        if self._cpu_only:
+            kwargs.update(context_params={"use_gpu": False}, n_threads=4)
 
         try:
             logger.info("Loading whisper.cpp model %s", self._model)

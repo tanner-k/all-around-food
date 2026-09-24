@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js/React/TypeScript, IndexedDB, Supabase Auth/Postgres/Storage, Python 3.12, Docker Compose, yt-dlp, FFmpeg, pywhispercpp, Anthropic SDK, Pydantic and Zod.
 
-**Status:** Proposed execution plan, based on the inspected implementation at `6e7d1b5`. This document does not install a worker, apply hosted migrations, or publish a production release.
+**Status:** Superseded in part by the user's September 24 decision to remove Anthropic. Do not execute the Anthropic-dependent extraction, vision, or configuration tasks below. The [Jev experiment](../../experiments/2026-09-24-jev-recipe.md) records the first replacement prototype; production-plan revision awaits its review. The remaining architecture is a proposal based on `6e7d1b5`, not evidence of installation or deployment.
 
 ## Decisions and global constraints
 
