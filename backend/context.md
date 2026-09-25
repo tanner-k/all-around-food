@@ -1,10 +1,10 @@
 # backend/
 
 ## Scope
-- Local import/eval worker
+- HTTP/API endpoints
 - Business logic & domain models
-- Recipe parsing, video transcription, receipt OCR, and pricing support libraries
-- Messaging helpers retained for future local-only workflows
+- Authentication / authorization
+- Background jobs, schedulers, queue workers
 
 ## Not in scope
 - UI rendering → `frontend/`
@@ -12,26 +12,19 @@
 - Cloud infrastructure → `infra/`
 
 ## Stack
-Python 3.12 + Supabase service-role client + Polars for deferred pricing/OCR Parquet paths
+Python 3.12 + FastAPI + Polars (file-backed)
 
 ## Runtime requirements
-- `yt-dlp` for fetching supported Instagram/TikTok recipe video media and metadata
-- `ffmpeg` for audio extraction/transcoding before transcription
+- `yt-dlp` for fetching supported Instagram/TikTok recipe video media and metadata. Video fetch runs its Python package in an isolated child process that checks every socket destination. Only one direct HTTP(S) media stream is accepted; HLS/DASH/RTMP and split streams return a fallback error that suggests caption text or a screenshot.
+- `ffmpeg` for local-file audio extraction/transcoding before transcription; input protocols are limited to `file,pipe` so a downloaded media file cannot trigger an outbound fetch.
 - local whisper.cpp speech-to-text, in-process via the `pywhispercpp` package (no external service, no separate binary — the runtime ships in the pip wheel). See ADR 0006.
-  - `WHISPER_MODEL` selects the model by name (default `base.en`); English `.en` models suit English recipe videos. `WHISPER_MODELS_DIR` (optional) points at a directory of pre-downloaded ggml `.bin` files, or where a named model is cached.
-  - ggml model `.bin` files download on first use from huggingface.co (`tiny.en` ≈ 75 MB, `base.en` ≈ 142 MB). In network-restricted environments (including CI and some deploys) huggingface.co may be blocked, so provision the model as a file: pre-download it and point `WHISPER_MODELS_DIR` at it, or run first-use where egress is allowed.
+  - `WHISPER_MODEL` selects the model by name (default `small.en`); English `.en` models suit English recipe videos. `WHISPER_MODELS_DIR` (optional) points at a directory of pre-downloaded ggml `.bin` files, or where a named model is cached.
+  - ggml model `.bin` files download on first use from huggingface.co (`tiny.en` ≈ 75 MB, `small.en` ≈ 466 MB). In network-restricted environments (including CI and some deploys) huggingface.co may be blocked, so provision the model as a file: pre-download it and point `WHISPER_MODELS_DIR` at it, or run first-use where egress is allowed. The FastAPI startup hook will log whether `yt-dlp` and `ffmpeg` resolved (ADR 0002 follow-up).
+- Local Tesseract OCR for recipe screenshots (`brew install tesseract` on macOS; included in the worker container). Set `TESSERACT_BIN` if needed. This is separate from receipt OCR.
+- Jev `jev-1.13.0` classifies source spans and relationships using `TYPESAFE_API_KEY`. Exact fractions/ranges come from local parsing. Request budgets fail visibly; missing evidence is never invented. Captions and transcripts are both parsed; original text and uncertainties remain in draft notes.
 - Playwright Chromium for pricing adapter fallback fetches: `uv run playwright install chromium`
 - Poppler for `pdf2image` receipt PDF preprocessing: `brew install poppler` on macOS
 - Qwen2-VL GGUF for real receipt OCR: `bash scripts/download_qwen.sh`, then set `QWEN_GGUF_PATH`
-- Docker Desktop for the scheduled local worker image; launchd runs `docker run ... allaroundfood-worker --once`
-
-## Worker operations
-- Preflight before scheduling: `uv run python -m allaroundfood.worker --doctor`
-- Prefetch/cache local models: `uv run python -m allaroundfood.worker --prefetch-models`
-- Drain once for a smoke test: `uv run python -m allaroundfood.worker --once`
-- Build the scheduled image from the repo root: `docker build -f backend/Dockerfile.worker -t allaroundfood-worker backend`
-- Supported local scheduler: macOS launchd via `infra/worker/com.allaroundfood.worker.plist` and `infra/worker/install_launchd.sh`
-- The Docker worker mounts host models at `/models`; use `QWEN_GGUF_PATH=/models/qwen2-vl.gguf` and `WHISPER_MODELS_DIR=/models/whisper`
 
 ## Local skills / conventions
 - test-driven-development
@@ -40,12 +33,22 @@ Python 3.12 + Supabase service-role client + Polars for deferred pricing/OCR Par
 ## Run
 ```bash
 cd backend
-uv run python -m allaroundfood.worker --once
+uv run python -m allaroundfood
 ```
 
+The personal import worker runs separately with `python -m allaroundfood.worker --watch`.
+Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TYPESAFE_API_KEY`,
+and `IMPORT_OWNER_USER_ID` in its Mac environment. It returns recipe drafts for
+website, video, screenshot, and pasted-text jobs through fenced queue RPCs;
+manual recipe editing does not depend on it. `RUN_EVALS` is a legacy setting; imports never invoke the Anthropic judge.
+Acknowledged or expired uploads are removed in a later watch cycle. If the Mac
+is offline, that cleanup waits until it reconnects; no source is removed before
+the draft is durably published and acknowledged or expired.
+
 ## Notes for agents
-- `python -m allaroundfood.worker --once` drains pending Supabase `parse_jobs`.
-- Validation at the worker boundary remains required — never trust queued payloads.
+- Keep FastAPI route modules grouped by resource.
+- Validation at the edge (request → typed input) — never trust the client
+- Errors surface as typed problem objects; do not throw raw strings
 - All shared env access goes through `config.py` — fail loudly if a required env var is missing
 - Pricing context lives at `src/allaroundfood/pricing/context.md`
 - OCR context lives at `src/allaroundfood/ocr/context.md`

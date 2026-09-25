@@ -1,7 +1,8 @@
-# Supabase (Phase 1 — personal re-architecture)
+# Supabase import coordination and legacy schema
 
-Schema, storage, and the one-time data migration for moving All Around Food off
-Parquet `*Store` files and onto Supabase Postgres (see
+Supabase retains the legacy cloud library, owner-only export, evaluation stats,
+and the temporary recipe-import queue. The personal `/app` library now lives in
+IndexedDB; existing cloud and Parquet records are preserved during migration (see
 [`docs/plans/personal-supabase-pivot.md`](../docs/plans/personal-supabase-pivot.md)
 and [ADR 0007](../docs/decisions/0007-personal-supabase-rearchitecture.md)).
 
@@ -12,7 +13,10 @@ supabase/
 ├── README.md                  ← this file
 └── migrations/
     ├── 0001_init.sql          ← extensions, all tables, indexes, RLS policies
-    └── 0002_storage.sql       ← private `imports` bucket + storage RLS policies
+    ├── 0002_storage.sql       ← private `imports` bucket + storage RLS policies
+    ├── 0003_claim_and_payload.sql ← deployed legacy queue history
+    ├── 0004_evaluation_stats.sql ← owner-scoped evaluation view
+    └── 0005_local_recipe_drafts.sql ← token-fenced transient drafts
 ```
 
 ## Required environment
@@ -21,12 +25,12 @@ supabase/
 |---|---|---|
 | `SUPABASE_URL` | migration script, frontend, worker | Project URL, e.g. `https://xxxx.supabase.co` |
 | `SUPABASE_SERVICE_ROLE_KEY` | **migration script + worker only** | Bypasses RLS. **Never** ship to the browser/Vercel. |
-| `SUPABASE_ANON_KEY` | frontend (PWA) + keep-alive workflow | Public anon key; safe in the client, gated by RLS. |
+| `SUPABASE_ANON_KEY` | frontend online imports/export + keep-alive workflow | Public anon key; safe in the client, gated by RLS. |
 | `OWNER_USER_ID` | **migration script only** | uuid of the Supabase auth user that will own every migrated row. Create that user first (**Dashboard → Authentication → Users**), then copy its uuid. Required for a real run; not needed for `--dry-run`. |
 
 ## Applying the migrations
 
-Run `0001_init.sql` then `0002_storage.sql`, in order. Pick one method:
+Run numbered migrations in order through `0005_local_recipe_drafts.sql`. Check `supabase_migrations.schema_migrations` in each target first: dev uses version `0004` for evaluation stats. If a target already recorded version `0004` for local drafts, reconcile that database explicitly before applying anything. Pick one method:
 
 ### Supabase CLI (recommended)
 
@@ -40,6 +44,9 @@ supabase db push          # applies everything under supabase/migrations/
 ```bash
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0001_init.sql
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0002_storage.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0003_claim_and_payload.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0004_evaluation_stats.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0005_local_recipe_drafts.sql
 ```
 
 `$SUPABASE_DB_URL` is the connection string from
@@ -48,10 +55,35 @@ psql "$SUPABASE_DB_URL" -f supabase/migrations/0002_storage.sql
 ### Supabase SQL editor
 
 Open **SQL Editor** in the dashboard, paste the contents of `0001_init.sql`,
-run it, then do the same for `0002_storage.sql`.
+run it, then do the same for `0002_storage.sql` through `0005_local_recipe_drafts.sql` in order.
 
-The migrations are idempotent (`create ... if not exists`,
-`on conflict do nothing`, `drop policy if exists`), so re-running is safe.
+Apply each migration once. Track applied files before using the SQL editor or `psql`.
+
+Before using imports, set the personal owner in the SQL editor (as the database
+administrator), substituting the existing auth user UUID. Until configured,
+import policies and claims fail closed:
+
+```sql
+insert into app_private.import_owner(singleton, user_id)
+values (true, '<existing-owner-auth-uuid>')
+on conflict (singleton) do update set user_id = excluded.user_id;
+```
+
+Disable public sign-ups under **Authentication → Providers → Email** (and any
+other enabled providers) in the Supabase dashboard. Only invite/create the owner
+account. The worker must also set `IMPORT_OWNER_USER_ID` to this same UUID.
+
+Run `supabase/tests/local_recipe_drafts.sql` only against a separate disposable
+project with two actual test users and all migrations applied. Set
+`AAF_TEST_DATABASE_URL`, `AAF_TEST_OWNER_ID`, `AAF_TEST_OTHER_ID`, and
+`AAF_TEST_DISPOSABLE_PROJECT=YES`, then run:
+
+```bash
+psql "$AAF_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/local_recipe_drafts.sql
+```
+
+The suite rolls back its rows and temporary owner configuration. The explicit
+guard prevents accidental execution without the disposable-project flag.
 
 > The `vector` (pgvector) extension is enabled by `0001_init.sql`. If your
 > project blocks `create extension`, enable **Vector** under
@@ -59,7 +91,7 @@ The migrations are idempotent (`create ... if not exists`,
 
 ## Migrating existing Parquet data
 
-After the schema is applied, load the existing `data/*.parquet` rows:
+For legacy Supabase migration only, the existing Parquet import script remains available. It is not the browser IndexedDB copy step. After the schema is applied, load existing `data/*.parquet` rows only when that separate migration is intended:
 
 ```bash
 # from the repo root, with the migrate dep group installed (see below)

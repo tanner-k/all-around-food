@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, Manrope } from "next/font/google";
-import Link from "next/link";
 import { MobileTabBar } from "@/app/(app)/_components/MobileTabBar";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import "./globals.css";
@@ -45,10 +44,10 @@ export const viewport: Viewport = {
 };
 
 const navLinks = [
-  { label: "Plan", href: "/plan" },
-  { label: "Cookbook", href: "/cookbook" },
-  { label: "Shop", href: "/shop" },
-  { label: "Pantry", href: "/pantry" },
+  { label: "Plan", href: "/app#/plan" },
+  { label: "Cookbook", href: "/app#/cookbook" },
+  { label: "Shop", href: "/app#/shop" },
+  { label: "Pantry", href: "/app#/pantry" },
 ];
 
 export default function RootLayout({
@@ -66,12 +65,12 @@ export default function RootLayout({
         <header className="border-b border-line">
           <nav className="mx-auto flex max-w-[1400px] items-center gap-8 px-4 md:px-14 py-4">
             {/* Brand mark */}
-            <Link
-              href="/plan"
+            <a
+              href="/app#/plan"
               className="font-serif italic text-xl text-terra tracking-tight shrink-0"
             >
               All Around Food
-            </Link>
+            </a>
 
             {/* Spacer */}
             <div className="flex-1" />
@@ -79,22 +78,23 @@ export default function RootLayout({
             {/* Nav items */}
             <div className="hidden md:flex items-center gap-6 text-sm font-medium">
               {navLinks.map(({ label, href }) => (
-                <Link
+                <a
                   key={href}
                   href={href}
                   className="text-ink-soft transition-colors hover:text-ink"
                 >
                   {label}
-                </Link>
+                </a>
               ))}
 
               {/* + Import — terracotta pill accent */}
-              <Link
-                href="/import"
+              <a
+                href="/app#/import"
                 className="rounded-full bg-terra-soft px-3 py-1 text-terra transition-colors hover:bg-terra hover:text-paper"
               >
                 + Import
-              </Link>
+              </a>
+              <a href="/app#/settings" className="text-ink-soft transition-colors hover:text-ink">Settings</a>
             </div>
           </nav>
         </header>

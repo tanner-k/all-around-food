@@ -1,5 +1,7 @@
 # Worker Reliability Implementation Plan
 
+> Historical plan. The local-first worker now uses token-fenced leases, owner-only retries, and a native Mac LaunchAgent. The proposed unfenced stale-recovery RPC, direct attempt reset, Docker daily worker, and Qwen-gated preflight are superseded; see ADR 0008 and infra/worker/README.md.
+
 **Status:** In progress  
 **Date:** 2026-07-05  
 **Scope:** Make the local import worker boringly reliable: installed scheduling,

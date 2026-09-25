@@ -17,6 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 
 export type ParseJobKind =
   | "url"
+  | "text"
   | "screenshot"
   | "video"
   | "shopping_list"
@@ -35,6 +36,12 @@ export interface ParseJob {
   attempts: number;
   error: string | null;
   result_recipe_id: string | null;
+  result_recipe_json: unknown | null;
+  result_warnings: string[];
+  lease_until: string | null;
+  claim_token: string | null;
+  acknowledged_at: string | null;
+  expires_at: string;
   created_at: string;
   updated_at: string;
 }
@@ -63,16 +70,18 @@ export function classifyUrlKind(url: string): "video" | "url" {
  * `video` job; everything else enqueues a `url` job. Sends only `kind` +
  * `source_url`; the rest of the row defaults server-side.
  */
-export async function enqueueUrlJob(url: string): Promise<ParseJob> {
+export async function enqueueUrlJob(url: string, id = crypto.randomUUID(), expectedOwner?: string): Promise<ParseJob> {
   const supabase = createClient();
+  if (expectedOwner) await verifyExpectedOwner(supabase, expectedOwner);
   const kind = classifyUrlKind(url);
 
   const { data, error } = await supabase
     .from(TABLE)
-    .insert({ kind, source_url: url })
+    .insert({ id, kind, source_url: url, ...(expectedOwner ? { user_id: expectedOwner } : {}) })
     .select("*")
     .single();
 
+  if (error?.code === "23505") return getJob(id);
   if (error) throw new Error(`Failed to enqueue URL job: ${error.message}`);
   return data as ParseJob;
 }
@@ -82,6 +91,11 @@ const EXT_BY_MEDIA_TYPE: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
 };
+
+async function verifyExpectedOwner(supabase: ReturnType<typeof createClient>, owner: string): Promise<void> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || data.user?.id !== owner) throw new Error("Import account changed; sign in as the original owner");
+}
 
 function extensionFor(file: File): string {
   const byType = EXT_BY_MEDIA_TYPE[file.type];
@@ -100,8 +114,14 @@ function extensionFor(file: File): string {
  */
 export async function enqueueImageJob(
   file: File,
-  kind: "screenshot" | "receipt"
+  kind: "screenshot" | "receipt",
+  id = crypto.randomUUID(),
+  expectedOwner?: string,
 ): Promise<ParseJob> {
+  if (!Object.hasOwn(EXT_BY_MEDIA_TYPE, file.type)) {
+    throw new Error("Upload a JPEG, PNG, or WebP image");
+  }
+  if (file.size > 10 * 1024 * 1024) throw new Error("Image exceeds 10 MB");
   const supabase = createClient();
 
   const {
@@ -110,8 +130,10 @@ export async function enqueueImageJob(
   } = await supabase.auth.getUser();
   if (authError) throw new Error(`Not signed in: ${authError.message}`);
   if (!user) throw new Error("Not signed in");
+  if (expectedOwner && user.id !== expectedOwner)
+    throw new Error("Import account changed; sign in as the original owner");
 
-  const path = `${user.id}/${crypto.randomUUID()}.${extensionFor(file)}`;
+  const path = `${expectedOwner ?? user.id}/${id}.${extensionFor(file)}`;
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
@@ -119,15 +141,16 @@ export async function enqueueImageJob(
       contentType: file.type || undefined,
       upsert: false,
     });
-  if (uploadError)
+  if (uploadError && !/already exists|duplicate/i.test(uploadError.message))
     throw new Error(`Failed to upload image: ${uploadError.message}`);
 
   const { data, error } = await supabase
     .from(TABLE)
-    .insert({ kind, storage_path: path })
+    .insert({ id, kind, storage_path: path, ...(expectedOwner ? { user_id: expectedOwner } : {}) })
     .select("*")
     .single();
 
+  if (error?.code === "23505") return getJob(id);
   if (error) throw new Error(`Failed to enqueue image job: ${error.message}`);
   return data as ParseJob;
 }
@@ -138,16 +161,21 @@ export async function enqueueImageJob(
  */
 export async function enqueueTextJob(
   text: string,
-  kind: "shopping_list"
+  kind: "text" | "shopping_list",
+  id = crypto.randomUUID(),
+  expectedOwner?: string,
 ): Promise<ParseJob> {
+  if (!text.trim() || text.length > 50_000) throw new Error("Text must be 1–50,000 characters");
   const supabase = createClient();
+  if (expectedOwner) await verifyExpectedOwner(supabase, expectedOwner);
 
   const { data, error } = await supabase
     .from(TABLE)
-    .insert({ kind, payload_text: text })
+    .insert({ id, kind, payload_text: text, ...(expectedOwner ? { user_id: expectedOwner } : {}) })
     .select("*")
     .single();
 
+  if (error?.code === "23505") return getJob(id);
   if (error) throw new Error(`Failed to enqueue text job: ${error.message}`);
   return data as ParseJob;
 }
@@ -166,17 +194,29 @@ export async function listJobs(): Promise<ParseJob[]> {
   return (data ?? []) as ParseJob[];
 }
 
-/** Retry a failed job from scratch: reset `status`, `error`, and `attempts`. */
+/** Fetch a submitted job by its durable local ID. A missing row has expired. */
+export async function getJob(id: string): Promise<ParseJob> {
+  const { data, error } = await createClient().from(TABLE).select("*").eq("id", id).single();
+  if (error?.code === "PGRST116") throw new Error("Import expired; submit again");
+  if (error) throw new Error(`Failed to fetch import job: ${error.message}`);
+  if (!data) throw new Error("Import expired; submit again");
+  return data as ParseJob;
+}
+
+/**
+ * Retry a failed owned job through the checked RPC. Attempts remain capped at 3.
+ */
 export async function retryJob(id: string): Promise<ParseJob> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from(TABLE)
-    .update({ status: "pending", error: null, attempts: 0 })
-    .eq("id", id)
-    .select("*")
-    .single();
+  const { data, error } = await createClient().rpc("retry_import_job", { p_id: id });
 
   if (error) throw new Error(`Failed to retry job: ${error.message}`);
+  return data as ParseJob;
+}
+
+/** Called only after the draft is durably committed in IndexedDB. */
+export async function ackJob(id: string): Promise<ParseJob> {
+  const { data, error } = await createClient().rpc("ack_import_job", { p_id: id });
+  if (error) throw new Error(`Failed to acknowledge import: ${error.message}`);
   return data as ParseJob;
 }
 

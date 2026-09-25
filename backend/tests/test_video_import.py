@@ -41,6 +41,9 @@ def test_video_import_settings_read_env(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("WHISPER_MODEL", "tiny.en")
     monkeypatch.setenv("WHISPER_MODELS_DIR", "/opt/models")
 
+    from allaroundfood.config import Settings
+
+    monkeypatch.setattr("allaroundfood.video_import.app_settings", Settings(_env_file=None))
     settings = VideoImportSettings.from_env()
 
     assert settings.ytdlp_bin == "/opt/bin/yt-dlp"
@@ -68,8 +71,8 @@ def test_fetch_video_text_runs_pipeline(
         assert text is True
         assert timeout == 30
 
-        if cmd[0] == "yt-dlp":
-            output_template = Path(cmd[cmd.index("-o") + 1])
+        if cmd[2:3] == ["allaroundfood.safe_ytdlp"]:
+            output_template = Path(cmd[-2])
             tmp_path = output_template.parent
             (tmp_path / "source.mp4").write_bytes(b"video")
             (tmp_path / "source.info.json").write_text(
@@ -94,7 +97,13 @@ def test_fetch_video_text_runs_pipeline(
         FakeTranscriber(transcript="mix the eggs and flour"),
     )
 
-    assert [cmd[0] for cmd in commands] == ["yt-dlp", "yt-dlp", "ffmpeg"]
+    assert [cmd[2] if cmd[1:2] == ["-m"] else cmd[0] for cmd in commands] == [
+        "allaroundfood.safe_ytdlp",
+        "allaroundfood.safe_ytdlp",
+        "ffmpeg",
+    ]
+    assert [cmd[3] for cmd in commands[:2]] == ["metadata", "media"]
+    assert commands[2][commands[2].index("-protocol_whitelist") + 1] == "file,pipe"
     assert result.platform == "instagram"
     assert result.caption == "Caption ingredients: pasta and tomatoes"
     assert "mix the eggs and flour" in result.transcript
@@ -106,6 +115,7 @@ def test_fetch_video_text_allows_caption_without_transcript(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A transcription failure falls back to caption-only when a caption exists."""
+    temp_paths: list[Path] = []
 
     def fake_run(
         cmd: list[str],
@@ -115,9 +125,10 @@ def test_fetch_video_text_allows_caption_without_transcript(
         text: bool,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
-        if cmd[0] == "yt-dlp":
-            output_template = Path(cmd[cmd.index("-o") + 1])
+        if cmd[2:3] == ["allaroundfood.safe_ytdlp"]:
+            output_template = Path(cmd[-2])
             tmp_path = output_template.parent
+            temp_paths.append(tmp_path)
             (tmp_path / "source.mp4").write_bytes(b"video")
             (tmp_path / "source.info.json").write_text(
                 json.dumps({"description": "Caption has the whole recipe"}),
@@ -138,6 +149,7 @@ def test_fetch_video_text_allows_caption_without_transcript(
     assert result.platform == "tiktok"
     assert result.caption == "Caption has the whole recipe"
     assert result.transcript == ""
+    assert temp_paths and all(not path.exists() for path in temp_paths)
 
 
 def test_fetch_video_text_reraises_when_no_caption(
@@ -153,8 +165,8 @@ def test_fetch_video_text_reraises_when_no_caption(
         text: bool,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
-        if cmd[0] == "yt-dlp":
-            output_template = Path(cmd[cmd.index("-o") + 1])
+        if cmd[2:3] == ["allaroundfood.safe_ytdlp"]:
+            output_template = Path(cmd[-2])
             tmp_path = output_template.parent
             (tmp_path / "source.mp4").write_bytes(b"video")
         elif cmd[0] == "ffmpeg":
@@ -207,8 +219,8 @@ def test_fetch_video_text_requires_caption_or_transcript(
         text: bool,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
-        if cmd[0] == "yt-dlp":
-            output_template = Path(cmd[cmd.index("-o") + 1])
+        if cmd[2:3] == ["allaroundfood.safe_ytdlp"]:
+            output_template = Path(cmd[-2])
             tmp_path = output_template.parent
             (tmp_path / "source.mp4").write_bytes(b"video")
         elif cmd[0] == "ffmpeg":
@@ -312,3 +324,32 @@ def test_check_video_import_binaries_reports_missing(
 def test_fetch_video_text_full_pipeline_public_video() -> None:
     """Exercise the real video pipeline when external services are available."""
     _fetch_video_text_sync("https://www.tiktok.com/@example/video/000")
+
+
+def test_default_video_transcription_uses_small_cpu_and_bounded_caption(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from allaroundfood import video_import
+
+    captured: dict[str, Any] = {}
+    caption = "cooking context " * 100
+
+    def build_transcriber(**kwargs: Any) -> FakeTranscriber:
+        captured.update(kwargs)
+        return FakeTranscriber("Mix rice.")
+
+    monkeypatch.setattr(video_import, "WhisperCppTranscriber", build_transcriber)
+    monkeypatch.setattr(
+        video_import,
+        "_download_video",
+        lambda url, path, settings: (path / "source.mp4", {"description": caption}),
+    )
+    monkeypatch.setattr(
+        video_import, "_extract_audio", lambda video, path, settings: path / "audio.wav"
+    )
+    result = _fetch_video_text_sync("https://www.instagram.com/reel/abc", VideoImportSettings())
+    assert captured["model"] == "small.en"
+    assert captured["cpu_only"] is True
+    assert captured["initial_prompt"] == "Recipe context from caption: " + caption[:1200]
+    assert result.caption == caption.strip()
+    assert result.transcript == "Mix rice."

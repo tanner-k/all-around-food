@@ -1,5 +1,7 @@
 # Plan: Import → Parse Queue (Phase 3) + Local Worker (Phase 4)
 
+> Historical plan. Current import behavior is the owner-only, token-fenced draft protocol in supabase/migrations/0005_local_recipe_drafts.sql and the native Mac worker described by infra/worker/README.md. Do not use this plan’s older queue RPC or Docker scheduling instructions.
+
 **Status:** Proposed
 **Date:** 2026-07-01
 **Owner:** Tanner
@@ -17,8 +19,8 @@ The two "core loop" phases of the Supabase pivot, in detail:
 - **Phase 4 — Containerized local worker.** One Docker image with a
   `worker --once` entry point drains `parse_jobs`: download media → run the parser
   for that `kind` → write the result to Supabase → mark the job `done`/`error`.
-  launchd-driven locally today; re-hostable as a scheduled cloud container later
-  with no code change.
+  Cron/launchd-driven locally today; re-hostable as a scheduled cloud container
+  later with no code change.
 
 **Decisions taken for this plan (2026-07-01):**
 
@@ -311,38 +313,14 @@ Multi-stage to keep the runtime image lean despite native builds:
   in: env `QWEN_GGUF_PATH=/models/qwen2-vl.gguf`, `WHISPER_MODELS_DIR=/models/whisper`.
   yt-dlp is a pip dep already; `ffmpeg` is the only apt binary.
 
-### 4.8 Local trigger — launchd (`infra/worker/`)
+### 4.8 Local trigger — cron / launchd (`infra/worker/`)
 
-launchd is the supported local scheduler. The LaunchAgent uses
-`StartCalendarInterval` so a sleeping Mac runs the job on next wake instead of
-silently missing it. Cron is not the supported laptop path.
-
-- `infra/worker/com.allaroundfood.worker.plist` is the template. It runs
-  `docker run --rm --env-file __REPO__/backend/.env -v __MODELS__:/models
-  allaroundfood-worker --once` once daily at 08:00 local.
-- `infra/worker/install_launchd.sh --models /path/to/models` renders
-  `__DOCKER__`, `__REPO__`, and `__MODELS__`, validates the plist with `plutil`,
-  installs it to `~/Library/LaunchAgents`, and prints the load/start/log/uninstall
-  commands.
-- Manual `docker run ... --once` or `launchctl start com.allaroundfood.worker` =
-  on-demand drain any time.
-- Inspect launchd state with `launchctl print "gui/$(id -u)/com.allaroundfood.worker"`.
-- Logs live at `/tmp/allaroundfood-worker.out` and
-  `/tmp/allaroundfood-worker.err`.
-
-Before scheduling, run:
-
-```bash
-cd backend
-uv run python -m allaroundfood.worker --doctor
-uv run python -m allaroundfood.worker --prefetch-models
-```
-
-The model directory mounted at `/models` should contain `qwen2-vl.gguf` and a
-`whisper/` cache directory. The worker env should set
-`QWEN_GGUF_PATH=/models/qwen2-vl.gguf` and `WHISPER_MODELS_DIR=/models/whisper`.
-`yt-dlp` and `ffmpeg` are required for video jobs; the Docker image provides the
-runtime versions used by launchd.
+- macOS: a **launchd** plist with `StartCalendarInterval` (fires on next wake if the
+  machine was asleep — better than `cron` for a laptop). Ship a template plist +
+  install notes.
+- Linux/portable: crontab line, e.g.
+  `0 8 * * * docker run --rm --env-file backend/.env -v $MODELS:/models allaroundfood-worker --once`.
+- Manual `docker run … --once` = on-demand drain any time.
 
 ### 4.9 Cloud-portable later (no code change)
 
@@ -385,8 +363,7 @@ image or pull from object storage on start; local keeps the mounted volume).
 | BE | `backend/src/allaroundfood/parsing/judge.py` | **new** — port of `gradeRecipeParse` |
 | BE | `backend/src/allaroundfood/worker.py` | **new** — `--once` loop + dispatch |
 | BE | `backend/Dockerfile.worker` | **new** — multi-stage image |
-| Infra | `infra/worker/com.allaroundfood.worker.plist` | launchd template |
-| Infra | `infra/worker/install_launchd.sh` | **new** — render/install LaunchAgent helper |
+| Infra | `infra/worker/` | **new** — launchd plist + crontab template |
 | Deferred to Phase 6 | `frontend/src/app/api/import/parse/route.ts`, `frontend/src/lib/claude.ts` | delete after worker proven |
 
 ## Risks & open items

@@ -8,6 +8,8 @@ architecture-driven rather than scale-driven).
 **Relates to:** ADR 0003 (pricing scope — unchanged), ADR 0004 (canonical matching —
 embedding model choice stands; storage moves to `pgvector`).
 
+> Implementation note (2026-09-20): the local-first candidate in [ADR 0008](0008-local-first-pwa.md) keeps the independent FastAPI/Parquet/pricing suite and uses IndexedDB for the personal app. This ADR records the earlier Supabase design; its backend deletion and Docker-worker plans are not the current release instructions.
+
 ## Context
 
 The project is shifting to a **personal, low-cost** build. Goals:

@@ -1,571 +1,331 @@
-"""Tests for the import-queue worker loop and per-kind dispatch.
-
-No real Anthropic / Qwen / network access: the parsers, video importer, receipt
-pipeline, and shopping-list logic are monkeypatched, and Supabase is a
-``FakeSupabaseClient`` that records every call. The tests assert, per ``kind``,
-that the right parser ran, the right insert helper fired, ``mark_done`` carried
-the right ``result_recipe_id``, and that a parser exception routes to
-``mark_error`` without aborting sibling jobs. Idempotency and the eval toggle
-are covered too.
-"""
+"""The personal worker publishes fenced drafts without cloud recipe writes."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, cast
+import subprocess
+import sys
+from typing import Any
 
 import pytest
-from pydantic import SecretStr
 
 from allaroundfood import worker
-from allaroundfood.models import Recipe, ShoppingListItem
+from allaroundfood.config import Settings
+from allaroundfood.models import Recipe
 from allaroundfood.parsing.recipe_parser import RecipeParseResult
 
-USER_ID = "user-123"
 
-
-def _run(client: FakeSupabaseClient, job: dict[str, Any]) -> bool:
-    """Call ``worker.process_job`` with the fake client (typed as the real one)."""
-    return worker.process_job(cast(Any, client), job)
-
-
-def _drain(client: FakeSupabaseClient, limit: int) -> int:
-    """Call ``worker.drain_once`` with the fake client (typed as the real one)."""
-    return worker.drain_once(cast(Any, client), limit)
-
-
-# ── Fakes ────────────────────────────────────────────────────────────────────
-
-
-class FakeSupabaseClient:
-    """Records the worker's write calls; a stand-in for a service-role client."""
-
-    def __init__(self) -> None:
-        self.done: list[tuple[str, str | None]] = []
-        self.errors: list[tuple[str, str]] = []
-        self.recipes: list[tuple[Recipe, str]] = []
-        self.receipts: list[tuple[Any, str]] = []
-        self.shopping_items: list[tuple[list[ShoppingListItem], str]] = []
-        self.evaluations: list[tuple[dict[str, Any], str]] = []
-
-
-def _make_recipe(title: str = "Test") -> Recipe:
+def recipe() -> Recipe:
     return Recipe(
         id="",
-        title=title,
-        ingredients=[
-            {  # type: ignore[list-item]
-                "name": "flour",
-                "quantity": {"value": 1.0, "unit": "cup", "as_written": "1 cup"},
-            }
-        ],
-        steps=[{"order": 1, "instruction": "Mix."}],  # type: ignore[list-item]
-        parse_confidence=0.9,
-    )
+        title="Soup",
+        ingredients=[{"name": "peas", "quantity": {"value": None, "unit": None, "as_written": ""}}],
+        steps=[{"order": 1, "instruction": "Boil peas."}],
+    )  # type: ignore[list-item]
 
 
-def _parse_result(recipe: Recipe, stripped: str | None = None) -> RecipeParseResult:
-    return RecipeParseResult(
-        recipe=recipe, worker_prompt="SYSTEM:\nprompt", stripped_text=stripped
-    )
-
-
-@pytest.fixture
-def patched_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Route the worker's supabase helpers into the FakeSupabaseClient records."""
-
-    def _insert_recipe(client: FakeSupabaseClient, recipe: Recipe, user_id: str) -> str:
-        client.recipes.append((recipe, user_id))
-        return "recipe-abc"
-
-    def _insert_receipt(client: FakeSupabaseClient, receipt: Any, user_id: str) -> str:
-        client.receipts.append((receipt, user_id))
-        return "receipt-abc"
-
-    def _insert_shopping_items(
-        client: FakeSupabaseClient, items: list[ShoppingListItem], user_id: str
-    ) -> list[str]:
-        client.shopping_items.append((items, user_id))
-        return [i.id for i in items]
-
-    def _insert_evaluation(
-        client: FakeSupabaseClient, evaluation: dict[str, Any], user_id: str
-    ) -> str:
-        client.evaluations.append((evaluation, user_id))
-        return "eval-abc"
-
-    def _mark_done(
-        client: FakeSupabaseClient, job_id: str, result_recipe_id: str | None = None
-    ) -> None:
-        client.done.append((job_id, result_recipe_id))
-
-    def _mark_error(client: FakeSupabaseClient, job_id: str, message: str) -> None:
-        client.errors.append((job_id, message))
-
-    def _download_import(client: FakeSupabaseClient, storage_path: str) -> bytes:
-        return b"raw-bytes"
-
-    monkeypatch.setattr(worker, "insert_recipe", _insert_recipe)
-    monkeypatch.setattr(worker, "insert_receipt", _insert_receipt)
-    monkeypatch.setattr(worker, "insert_shopping_items", _insert_shopping_items)
-    monkeypatch.setattr(worker, "insert_evaluation", _insert_evaluation)
-    monkeypatch.setattr(worker, "mark_done", _mark_done)
-    monkeypatch.setattr(worker, "mark_error", _mark_error)
-    monkeypatch.setattr(worker, "download_import", _download_import)
-
-
-def _job(kind: str, **overrides: Any) -> dict[str, Any]:
-    base: dict[str, Any] = {
-        "id": f"job-{kind}",
-        "kind": kind,
-        "user_id": USER_ID,
-        "source_url": None,
-        "storage_path": None,
-        "payload_text": None,
-        "result_recipe_id": None,
-        "status": "processing",
+def job(**changes: Any) -> dict[str, Any]:
+    result = {
+        "id": "draft-1",
+        "kind": "text",
+        "user_id": "owner",
+        "claim_token": "claim-1",
+        "payload_text": "Peas. Boil peas.",
         "attempts": 1,
+        "result_recipe_json": None,
+        "result_recipe_id": None,
     }
-    base.update(overrides)
-    return base
+    result.update(changes)
+    return result
 
 
-# ── Recipe-kind dispatch (url / video / screenshot) ──────────────────────────
+@pytest.fixture(autouse=True)
+def renew(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker, "renew_import_job", lambda *args: None)
 
 
-class TestRecipeKinds:
-    def test_url_dispatch(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        recipe = _make_recipe("URL Recipe")
-        called: dict[str, Any] = {}
+def test_text_publishes_fenced_draft_without_cloud_recipe_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    published: list[dict[str, Any]] = []
 
-        def _fake(url: str) -> RecipeParseResult:
-            called["url"] = url
-            return _parse_result(recipe, stripped="stripped text")
+    class Client:
+        def rpc(self, name: str, params: dict[str, Any]) -> Client:
+            assert name == "finish_import_job"
+            published.append(params)
+            events.append("finish")
+            return self
 
-        monkeypatch.setattr(
-            "allaroundfood.parsing.recipe_parser.parse_recipe_from_url", _fake
+        def execute(self) -> None:
+            return None
+
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner", raising=False)
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_text",
+        lambda text: RecipeParseResult(recipe(), "prompt", text),
+    )
+    monkeypatch.setattr(
+        "allaroundfood.supabase_client.insert_recipe",
+        lambda *args: pytest.fail("cloud recipe write"),
+    )
+    monkeypatch.setattr(worker, "cleanup_import_jobs", lambda client: events.append("cleanup"))
+    assert worker.process_job(Client(), job()) is True  # type: ignore[arg-type]
+    assert events == ["finish"]
+    assert published[0]["p_recipe"]["id"] == "draft-1"
+    assert published[0]["p_recipe"]["ingredients"][0]["quantity"]["value"] is None
+    assert published[0]["p_claim_token"] == "claim-1"
+
+
+def test_parser_warnings_are_published_with_draft(monkeypatch: pytest.MonkeyPatch) -> None:
+    found: list[str] = []
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_text",
+        lambda text: RecipeParseResult(recipe(), "jev", text, ["Amount uncertain"]),
+    )
+    monkeypatch.setattr(
+        worker, "finish_import_job",
+        lambda client, job_id, token, value, warnings: found.extend(warnings),
+    )
+    assert worker.process_job(object(), job())  # type: ignore[arg-type]
+    assert found == ["Amount uncertain"]
+
+
+def test_active_worker_never_runs_legacy_eval(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    monkeypatch.setattr(worker.settings, "run_evals", True)
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_text",
+        lambda text: RecipeParseResult(recipe(), "jev", text),
+    )
+    monkeypatch.setattr(worker, "_run_eval", lambda *args: pytest.fail("legacy eval called"))
+    monkeypatch.setattr(worker, "finish_import_job", lambda *args: None)
+    assert worker.process_job(object(), job())  # type: ignore[arg-type]
+
+
+def test_other_owner_rejected_before_source_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner", raising=False)
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_url",
+        lambda url: pytest.fail("fetched"),
+    )
+    monkeypatch.setattr(worker, "fail_import_job", lambda *args: None)
+    assert (
+        worker.process_job(
+            object(), job(kind="url", user_id="other", source_url="https://example.com")
         )
-        monkeypatch.setattr(worker.settings, "run_evals", False, raising=False)
-
-        client = FakeSupabaseClient()
-        job = _job("url", source_url="https://ex.test/r")
-        assert _run(client, job) is True
-
-        assert called["url"] == "https://ex.test/r"
-        assert client.recipes == [(recipe, USER_ID)]
-        assert client.done == [("job-url", "recipe-abc")]
-        assert client.errors == []
-
-    def test_video_dispatch(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        recipe = _make_recipe("Video Recipe")
-        seen: dict[str, Any] = {}
-
-        class _Vid:
-            caption = "cap"
-            transcript = "trans"
-            source_url = "https://tiktok.com/x"
-
-        async def _fetch(url: str) -> _Vid:
-            seen["fetched"] = url
-            return _Vid()
-
-        def _validate(url: str) -> str:
-            seen["validated"] = url
-            return "tiktok"
-
-        def _parse(caption: str, transcript: str, source_url: str) -> RecipeParseResult:
-            seen["parse"] = (caption, transcript, source_url)
-            return _parse_result(recipe, stripped="CAPTION:\ncap")
-
-        monkeypatch.setattr("allaroundfood.video_import.fetch_video_text", _fetch)
-        monkeypatch.setattr("allaroundfood.video_import.validate_video_url", _validate)
-        monkeypatch.setattr(
-            "allaroundfood.parsing.recipe_parser.parse_recipe_from_video_text", _parse
-        )
-        monkeypatch.setattr(worker.settings, "run_evals", False, raising=False)
-
-        client = FakeSupabaseClient()
-        job = _job("video", source_url="https://tiktok.com/x")
-        assert _run(client, job) is True
-
-        assert seen["validated"] == "https://tiktok.com/x"
-        assert seen["fetched"] == "https://tiktok.com/x"
-        assert seen["parse"] == ("cap", "trans", "https://tiktok.com/x")
-        assert client.recipes == [(recipe, USER_ID)]
-        assert client.done == [("job-video", "recipe-abc")]
-
-    def test_screenshot_dispatch_infers_media_type(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        recipe = _make_recipe("Shot Recipe")
-        seen: dict[str, Any] = {}
-
-        def _fake(data: bytes, media_type: str) -> RecipeParseResult:
-            seen["data"] = data
-            seen["media_type"] = media_type
-            return _parse_result(recipe)
-
-        monkeypatch.setattr(
-            "allaroundfood.parsing.recipe_parser.parse_recipe_from_image", _fake
-        )
-        monkeypatch.setattr(worker.settings, "run_evals", False, raising=False)
-
-        client = FakeSupabaseClient()
-        job = _job("screenshot", storage_path=f"{USER_ID}/abc.png")
-        assert _run(client, job) is True
-
-        assert seen["data"] == b"raw-bytes"
-        assert seen["media_type"] == "image/png"  # inferred from .png
-        assert client.done == [("job-screenshot", "recipe-abc")]
-
-    def test_media_type_defaults_to_jpeg(self) -> None:
-        assert worker._media_type_for(_job("screenshot", storage_path="x/y.bin")) == (
-            "image/jpeg"
-        )
-        assert worker._media_type_for(
-            _job("screenshot", storage_path="x/y.webp")
-        ) == "image/webp"
+        is False
+    )  # type: ignore[arg-type]
 
 
-# ── Receipt + shopping-list dispatch ─────────────────────────────────────────
+def test_old_recipe_id_is_not_republished(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner", raising=False)
+    monkeypatch.setattr(worker, "finish_import_job", lambda *args: pytest.fail("republished"))
+    assert worker.process_job(object(), job(result_recipe_id="old-id")) is True  # type: ignore[arg-type]
 
 
-class TestReceiptAndShopping:
-    def test_receipt_dispatch(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        sentinel_receipt = object()
-
-        class _FakeParser:
-            def parse(self, preprocessed: Any) -> Any:
-                return sentinel_receipt
-
-        monkeypatch.setattr(
-            "allaroundfood.ocr.deps.get_receipt_parser", lambda: _FakeParser()
-        )
-        monkeypatch.setattr(
-            "allaroundfood.ocr.preprocess.preprocess_receipt",
-            lambda path, output_dir=None: object(),
-        )
-        # Observation mapping is best-effort; force it to no-op.
-        monkeypatch.setattr(worker, "_write_receipt_observations", lambda r: 0)
-
-        client = FakeSupabaseClient()
-        job = _job("receipt", storage_path=f"{USER_ID}/receipt.jpg")
-        assert _run(client, job) is True
-
-        assert client.receipts == [(sentinel_receipt, USER_ID)]
-        assert client.done == [("job-receipt", None)]
-        assert client.errors == []
-
-    def test_shopping_list_from_text(self, patched_helpers: None) -> None:
-        client = FakeSupabaseClient()
-        text = "- milk (1 gal)\n2 lemons\nchicken breast, 1 lb\n\n"
-        job = _job("shopping_list", payload_text=text)
-        assert _run(client, job) is True
-
-        assert len(client.shopping_items) == 1
-        items, user_id = client.shopping_items[0]
-        assert user_id == USER_ID
-        by_name = {i.name: i for i in items}
-        assert by_name["milk"].quantity_text == "1 gal"
-        assert by_name["milk"].aisle == "Dairy"
-        assert by_name["chicken breast"].quantity_text == "1 lb"
-        assert by_name["chicken breast"].aisle == "Meat"
-        assert "2 lemons" in by_name  # bare line, no quantity split
-        assert client.done == [("job-shopping_list", None)]
-
-    def test_shopping_list_from_storage(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        monkeypatch.setattr(
-            worker, "download_import", lambda client, path: b"eggs\nbread\n"
-        )
-        client = FakeSupabaseClient()
-        job = _job("shopping_list", storage_path=f"{USER_ID}/list.txt")
-        assert _run(client, job) is True
-
-        items, _ = client.shopping_items[0]
-        names = {i.name for i in items}
-        assert names == {"eggs", "bread"}
+def test_existing_draft_is_not_reparsed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    monkeypatch.setattr(worker, "finish_import_job", lambda *args: pytest.fail("republished"))
+    assert worker.process_job(object(), job(result_recipe_json={"title": "Saved"}))  # type: ignore[arg-type]
 
 
-# ── Error isolation, idempotency, unknown kind ───────────────────────────────
+def test_parser_error_is_fenced_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    errors: list[str] = []
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner", raising=False)
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_text",
+        lambda text: (_ for _ in ()).throw(ValueError("insufficient evidence")),
+    )
+    monkeypatch.setattr(
+        worker, "fail_import_job", lambda client, job_id, token, message: errors.append(message)
+    )
+    assert worker.process_job(object(), job()) is False  # type: ignore[arg-type]
+    assert errors == ["insufficient evidence"]
 
 
-class TestErrorHandling:
-    def test_parser_exception_routes_to_mark_error_without_aborting_siblings(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        good_recipe = _make_recipe("Good")
-
-        def _url(url: str) -> RecipeParseResult:
-            return _parse_result(good_recipe)
-
-        def _image(data: bytes, media_type: str) -> RecipeParseResult:
-            raise RuntimeError("boom parsing image")
-
-        monkeypatch.setattr(
-            "allaroundfood.parsing.recipe_parser.parse_recipe_from_url", _url
-        )
-        monkeypatch.setattr(
-            "allaroundfood.parsing.recipe_parser.parse_recipe_from_image", _image
-        )
-        monkeypatch.setattr(worker.settings, "run_evals", False, raising=False)
-
-        client = FakeSupabaseClient()
-        bad = _job("screenshot", id="bad", storage_path="u/x.jpg")
-        good = _job("url", id="good", source_url="https://ex.test/r")
-
-        # Bad job first: it must not prevent the good job from succeeding.
-        assert _run(client, bad) is False
-        assert _run(client, good) is True
-
-        assert client.errors == [("bad", "boom parsing image")]
-        assert client.done == [("good", "recipe-abc")]
-        assert len(client.recipes) == 1
-
-    def test_unknown_kind_marks_error(self, patched_helpers: None) -> None:
-        client = FakeSupabaseClient()
-        job = _job("mystery", id="weird")
-        assert _run(client, job) is False
-        assert client.errors and client.errors[0][0] == "weird"
-        assert "unknown job kind" in client.errors[0][1]
-
-    def test_idempotent_job_is_skipped(self, patched_helpers: None) -> None:
-        client = FakeSupabaseClient()
-        job = _job("url", id="dup", result_recipe_id="already-here")
-        assert _run(client, job) is True
-
-        # No parse / insert happened; just a mark_done relinking the recipe.
-        assert client.recipes == []
-        assert client.done == [("dup", "already-here")]
-        assert client.errors == []
+def test_blank_ingredient_or_step_is_recoverable_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    errors: list[str] = []
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    incomplete = recipe().model_copy(deep=True)
+    incomplete.ingredients[0].name = " "
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_text",
+        lambda text: RecipeParseResult(incomplete, "prompt"),
+    )
+    monkeypatch.setattr(worker, "finish_import_job", lambda *args: pytest.fail("published"))
+    monkeypatch.setattr(worker, "fail_import_job", lambda *args: errors.append(args[3]))
+    assert not worker.process_job(object(), job())  # type: ignore[arg-type]
+    assert "Insufficient" in errors[0]
 
 
-# ── Eval toggle (fire-and-forget) ────────────────────────────────────────────
+def test_caption_only_video_warns_without_claiming_screen_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from allaroundfood.models import VideoImportResult
 
+    warnings: list[str] = []
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    monkeypatch.setattr("allaroundfood.video_import.validate_video_url", lambda url: "tiktok")
 
-class TestEvals:
-    def _patch_url(self, monkeypatch: pytest.MonkeyPatch, recipe: Recipe) -> None:
-        monkeypatch.setattr(
-            "allaroundfood.parsing.recipe_parser.parse_recipe_from_url",
-            lambda url: _parse_result(recipe, stripped="stripped text"),
+    async def fetch(url: str) -> VideoImportResult:
+        return VideoImportResult(
+            source_url=url, platform="tiktok", caption="Peas. Boil peas.", transcript=""
         )
 
-    def test_run_evals_false_skips_insert_evaluation(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        self._patch_url(monkeypatch, _make_recipe())
-        monkeypatch.setattr(worker.settings, "run_evals", False, raising=False)
-
-        client = FakeSupabaseClient()
-        _run(client, _job("url", source_url="https://ex.test/r"))
-
-        assert client.evaluations == []
-        assert client.done == [("job-url", "recipe-abc")]
-
-    def test_run_evals_true_calls_insert_evaluation(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        self._patch_url(monkeypatch, _make_recipe())
-        monkeypatch.setattr(worker.settings, "run_evals", True, raising=False)
-
-        class _Grade:
-            verdict = {
-                "overall_grade": 8,
-                "accuracy_grade": 9,
-                "completeness_grade": 7,
-                "strengths": [],
-                "weaknesses": [],
-                "field_checks": [],
-                "reasoning": "ok",
-                "suggested_prompt_improvements": None,
-            }
-            judge_prompt = "judge prompt"
-            raw_judge_output = "{}"
-
-        monkeypatch.setattr(
-            "allaroundfood.parsing.judge.grade_recipe_parse",
-            lambda **kwargs: _Grade(),
-        )
-
-        client = FakeSupabaseClient()
-        _run(client, _job("url", source_url="https://ex.test/r"))
-
-        assert len(client.evaluations) == 1
-        evaluation, user_id = client.evaluations[0]
-        assert user_id == USER_ID
-        assert evaluation["overall_grade"] == 8
-        assert evaluation["worker_model"] == "claude-haiku-4-5"
-        assert evaluation["judge_model"] == "claude-sonnet-4-6"
-        # The job still completed successfully.
-        assert client.done == [("job-url", "recipe-abc")]
-
-    def test_judge_exception_is_swallowed_and_job_still_done(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        self._patch_url(monkeypatch, _make_recipe())
-        monkeypatch.setattr(worker.settings, "run_evals", True, raising=False)
-
-        def _boom(**kwargs: Any) -> Any:
-            raise RuntimeError("judge exploded")
-
-        monkeypatch.setattr("allaroundfood.parsing.judge.grade_recipe_parse", _boom)
-
-        client = FakeSupabaseClient()
-        assert (
-            _run(client, _job("url", source_url="https://ex.test/r"))
-            is True
-        )
-
-        # Judge error swallowed: no evaluation, no job error, job still done.
-        assert client.evaluations == []
-        assert client.errors == []
-        assert client.done == [("job-url", "recipe-abc")]
+    monkeypatch.setattr("allaroundfood.video_import.fetch_video_text", fetch)
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_video_text",
+        lambda **kwargs: RecipeParseResult(recipe(), "prompt"),
+    )
+    monkeypatch.setattr(
+        worker,
+        "finish_import_job",
+        lambda client, job_id, token, value, found: warnings.extend(found),
+    )
+    assert worker.process_job(object(), job(kind="video", source_url="https://tiktok.com/x"))  # type: ignore[arg-type]
+    assert len(warnings) == 1
+    assert "on-screen text was not extracted" in warnings[0]
 
 
-# ── Drain loop + CLI ─────────────────────────────────────────────────────────
+def test_failed_publication_does_not_cleanup_upload(monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[str] = []
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_image",
+        lambda *args: RecipeParseResult(recipe(), "prompt"),
+    )
+    monkeypatch.setattr(worker, "download_import", lambda *args: b"image")
+
+    def crash(*args: Any) -> None:
+        events.append("finish")
+        raise RuntimeError("network lost before finish")
+
+    monkeypatch.setattr(worker, "finish_import_job", crash)
+    monkeypatch.setattr(worker, "fail_import_job", lambda *args: events.append("fail"))
+    monkeypatch.setattr(worker, "cleanup_import_jobs", lambda *args: events.append("cleanup"))
+    assert not worker.process_job(object(), job(kind="screenshot", storage_path="owner/a.png"))  # type: ignore[arg-type]
+    assert events == ["finish", "fail"]
 
 
-class TestDrainAndCli:
-    def test_drain_once_processes_each_claimed_job(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        jobs = [
-            _job("url", id="j1", source_url="https://ex.test/1"),
-            _job("url", id="j2", source_url="https://ex.test/2"),
-        ]
-        monkeypatch.setattr(
-            "allaroundfood.supabase_client.claim_pending_jobs",
-            lambda client, limit, max_attempts: jobs,
-        )
-        recovered: dict[str, Any] = {}
+def test_lost_claim_does_not_publish(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_text",
+        lambda text: RecipeParseResult(recipe(), "prompt"),
+    )
+    monkeypatch.setattr(
+        worker,
+        "renew_import_job",
+        lambda *args: (_ for _ in ()).throw(RuntimeError("import claim lost")),
+    )
+    monkeypatch.setattr(worker, "finish_import_job", lambda *args: pytest.fail("stale publish"))
+    monkeypatch.setattr(worker, "fail_import_job", lambda *args: None)
+    assert not worker.process_job(object(), job())  # type: ignore[arg-type]
 
-        def _recover(
-            client: Any, stale_after_minutes: int, max_attempts: int
-        ) -> list[dict[str, Any]]:
-            recovered["stale_after_minutes"] = stale_after_minutes
-            recovered["max_attempts"] = max_attempts
-            return [{"id": "stale"}]
 
-        monkeypatch.setattr("allaroundfood.supabase_client.recover_stale_jobs", _recover)
-        monkeypatch.setattr(
-            "allaroundfood.parsing.recipe_parser.parse_recipe_from_url",
-            lambda url: _parse_result(_make_recipe()),
-        )
-        monkeypatch.setattr(worker.settings, "run_evals", False, raising=False)
+def test_cleanup_failure_does_not_block_new_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        worker, "cleanup_import_jobs", lambda client: (_ for _ in ()).throw(RuntimeError("offline"))
+    )
+    monkeypatch.setattr("allaroundfood.supabase_client.claim_pending_jobs", lambda *args: [])
+    assert worker.drain_once(object(), 1) == 0  # type: ignore[arg-type]
 
-        client = FakeSupabaseClient()
-        assert _drain(client, 10) == 2
-        assert {d[0] for d in client.done} == {"j1", "j2"}
-        assert recovered["stale_after_minutes"] == worker.settings.worker_stale_after_minutes
-        assert recovered["max_attempts"] == worker.settings.worker_max_attempts
 
-    def test_main_returns_2_on_missing_creds(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        def _raise() -> Any:
-            raise RuntimeError("SUPABASE_URL ... must be set")
+def test_drain_finishes_before_cleanup(monkeypatch: pytest.MonkeyPatch) -> None:
+    events: list[str] = []
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    monkeypatch.setattr("allaroundfood.supabase_client.claim_pending_jobs", lambda *args: [job()])
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_text",
+        lambda text: RecipeParseResult(recipe(), "prompt"),
+    )
+    monkeypatch.setattr(worker, "finish_import_job", lambda *args: events.append("finish"))
+    monkeypatch.setattr(worker, "cleanup_import_jobs", lambda *args: events.append("cleanup"))
+    assert worker.drain_once(object(), 1) == 1  # type: ignore[arg-type]
+    assert events == ["finish", "cleanup"]
 
-        monkeypatch.setattr(worker, "get_service_client", _raise)
-        assert worker.main(["--once"]) == 2
 
-    def test_main_once_drains(
-        self, monkeypatch: pytest.MonkeyPatch, patched_helpers: None
-    ) -> None:
-        client = FakeSupabaseClient()
-        monkeypatch.setattr(worker, "get_service_client", lambda: client)
-        drained: dict[str, Any] = {}
+def test_drain_claims_next_job_only_after_previous_is_processed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    pending = iter([job(id="first"), job(id="second")])
 
-        def _drain(c: Any, limit: int) -> int:
-            drained["limit"] = limit
-            return 0
+    def claim(*args: Any) -> list[dict[str, Any]]:
+        item = next(pending)
+        events.append(f"claim:{item['id']}")
+        return [item]
 
-        monkeypatch.setattr(worker, "drain_once", _drain)
-        assert worker.main(["--once", "--limit", "5"]) == 0
-        assert drained["limit"] == 5
+    monkeypatch.setattr("allaroundfood.supabase_client.claim_pending_jobs", claim)
+    monkeypatch.setattr(
+        worker, "process_job", lambda client, item: events.append(f"process:{item['id']}")
+    )
+    monkeypatch.setattr(worker, "cleanup_import_jobs", lambda client: None)
 
-    def test_doctor_checks_without_supabase_client(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        qwen = tmp_path / "qwen.gguf"
-        qwen.write_text("model", encoding="utf-8")
+    assert worker.drain_once(object(), 2) == 2  # type: ignore[arg-type]
+    assert events == ["claim:first", "process:first", "claim:second", "process:second"]
 
-        monkeypatch.setattr(worker.settings, "supabase_url", "https://supabase.test")
-        monkeypatch.setattr(
-            worker.settings,
-            "supabase_service_role_key",
-            SecretStr("service-role"),
-        )
-        monkeypatch.setattr(
-            worker.settings,
-            "anthropic_api_key_parsing",
-            SecretStr("anthropic"),
-        )
-        monkeypatch.setattr(worker.settings, "qwen_gguf_path", qwen)
-        monkeypatch.setattr(worker.settings, "whisper_models_dir", tmp_path)
-        monkeypatch.setattr(
-            worker,
-            "get_service_client",
-            lambda: (_ for _ in ()).throw(AssertionError("should not connect")),
-        )
 
-        from allaroundfood.video_import import VideoImportBinaryStatus
+def test_exhausted_job_is_not_processed_when_claim_rpc_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("allaroundfood.supabase_client.claim_pending_jobs", lambda *args: [])
+    monkeypatch.setattr(worker, "cleanup_import_jobs", lambda *args: [])
+    monkeypatch.setattr(worker, "process_job", lambda *args: pytest.fail("unclaimed job"))
+    assert worker.drain_once(object(), 1) == 0  # type: ignore[arg-type]
 
-        monkeypatch.setattr(
-            "allaroundfood.video_import.check_video_import_binaries",
-            lambda settings=None: VideoImportBinaryStatus(
-                ytdlp="/opt/bin/yt-dlp", ffmpeg="/opt/bin/ffmpeg"
-            ),
-        )
 
-        assert worker.main(["--doctor"]) == 0
-        out = capsys.readouterr().out
-        assert "ok   SUPABASE_URL" in out
-        assert "ok   QWEN_GGUF_PATH" in out
+def test_recipe_only_worker_import_does_not_load_ocr_or_torch() -> None:
+    code = """
+import builtins
+original = builtins.__import__
+def guard(name, *args, **kwargs):
+    if name.startswith(('torch', 'allaroundfood.ocr')):
+        raise AssertionError('recipe startup loaded OCR dependencies')
+    return original(name, *args, **kwargs)
+builtins.__import__ = guard
+import allaroundfood.worker as worker
+worker.settings.import_owner_user_id = 'owner'
+worker.get_service_client = lambda: object()
+worker.drain_once = lambda client, limit: 0
+assert worker.main(['--once']) == 0
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, timeout=10, check=False
+    )
+    assert result.returncode == 0, result.stderr
 
-    def test_prefetch_models_without_supabase_client(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        qwen = tmp_path / "qwen.gguf"
-        qwen.write_text("model", encoding="utf-8")
-        whisper_dir = tmp_path / "whisper"
-        loaded: dict[str, Any] = {}
 
-        class _FakeTranscriber:
-            def __init__(self, model: str, models_dir: Path | None) -> None:
-                loaded["model"] = model
-                loaded["models_dir"] = models_dir
+def test_old_worker_environment_keys_remain_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VIDEO_IMPORT_TIMEOUT_S", "240")
+    monkeypatch.setenv("WORKER_STALE_AFTER_MINUTES", "15")
+    active = Settings(_env_file=None)
+    assert active.video_import_timeout_s == 240
+    assert active.worker_stale_after_minutes == 15
+    assert active.run_evals is False
 
-            def _load(self) -> object:
-                loaded["called"] = True
-                return object()
 
-        monkeypatch.setattr(worker.settings, "qwen_gguf_path", qwen)
-        monkeypatch.setattr(worker.settings, "whisper_model", "base.en")
-        monkeypatch.setattr(worker.settings, "whisper_models_dir", whisper_dir)
-        monkeypatch.setattr(
-            "allaroundfood.transcription.WhisperCppTranscriber",
-            _FakeTranscriber,
-        )
-        monkeypatch.setattr(
-            worker,
-            "get_service_client",
-            lambda: (_ for _ in ()).throw(AssertionError("should not connect")),
-        )
+def test_worker_refuses_start_without_import_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", None)
+    monkeypatch.setattr(worker, "get_service_client", lambda: pytest.fail("opened Supabase"))
+    assert worker.main(["--once"]) == 2
 
-        assert worker.main(["--prefetch-models"]) == 0
-        assert loaded == {
-            "model": "base.en",
-            "models_dir": whisper_dir,
-            "called": True,
-        }
-        assert whisper_dir.exists()
-        out = capsys.readouterr().out
-        assert "ok   whisper base.en" in out
-        assert "ok   QWEN_GGUF_PATH" in out
+
+def test_watch_uses_bounded_network_backoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    delays: list[float] = []
+    calls = 0
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    monkeypatch.setattr(worker, "get_service_client", lambda: object())
+
+    def drain(client: Any, limit: int) -> int:
+        nonlocal calls
+        calls += 1
+        if calls == 7:
+            raise KeyboardInterrupt
+        raise ConnectionError("Mac offline")
+
+    monkeypatch.setattr(worker, "drain_once", drain)
+    monkeypatch.setattr(worker.time, "sleep", delays.append)
+    assert worker.main(["--watch"]) == 0
+    assert delays == [5, 10, 20, 40, 60, 60]

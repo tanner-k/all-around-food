@@ -30,7 +30,7 @@ export function PantryRow({ item, onStatusChange, onDelete }: PantryRowProps) {
               onClick={() => onStatusChange(item.id, opt.value)}
               aria-pressed={active}
               className={[
-                "px-2.5 py-1 text-xs font-medium transition-colors",
+                "min-h-11 px-2.5 py-1 text-xs font-medium transition-colors",
                 active
                   ? opt.active
                   : "bg-paper text-ink-mute hover:text-ink",
@@ -46,7 +46,7 @@ export function PantryRow({ item, onStatusChange, onDelete }: PantryRowProps) {
         type="button"
         onClick={() => onDelete(item.id)}
         aria-label={`Remove ${item.name}`}
-        className="px-1 text-lg leading-none text-ink-mute transition-colors hover:text-terra"
+        className="min-h-11 min-w-11 text-lg leading-none text-ink-mute transition-colors hover:text-terra"
       >
         ×
       </button>

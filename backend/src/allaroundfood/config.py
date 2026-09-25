@@ -44,24 +44,28 @@ class Settings(BaseSettings):
     supabase_url: str | None = None
     supabase_service_role_key: SecretStr | None = None
 
-    # ── Worker: Anthropic parsing key (moved off Vercel/frontend, ADR 0007 §3) ──
+    # Jev recipe classification; credentials remain on the worker.
+    typesafe_api_key: SecretStr | None = None
+    tesseract_bin: str = "tesseract"
+
+    # Legacy, explicitly invoked evaluation tooling only; never recipe imports.
     anthropic_api_key_parsing: SecretStr | None = None
 
     # Run the LLM-as-judge eval pipeline after a recipe parse (fire-and-forget).
-    run_evals: bool = True
+    run_evals: bool = False
+    import_owner_user_id: str | None = None
 
     # ── Video import binaries + whisper.cpp (consolidated onto Settings) ──
-    whisper_model: str = "base.en"
+    whisper_model: str = "small.en"
+    whisper_cpu_only: bool = True
     whisper_models_dir: Path | None = None
     ffmpeg_bin: str = "ffmpeg"
     ytdlp_bin: str = "yt-dlp"
+    video_import_timeout_s: int = 180
+    worker_stale_after_minutes: int = 10  # Accepted for older local .env files; SQL owns leases.
 
     # Poison-job retry cap: a job stops being reclaimed once attempts >= this.
     worker_max_attempts: int = 3
-
-    # Processing jobs older than this are assumed to have been abandoned by a
-    # crashed/killed worker run and are recovered before each drain.
-    worker_stale_after_minutes: int = 30
 
 
 settings = Settings()

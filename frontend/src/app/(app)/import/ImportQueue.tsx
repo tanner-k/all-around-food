@@ -32,6 +32,7 @@ const STATUS_CLASS: Record<ParseJobStatus, string> = {
 
 const KIND_LABEL: Record<ParseJob["kind"], string> = {
   url: "Link",
+  text: "Pasted recipe",
   video: "Video",
   screenshot: "Screenshot",
   receipt: "Receipt",

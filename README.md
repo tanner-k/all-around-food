@@ -1,287 +1,75 @@
 # all-around-food
 
-> A planner-first cooking app — weekly meal planning, AI recipe import, smart shopping list, pantry inventory, and a hands-on cook mode.
+A personal cooking app for planning meals, saving recipes, shopping, tracking pantry stock, and cooking step by step. The `/app` experience stores its everyday library in this browser's IndexedDB and is designed to reopen offline after its PWA shell is ready. Online imports use a private Supabase queue and a separate Mac Mini worker. [ADR 0008](docs/decisions/0008-local-first-pwa.md) is still proposed; this release has not passed its hosted migration and physical-device gates.
 
-[![CI](https://github.com/tanner-k/all-around-food/actions/workflows/ci.yml/badge.svg)](https://github.com/tanner-k/all-around-food/actions/workflows/ci.yml)
-[![Node 22](https://img.shields.io/badge/node-22-brightgreen)](https://nodejs.org/)
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue)](https://python.org/)
+## Stack
 
----
+- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS 4, pnpm 10, Node 22
+- Local library: IndexedDB through `idb`, with JSON backup and restore
+- Online import: Supabase Auth/queue/temporary storage and a Python 3.12 Mac worker using Anthropic, yt-dlp, FFmpeg, and whisper.cpp where needed
+- Legacy/backend utilities: FastAPI, Polars/Parquet, pricing, evaluations, and receipt OCR remain in the repository; they are outside the personal offline loop
 
-## Features
+## Run locally
 
-- **Weekly meal planner** — drag recipes into a 7-day grid, swap days, and plan the week in minutes.
-- **AI recipe import** — paste a URL or drop a screenshot; the app enqueues a parse job and the worker saves the recipe when it finishes.
-- **Smart shopping list** — recipe-sourced and manual items, grouped by aisle, with checked items flowing back into pantry stock.
-- **Pantry inventory** — track what you have on hand and what is running low.
-- **Cook mode** — guided step-by-step or full-scroll cooking views, with post-cook pantry status updates.
-- **Video recipe import** — import from Instagram or TikTok via yt-dlp, ffmpeg, and local whisper.cpp transcription.
-- **Receipt OCR** — local Qwen2-VL GGUF receipt parsing for the pricing/OCR pipeline.
-- **Grocery price tracking** — pricing adapters, canonical product matching, and analytics live under `backend/src/allaroundfood/pricing/`.
-- **Eval dashboard** — review how Claude graded recipe imports for accuracy and completeness.
+Install dependencies, then start the frontend:
 
----
-
-## Screenshots
-
-> Drop screenshots or a demo GIF here once the UI is stable.
-
----
-
-## Getting Started
-
-### Prerequisites
-
-| Tool | Version | Install |
-|------|---------|---------|
-| Node | 22 | [nodejs.org](https://nodejs.org/) |
-| pnpm | latest | `npm i -g pnpm` |
-| Python | 3.12 | [python.org](https://python.org/) |
-| uv | latest | [docs.astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/) |
-| Poppler | any | `brew install poppler` (macOS) · `apt install poppler-utils` (Linux) |
-| Docker Desktop | latest | Required for the scheduled local worker |
-
-You also need:
-
-- A Supabase project with the migrations in `supabase/migrations/` applied.
-- An Anthropic API key for worker-side recipe parsing and evaluation.
-- `yt-dlp` and `ffmpeg` on `PATH` for video imports (`brew install yt-dlp ffmpeg` on macOS).
-- A local model directory for the scheduled worker, mounted into Docker at `/models`.
-
-### Install
-
-```bash
-pnpm install
-cd backend && uv sync && cd ..
+```sh
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend dev
 ```
 
-### Configure Environment
+Open `http://localhost:3000/app` for UI development. Add a recipe manually, plan a week, generate shopping, and update pantry without Supabase or a backend. The service worker is registered only in a production build. To verify offline use locally, stop the dev server, run `pnpm --dir frontend build` and `pnpm --dir frontend start`, then wait for **Offline ready** before disconnecting. The installed PWA opens `/app`; legacy cookbook, plan, shop, pantry, and import URLs redirect there.
 
-Create `frontend/.env.local` with the public Supabase browser values:
+Online import requires the public `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the frontend environment, an owner-configured Supabase project with the reviewed additive migration, and the Mac worker. Those values are public client configuration. Keep `TYPESAFE_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `IMPORT_OWNER_USER_ID` only in the private Mac worker environment; see [backend/context.md](backend/context.md) and [infra/worker/README.md](infra/worker/README.md). Recipe imports use Jev classification, local CPU transcription, and local screenshot OCR. No Anthropic calls are made by imports. Direct `POST /api/import/parse` and `POST /api/pantry/receipt` return 410; the personal app imports through `/app#/import`, and receipt parsing is outside this milestone.
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+To develop the backend and worker separately:
+
+```sh
+cd backend
+uv sync
+uv run python -m allaroundfood
+# In another terminal, with private worker environment configured:
+uv run python -m allaroundfood.worker --watch
 ```
 
-Backend and worker env lives in `backend/.env`:
+The backend is not required for the local `/app` cooking and planning flow. The Mac worker, hosted Supabase schema, and real website/video imports still need deployment verification.
 
-```bash
-cp backend/.env.example backend/.env
-```
+## Keep your data
 
-Fill in at least:
+Open `/app#/settings` to download a JSON backup and verify its counts. The backup includes recipes, plans, shopping, pantry, drafts, cooking progress, and settings. Pending import uploads are excluded. Restore with **Merge backup** on a new profile or device; **Replace local library** first downloads a pre-restore copy and requires confirmation. A different browser, profile, device, or origin has separate storage. Backup transfer is manual; there is no cross-device synchronization. Clearing site data or losing a device can erase local edits unless an external backup exists. Cloud migration copies and verifies the old library; it does not delete cloud originals.
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `SUPABASE_URL` | Yes | Supabase project URL for migration scripts and the worker. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Service-role key for migration scripts and the worker; never expose it to the frontend. |
-| `ANTHROPIC_API_KEY_PARSING` | Yes | Anthropic API key used by the local worker for parsing and evals. |
-| `WHISPER_MODEL` | No | Local whisper.cpp model name; defaults to `base.en`. |
-| `YTDLP_BIN` / `FFMPEG_BIN` | No | Video import binaries; default to `yt-dlp` and `ffmpeg`. |
-| `QWEN_GGUF_PATH` | No | Real receipt OCR model path. |
+## Verify
 
-Apply Supabase migrations and migrate existing Parquet rows using [supabase/README.md](./supabase/README.md).
-
-### Run
-
-**Terminal A — frontend**
-
-```bash
+```sh
+pnpm --dir frontend lint
+pnpm --dir frontend exec tsc --noEmit
+pnpm --dir frontend exec vitest run
+NEXT_PUBLIC_SUPABASE_URL=https://aaf-mock.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=public-test-key pnpm --dir frontend build
 cd frontend
-pnpm dev
+NEXT_PUBLIC_SUPABASE_URL=https://aaf-mock.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=public-test-key pnpm test:pwa
 ```
 
-Next.js starts on `http://localhost:3000`.
+The production PWA tests require a build first. CI uses `https://aaf-mock.supabase.co` and `public-test-key` as public fixture values, then installs Chromium. Backend checks remain separate, including pricing tests:
 
-**Terminal B — worker**
-
-```bash
+```sh
 cd backend
-uv run python -m allaroundfood.worker --once
+uv run ruff check
+uv run mypy
+uv run pytest
 ```
 
-Use `--watch` while developing if you want the worker to poll continuously.
+Dated observed results and the remaining hosted, migration, Mac, and installed-device gates are in [the release checklist](docs/testing/local-first-pwa-release.md). No GitHub deployment workflow exists yet; Vercel setup and a stable production URL require verification before release. PRs target `dev`; `main` is the release branch.
 
-Before relying on the worker, run the preflight checks and prefetch local models:
+## Recent updates
 
-```bash
-cd backend
-uv run python -m allaroundfood.worker --doctor
-uv run python -m allaroundfood.worker --prefetch-models
-```
-
-`--prefetch-models` may download the configured Whisper model on first use. The Qwen GGUF receipt model is not committed; put it in the host model directory that Docker mounts at `/models`:
-
-```bash
-mkdir -p "$HOME/models/allaroundfood/whisper"
-bash scripts/download_qwen.sh "$HOME/models/allaroundfood/qwen2-vl.gguf"
-```
-
-For launchd/Docker, set `QWEN_GGUF_PATH=/models/qwen2-vl.gguf` and `WHISPER_MODELS_DIR=/models/whisper` in `backend/.env`.
-
-### Schedule the Worker on macOS
-
-launchd is the supported local scheduler. Build the worker image, prepare a model directory containing `qwen2-vl.gguf` and a `whisper/` subdirectory, then install the LaunchAgent:
-
-```bash
-docker build -f backend/Dockerfile.worker -t allaroundfood-worker backend
-infra/worker/install_launchd.sh --models "$HOME/models/allaroundfood"
-launchctl load "$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
-launchctl start com.allaroundfood.worker
-launchctl print "gui/$(id -u)/com.allaroundfood.worker"
-tail -f /tmp/allaroundfood-worker.out /tmp/allaroundfood-worker.err
-```
-
-To reload after editing the plist:
-
-```bash
-launchctl unload "$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
-launchctl load "$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
-```
-
-To uninstall:
-
-```bash
-launchctl unload "$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
-rm "$HOME/Library/LaunchAgents/com.allaroundfood.worker.plist"
-```
-
-### Try It Out
-
-1. Sign in through the PWA.
-2. Go to `/import`, paste a recipe URL or drop a screenshot, and add it to the queue.
-3. Run the worker once; the finished recipe appears in `/cookbook`.
-4. Plan meals in `/plan`, review the shopping list in `/shop`, and check parse grades in `/evaluations`.
-
----
-
-## Development
-
-### Run
-
-```bash
-# Frontend (hot reload)
-cd frontend && pnpm dev
-
-# Worker (single drain)
-cd backend && uv run python -m allaroundfood.worker --once
-```
-
-### Test
-
-```bash
-# Frontend unit tests (Vitest)
-cd frontend && pnpm test
-
-# Frontend E2E tests (Playwright)
-cd frontend && pnpm test:e2e
-
-# Backend (pytest)
-cd backend && uv run pytest
-```
-
-### Lint & Typecheck
-
-```bash
-# Frontend
-cd frontend && pnpm lint
-
-# Backend
-cd backend && uv run ruff check && uv run mypy
-```
-
-### Build
-
-```bash
-cd frontend && pnpm build
-```
-
----
-
-## Architecture
-
-```
-Browser / PWA
-  └─▶ Next.js 16 (frontend/)
-        ├─▶ Supabase Postgres + Storage
-        └─▶ local API routes for still-hosted frontend features
-
-Local worker (backend/)
-  └─▶ Supabase parse_jobs
-        ├─▶ Claude recipe parsing + evals
-        ├─▶ yt-dlp + ffmpeg + whisper.cpp video transcription
-        └─▶ Qwen2-VL receipt OCR / pricing observations
-```
-
-**Key subsystems**
-
-| Subsystem | Path | What it does |
-|-----------|------|--------------|
-| Supabase data access | `frontend/src/lib/db/` | Server-side reads/writes under RLS |
-| Import queue | `frontend/src/lib/db/parseJobs.ts`, `backend/src/allaroundfood/worker.py` | Enqueues and drains recipe parse jobs |
-| Recipe parsing | `backend/src/allaroundfood/parsing/` | Claude tool-use parsers and judge |
-| Video import | `backend/src/allaroundfood/video_import.py` | yt-dlp fetch, ffmpeg audio, whisper.cpp transcription |
-| Receipt OCR | `backend/src/allaroundfood/ocr/` | Qwen2-VL GGUF receipt parsing |
-| Pricing | `backend/src/allaroundfood/pricing/` | Retailer adapters, canonical matching, analytics |
-
----
-
-## Troubleshooting
-
-**`pnpm install` warns about build scripts**
-
-```bash
-pnpm approve-builds
-```
-
-**Video import cannot find system binaries**
-
-Install `yt-dlp` and `ffmpeg`, or set `YTDLP_BIN` / `FFMPEG_BIN` in `backend/.env`.
-
-```bash
-YTDLP_BIN=/path/to/yt-dlp FFMPEG_BIN=/path/to/ffmpeg uv run python -m allaroundfood.worker --once
-```
-
-**Whisper model download is blocked**
-
-Run `uv run python -m allaroundfood.worker --prefetch-models` on a network that can reach Hugging Face, or pre-download a ggml model and set `WHISPER_MODELS_DIR`.
-
-**Pricing adapter Playwright fallbacks need Chromium**
-
-```bash
-cd backend && uv run playwright install chromium
-```
-
-**Offline receipt OCR needs Qwen2-VL**
-
-```bash
-mkdir -p "$HOME/models/allaroundfood/whisper"
-bash scripts/download_qwen.sh "$HOME/models/allaroundfood/qwen2-vl.gguf"
-```
-
-When running locally without Docker, set `QWEN_GGUF_PATH` to that host path. When running through Docker/launchd, mount the host model directory at `/models` and set `QWEN_GGUF_PATH=/models/qwen2-vl.gguf`.
-
----
-
-## Contributing
-
-1. Branch off `dev`: `git checkout -b feature/your-thing dev`.
-2. Open a PR targeting `dev`; `main` is release-only.
-3. CI must be green before merge.
-4. `dev` → `main` is a release.
-
-See [CHANGELOG.md](./CHANGELOG.md) for shipped work and [TODO.md](./TODO.md) for open work.
-
-## Recent Updates
-
-Last 5 entries from [CHANGELOG.md](./CHANGELOG.md):
-
----
 <!-- BEGIN:RECENT-UPDATES -->
-- Text shopping list to any number via Apple Messages
+- Implement source-grounded Jev recipe parsing in the import worker
+- Archived migrated core Parquet files under `data/archive/` after Supabase row counts matched.
+- Cut over the app from hosted server proxies to Supabase reads/writes plus the local import worker.
+- Removed the deferred user-facing pricing surface while keeping the backend pricing library.
+- Deleted the Python HTTP server, proxy routes, and core Parquet store path after adding Supabase evaluation stats.
 <!-- END:RECENT-UPDATES -->
 
-## Project Map
+## Project map
 
-See [CLAUDE.md](./CLAUDE.md), which is identical to [AGENTS.md](./AGENTS.md), for the agent-readable repo map.
+See [CLAUDE.md](CLAUDE.md), kept identical to [AGENTS.md](AGENTS.md), and the folder `context.md` files.

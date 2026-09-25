@@ -1,74 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  com.allaroundfood.worker.plist — macOS launchd template.
-
-  Fires the import-queue worker once a day (08:00 local) to drain parse_jobs.
-  launchd is preferred over cron on a laptop: with StartCalendarInterval, if the
-  Mac is asleep at the scheduled time, launchd runs the job on the NEXT WAKE
-  (cron would silently skip it). See docs/plans/import-queue-worker.md §4.8.
-
-  ── Fill in the placeholders ──
-    __DOCKER__  absolute path to the Docker CLI, e.g. /usr/local/bin/docker
-                or /opt/homebrew/bin/docker
-    __REPO__    absolute path to the repo checkout, e.g.
-                /Users/tanner/coding/all-around-food
-    __MODELS__  absolute path to the host model directory that holds
-                qwen2-vl.gguf and whisper/, e.g. /Users/tanner/models/allaroundfood
-
-  Docker Desktop must be running for the job to succeed.
-
-  ── Install ──
-    1. Build the image (once, and after code changes):
-         docker build -f backend/Dockerfile.worker -t allaroundfood-worker backend
-    2. Render and install the LaunchAgent:
-         infra/worker/install_launchd.sh --models /Users/tanner/models/allaroundfood
-    3. Load it:
-         launchctl load ~/Library/LaunchAgents/com.allaroundfood.worker.plist
-    4. Run it immediately to test:
-         launchctl start com.allaroundfood.worker
-    5. Tail logs:
-         tail -f /tmp/allaroundfood-worker.out /tmp/allaroundfood-worker.err
-    6. Inspect status:
-         launchctl print "gui/$(id -u)/com.allaroundfood.worker"
-
-  ── Uninstall / change schedule ──
-    launchctl unload ~/Library/LaunchAgents/com.allaroundfood.worker.plist
-    # edit, then load again
+  Reference shape only. Do not load this file: its paths are placeholders.
+  Generate a loadable plist with install-macos-worker.sh so plistlib resolves
+  the actual checkout, virtualenv, binaries, and private log directory.
 -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>Label</key>
-    <string>com.allaroundfood.worker</string>
-
-    <key>ProgramArguments</key>
-    <array>
-        <string>__DOCKER__</string>
-        <string>run</string>
-        <string>--rm</string>
-        <string>--env-file</string>
-        <string>__REPO__/backend/.env</string>
-        <string>-v</string>
-        <string>__MODELS__:/models</string>
-        <string>allaroundfood-worker</string>
-        <string>--once</string>
-    </array>
-
-    <!-- Fire daily at 08:00 local. Runs on next wake if asleep at 08:00. -->
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>8</integer>
-        <key>Minute</key>
-        <integer>0</integer>
-    </dict>
-
-    <!-- Don't fire the moment it's loaded; wait for the scheduled time. -->
-    <key>RunAtLoad</key>
-    <false/>
-
-    <key>StandardOutPath</key>
-    <string>/tmp/allaroundfood-worker.out</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/allaroundfood-worker.err</string>
+  <key>Label</key>
+  <string>com.allaroundfood.worker</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__BACKEND_VENV_PYTHON__</string>
+    <string>-m</string>
+    <string>allaroundfood.worker</string>
+    <string>--watch</string>
+    <string>--interval</string>
+    <string>30</string>
+    <string>--limit</string>
+    <string>1</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__BACKEND_CHECKOUT__</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+  <key>StandardOutPath</key>
+  <string>__PRIVATE_LOG_DIR__/worker.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>__PRIVATE_LOG_DIR__/worker.err.log</string>
 </dict>
 </plist>

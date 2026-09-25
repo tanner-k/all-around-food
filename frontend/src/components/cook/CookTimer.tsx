@@ -6,7 +6,7 @@ import { formatTime } from "@/lib/format-time";
 interface CookTimerProps {
   secondsLeft: number;
   running: boolean;
-  onTick: (secondsLeft: number) => void;
+  onTick: () => void;
   onPause: () => void;
   onReset: () => void;
 }
@@ -23,7 +23,7 @@ export function CookTimer({
   useEffect(() => {
     if (running && secondsLeft > 0) {
       intervalRef.current = setInterval(() => {
-        onTick(secondsLeft - 1);
+        onTick();
       }, 1000);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -55,7 +55,7 @@ export function CookTimer({
       {!isExpired && (
         <button
           type="button"
-          onClick={running ? onPause : () => onTick(secondsLeft)}
+          onClick={onPause}
           className="min-h-8 px-2 text-sm text-ink-mute hover:text-ink active:text-ink rounded transition-colors"
           aria-label={running ? "Pause timer" : "Resume timer"}
         >

@@ -1,5 +1,7 @@
 # Plan: Supabase Cutover — retire the hosted-backend path (Phase 6, pricing deferred)
 
+> Historical plan. The local-first candidate preserves FastAPI, pricing APIs, and Parquet archives; see ADR 0008 and docs/testing/local-first-pwa-release.md. Do not execute this plan’s deletion steps.
+
 **Status:** Proposed
 **Date:** 2026-07-04
 **Owner:** Tanner

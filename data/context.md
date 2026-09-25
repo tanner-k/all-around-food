@@ -1,32 +1,18 @@
 # data/
 
 ## Scope
-- Supabase migration files
-- Archived Parquet files used for one-time migration/seeding
-- Deferred pricing/OCR Parquet paths
 
-## Not in scope
-- Worker code → `backend/`
-- UI-side data shaping → `frontend/`
-- Infrastructure provisioning the database → `infra/`
-
-## Stack
-Supabase Postgres migrations; Parquet remains only for archive/migration inputs and deferred pricing/OCR stores
+Legacy Parquet/CSV schemas, seed data, and archives for the FastAPI/Polars backend. The personal `/app` library is stored in browser IndexedDB, not these files. Hosted temporary import queue migrations and SQL tests live under `supabase/`.
 
 ## Data files
-- `recipes.parquet`, `evaluations.parquet`, `pantry.parquet`, `shopping_list.parquet`, `meal_plans.parquet` — legacy core app data, migrated to Supabase via `backend/scripts/migrate_parquet_to_supabase.py`.
-- `receipts.parquet` and `data/pricing/*.parquet` — deferred OCR/pricing paths retained for worker/library use.
 
-## Local skills / conventions
-- None yet — add as needed
+- `recipes.parquet` — legacy saved recipes
+- `evaluations.parquet` — legacy parse evaluations
+- `pantry.parquet`, `shopping_list.parquet`, `meal_plans.parquet` — legacy pantry, shopping, and plans
+- `archive/` — historical data; preserve during the local-first migration
 
-## Migration workflow
-1. Add a new SQL file under `supabase/migrations/`.
-2. Make it idempotent where practical.
-3. Apply with `supabase db push`.
-4. Commit the migration alongside the code that uses it.
+Files are created lazily on first save. Do not edit or delete archives as a side effect of the PWA release. The owner-only cloud export copies existing Supabase records into the target browser and verifies them separately; backup files transfer local records between browser profiles/devices manually.
 
-## Notes for agents
-- Never edit a migration that has shipped to `main` — write a new one
-- Schema changes that break the API must come with a coordinated `backend/` change in the same PR
-- Test data lives in `data/seeds/` — keep it small and meaningful, not exhaustive
+## Conventions
+
+Keep backend schema changes and tests coordinated. Never rewrite a migration already applied to a real database. Check actual Supabase migration history and reconcile version collisions before applying the local import draft migration; see `supabase/README.md` and `docs/testing/local-first-pwa-release.md`.

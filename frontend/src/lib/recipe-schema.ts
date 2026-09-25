@@ -7,6 +7,19 @@ export const QuantitySchema = z.object({
   as_written: z.string(),
 });
 
+/**
+ * Apply a freeform amount edit. The parsed `value`/`unit` described the old text,
+ * so they are dropped rather than re-guessed; shopping then treats the amount as
+ * unscalable text instead of summing a stale number.
+ */
+export function withEditedAmount(
+  quantity: z.infer<typeof QuantitySchema>,
+  asWritten: string,
+): z.infer<typeof QuantitySchema> {
+  if (asWritten === quantity.as_written) return quantity;
+  return { value: null, unit: null, as_written: asWritten };
+}
+
 export const IngredientSchema = z.object({
   name: z.string(),
   quantity: QuantitySchema,

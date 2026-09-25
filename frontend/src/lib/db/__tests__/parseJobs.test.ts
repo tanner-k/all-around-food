@@ -1,19 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ackJob, classifyUrlKind, enqueueImageJob, enqueueTextJob, enqueueUrlJob, getJob, retryJob } from "../parseJobs";
 
-const supabaseMock = vi.hoisted(() => {
-  const single = vi.fn();
-  const select = vi.fn(() => ({ single }));
-  const eq = vi.fn(() => ({ select }));
-  const update = vi.fn(() => ({ eq }));
-  const from = vi.fn(() => ({ update }));
-  return { from, update, eq, select, single };
-});
-
-vi.mock("@/lib/supabase/client", () => ({
-  createClient: () => ({ from: supabaseMock.from }),
+const { createClient, insert, select, single, rpc, upload, getUser } = vi.hoisted(() => ({
+  createClient: vi.fn(), insert: vi.fn(), select: vi.fn(), single: vi.fn(), rpc: vi.fn(),
+  upload: vi.fn(), getUser: vi.fn(),
 }));
-
-import { classifyUrlKind, retryJob } from "../parseJobs";
+vi.mock("@/lib/supabase/client", () => ({ createClient }));
+const job = { id: "00000000-0000-4000-8000-000000000001", status: "pending" };
+beforeEach(() => {
+  vi.clearAllMocks();
+  single.mockResolvedValue({ data: job, error: null });
+  select.mockReturnValue({ single, eq: vi.fn().mockReturnValue({ single }) });
+  insert.mockReturnValue({ select });
+  rpc.mockResolvedValue({ data: job, error: null });
+  upload.mockResolvedValue({ error: null });
+  getUser.mockResolvedValue({ data: { user: { id: "owner-a" } }, error: null });
+  createClient.mockReturnValue({ from: () => ({ insert, select }), rpc, auth: { getUser },
+    storage: { from: () => ({ upload }) } });
+});
 
 // URL → kind classification (video vs url). Mirrors the inline route's
 // VIDEO_URL_HOST_RE host regex.
@@ -57,35 +61,69 @@ describe("classifyUrlKind", () => {
   });
 });
 
-describe("retryJob", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+it("submits a stable UUID without client-owned state columns", async () => {
+  await enqueueUrlJob("https://example.com/recipe", job.id);
+  expect(insert).toHaveBeenCalledWith({ id: job.id, kind: "url", source_url: "https://example.com/recipe" });
+});
+
+it("reads its existing row after a duplicate submission", async () => {
+  single.mockResolvedValueOnce({ data: null, error: { code: "23505", message: "duplicate" } });
+  expect(await enqueueTextJob("eggs", "text", job.id)).toEqual(job);
+  expect(insert).toHaveBeenCalledWith({ id: job.id, kind: "text", payload_text: "eggs" });
+});
+
+it("reports a missing owned row as expired", async () => {
+  single.mockResolvedValue({ data: null, error: { code: "PGRST116", message: "none" } });
+  await expect(getJob(job.id)).rejects.toThrow("Import expired; submit again");
+});
+
+it("uses owner-checked RPCs for retry and acknowledgement", async () => {
+  await retryJob(job.id);
+  await ackJob(job.id);
+  expect(rpc).toHaveBeenNthCalledWith(1, "retry_import_job", { p_id: job.id });
+  expect(rpc).toHaveBeenNthCalledWith(2, "ack_import_job", { p_id: job.id });
+});
+
+it("rejects non-image uploads before contacting Storage", async () => {
+  const file = new File(["GIF89a"], "image.gif", { type: "image/gif" });
+  await expect(enqueueImageJob(file, "screenshot", job.id)).rejects.toThrow("JPEG, PNG, or WebP");
+  expect(createClient).not.toHaveBeenCalled();
+});
+
+it("pins URL and text inserts to their expected owner", async () => {
+  await enqueueUrlJob("https://example.com/toast", job.id, "owner-a");
+  await enqueueTextJob("Toast", "text", job.id, "owner-a");
+  expect(insert).toHaveBeenNthCalledWith(1, { id: job.id, kind: "url", source_url: "https://example.com/toast", user_id: "owner-a" });
+  expect(insert).toHaveBeenNthCalledWith(2, { id: job.id, kind: "text", payload_text: "Toast", user_id: "owner-a" });
+});
+
+it("stops an expected-owner submission before network work when account switched", async () => {
+  getUser.mockResolvedValue({ data: { user: { id: "owner-b" } }, error: null });
+  await expect(enqueueUrlJob("https://example.com/toast", job.id, "owner-a")).rejects.toThrow("Import account changed");
+  await expect(enqueueTextJob("Toast", "text", job.id, "owner-a")).rejects.toThrow("Import account changed");
+  await expect(enqueueImageJob(new File(["png"], "test.png", { type: "image/png" }), "screenshot", job.id, "owner-a"))
+    .rejects.toThrow("Import account changed");
+  expect(insert).not.toHaveBeenCalled();
+  expect(upload).not.toHaveBeenCalled();
+});
+
+it("pins screenshot path and inserted owner even if the account changes during upload", async () => {
+  upload.mockImplementation(async () => {
+    getUser.mockResolvedValue({ data: { user: { id: "owner-b" } }, error: null });
+    return { error: null };
   });
+  await enqueueImageJob(new File(["png"], "test.png", { type: "image/png" }), "screenshot", job.id, "owner-a");
+  expect(upload).toHaveBeenCalledWith(`owner-a/${job.id}.png`, expect.any(File), expect.objectContaining({ upsert: false }));
+  expect(insert).toHaveBeenCalledWith({ id: job.id, kind: "screenshot", storage_path: `owner-a/${job.id}.png`, user_id: "owner-a" });
+});
 
-  it("resets attempts when retrying", async () => {
-    const retriedJob = {
-      id: "job-1",
-      kind: "url",
-      source_url: null,
-      storage_path: null,
-      payload_text: null,
-      status: "pending",
-      attempts: 0,
-      error: null,
-      result_recipe_id: null,
-      created_at: "2026-07-01T00:00:00Z",
-      updated_at: "2026-07-01T00:00:00Z",
-    };
-    supabaseMock.single.mockResolvedValue({ data: retriedJob, error: null });
-
-    await expect(retryJob("job-1")).resolves.toEqual(retriedJob);
-
-    expect(supabaseMock.from).toHaveBeenCalledWith("parse_jobs");
-    expect(supabaseMock.update).toHaveBeenCalledWith({
-      status: "pending",
-      error: null,
-      attempts: 0,
-    });
-    expect(supabaseMock.eq).toHaveBeenCalledWith("id", "job-1");
-  });
+it("reuses the stable image path after an ambiguous insert without overwriting the object", async () => {
+  single.mockResolvedValueOnce({ data: null, error: { message: "network interrupted" } });
+  const file = new File(["png"], "test.png", { type: "image/png" });
+  await expect(enqueueImageJob(file, "screenshot", job.id, "owner-a")).rejects.toThrow("network interrupted");
+  upload.mockResolvedValueOnce({ error: { message: "already exists" } });
+  expect(await enqueueImageJob(file, "screenshot", job.id, "owner-a")).toEqual(job);
+  expect(upload).toHaveBeenNthCalledWith(2, `owner-a/${job.id}.png`, file,
+    expect.objectContaining({ upsert: false }));
+  expect(insert).toHaveBeenCalledTimes(2);
 });

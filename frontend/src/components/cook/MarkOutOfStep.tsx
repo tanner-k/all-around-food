@@ -1,10 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  listPantryItemsAction,
-  updatePantryStatusAction,
-} from "@/app/(app)/pantry/actions";
+import { useState } from "react";
 import type { PantryItem, PantryStatus } from "@/lib/pantry-schema";
 import { normalizeName } from "@/lib/normalize";
 
@@ -20,6 +16,8 @@ const STATUS_OPTIONS: {
 
 interface MarkOutOfStepProps {
   ingredientNames: string[];
+  pantry: PantryItem[];
+  onSetPantryStatus: (id: string, status: PantryStatus) => Promise<void>;
   onDone: () => void;
 }
 
@@ -28,39 +26,13 @@ interface Choice {
   status: PantryStatus;
 }
 
-export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
-  const [phase, setPhase] = useState<"loading" | "ready" | "saving">(
-    "loading"
-  );
-  const [choices, setChoices] = useState<Choice[]>([]);
+export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDone }: MarkOutOfStepProps) {
+  const [phase, setPhase] = useState<"ready" | "saving">("ready");
+  const [choices, setChoices] = useState<Choice[]>(() => {
+    const wanted = new Set(ingredientNames.map(normalizeName));
+    return pantry.filter((item) => wanted.has(normalizeName(item.name))).map((item) => ({ item, status: item.status }));
+  });
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    listPantryItemsAction()
-      .then((result) => {
-        if (cancelled) return;
-        if ("error" in result) {
-          setError(result.error);
-          setPhase("ready");
-          return;
-        }
-        const wanted = new Set(ingredientNames.map(normalizeName));
-        const matched = result.items.filter((p) =>
-          wanted.has(normalizeName(p.name))
-        );
-        setChoices(matched.map((item) => ({ item, status: item.status })));
-        setPhase("ready");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setError("Couldn't load your pantry.");
-        setPhase("ready");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [ingredientNames]);
 
   function setStatus(id: string, status: PantryStatus) {
     setChoices((prev) =>
@@ -73,26 +45,14 @@ export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
     setError(null);
     try {
       const changed = choices.filter((c) => c.status !== c.item.status);
-      const results = await Promise.all(
-        changed.map((c) => updatePantryStatusAction(c.item.id, c.status))
+      await Promise.all(
+        changed.map((c) => onSetPantryStatus(c.item.id, c.status))
       );
-      if (results.some((result) => "error" in result)) {
-        throw new Error("Failed to update pantry");
-      }
       onDone();
     } catch {
       setError("Couldn't update some items. Try again.");
       setPhase("ready");
     }
-  }
-
-  if (phase === "loading") {
-    return (
-      <div className="flex items-center justify-center gap-3 py-12 text-ink-mute">
-        <span className="animate-pulse text-xl text-terra">⏳</span>
-        Checking your pantry…
-      </div>
-    );
   }
 
   if (choices.length === 0) {
