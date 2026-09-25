@@ -1,10 +1,23 @@
 # Local-first PWA release record
 
-**Record date:** 2026-09-20  
-**Candidate:** `codex/local-first-pwa` worktree, after the `origin/dev` merge and the final review fixes  
-**Decision:** release gate open. This document records observed local evidence separately from external checks.
+**Updated:** 2026-09-25
 
-## Observed in this workspace
+**Production revision:** `19145a53c5e06dfea06f26e0328fe760c96a5418` (`main`, PR #12)
+
+**Decision:** production deployment and a real owner import were observed; the full release gate remains open for physical-device, recovery, and library-copy checks.
+
+## Observed production rollout (2026-09-25)
+
+| Area | Observed result | Limit |
+|---|---|---|
+| Merge and deployment | PR #11 merged to `dev`; PR #12 merged to `main` at the revision above. All eight checks passed. Vercel reported a successful production deployment at https://all-around-food.vercel.app/app. | PR #13's installer fix passed all five checks and merged to `dev`; production promotion follows. |
+| Hosted Supabase | Project `pkvdoucwssyjltvqsxcq` received migrations `0001`–`0005` only after private schema/data snapshots and a disposable rehearsal. The rehearsal left all existing rows and original columns unchanged: 5 recipes, 5 meal plans, 10 planned meals, 4 evaluations, and 1 pending job. The hosted recipe count remains 5. An existing single owner was configured. | The old cloud library has not yet been copied into the production browser profile. Preserve hosted originals and private snapshots. |
+| Mac Mini worker | The `.worktrees/mac-import-worker` checkout uses Python 3.12, a mode-600 `backend/.env`, Jev, CPU-only `small.en`, Tesseract, and `RUN_EVALS=false`. LaunchAgent `com.allaroundfood.worker` is running with the corrected virtualenv path and polls every 30 seconds after login. | Sleep, crash, and lease-recovery behavior on this Mac has not yet been observed. |
+| Real production Chrome import | A pasted recipe queued offline survived a full offline reload. Reconnection submitted an owner-scoped row to hosted Supabase. The browser disconnected again while the Mac worker returned a Jev draft with 3 ingredients and 4 steps. Reconnection received and acknowledged the local draft; editing, Save to cookbook, and full recipe reload then passed offline in installed Chrome automation, without mocked services. | This is browser automation, not a physical iPhone/iPad test. A prior website import could not access its source and returned a useful error; that source is not evidence of website-import success. |
+
+No credential, owner UUID, magic-link token, or private snapshot is recorded here.
+
+## Earlier local candidate checks (2026-09-20)
 
 | Area | Observed result | Limit |
 |---|---|---|
@@ -18,17 +31,16 @@
 | Merged backend | Ruff and configured mypy passed 68 source files; the restored API, storage, pricing, OCR and worker suites passed 153 tests / 2 skips. | Full-suite evidence (523 passed, 4 skipped) is reused from the unchanged backend; no live import, Supabase, or Mac worker run. |
 | Retired inline parsing | Task 10 route regressions check 410 for direct recipe and receipt parsing; the frontend Claude module was removed. | Legacy API client helpers remain in unmounted screens; personal `/app` does not use them. |
 
-The current worktree CI workflow adds frontend lint, TypeScript, non-watch Vitest, production build, Chromium installation, and PWA tests with public fixture `https://aaf-mock.supabase.co` / `public-test-key`. Backend Ruff, mypy, and full pytest—including pricing—remain separate; canon sync remains. A green GitHub run on the merged candidate was observed on draft PR #11.
+The candidate CI workflow added frontend lint, TypeScript, non-watch Vitest, production build, Chromium installation, and PWA tests with public fixture `https://aaf-mock.supabase.co` / `public-test-key`. Backend Ruff, mypy, and full pytest—including pricing—remained separate; canon sync remained. A green GitHub run on draft PR #11 was observed before the production rollout above.
 
-## Gates before deployment or migration
+## Remaining release checks
 
-1. **`origin/dev` is merged (done).** The draft migration is now `0005_local_recipe_drafts.sql`, dev's `0004_evaluation_stats.sql` and its `0003` history are kept, and `0005` drops the unfenced `recover_stale_parse_jobs(int,int)` RPC. The backend API, pricing and OCR modules and their tests are restored; the legacy pricing E2E config stays runnable and excludes the PWA specs. Still open before any migration: inspect every target's `supabase_migrations.schema_migrations` and reconcile any project where a different `0004` was applied. Do not merge open PR #10's destructive `0004_queue_only.sql`; it is incompatible with the token-fenced draft protocol.
-2. **Run merged automated checks.** Done locally on this candidate except the complete backend pytest with pricing, which is reused from the unchanged backend. CI on draft PR #11 (run 35512114144) passed all five checks: backend Ruff/mypy/pytest, frontend lint/typecheck/unit/PWA, canon sync, and the Vercel preview deployment. Verify `CLAUDE.md` equals `AGENTS.md`. Branch protection is absent on both remote `dev` and `main`; decide and enforce required checks before release.
-3. **Validate hosted import security first in a disposable project.** Apply only the reviewed additive migration in correct version order. Run owner/other/anonymous SQL and Storage tests; configure the owner UUID, disable public sign-ups, and verify service-role-only claims, lease tokens, retries, acknowledgement, expiry, and cleanup. Check actual hosted migration history before touching production. Stop the old worker before cutover and coordinate worker/frontend versions.
-4. **Preserve and copy the library.** Export the existing cloud library through owner-only `/api/export` and keep that file plus cloud originals and Parquet archives. Count and inspect recipes, plan child rows, pantry, and shopping. Merge into the target installed browser, compare counts and representative contents, then download a local backup. Do not automatically delete or overwrite the source. A rollback must not route new local-only edits into old cloud writers.
-5. **Verify the real Mac Mini.** Install the native Python worker with private environment, ffmpeg, yt-dlp, and the whisper model; inspect/enable its LaunchAgent explicitly. Exercise a live website import and an accessible public Instagram link, recording caption/transcript availability and latency. Check paste-text/screenshot fallback when media is blocked. Observe owner rejection, Mac sleep/offline recovery, mid-job crash/reclaim, local draft receipt before cloud cleanup, and no routine cloud recipe mirror. Do not claim universal Instagram support.
-6. **Verify real installations.** On an actual iPhone/iPad home-screen installation and a desktop installation at the intended stable production origin, wait for “Offline ready,” then use airplane-mode cold launch. Open a never-visited recipe, edit/save it, resume cooking, plan repeated meals with serving changes, generate/complete shopping, and reopen. Test a fresh-profile backup restore, sign-out while offline, a database upgrade with another tab open, and an app update during cooking. Simulated WebKit/Chromium is not proof of iOS installation behavior.
-7. **Deploy only after review.** Confirm the existing Vercel project, production URL, and branch mapping (`dev` staging, `main` release). Keep frontend config public only. Record storage-clearing/device-loss recovery and backup transfer instructions for the owner. Resolve the failing Supabase Keepalive workflow or consciously retire it. Keep ADR 0008 Proposed until architecture review, and leave the local-first TODO open until these gates pass.
+1. Promote the merged PR #13 installer fix and this rollout record through `dev` to `main`. The live LaunchAgent already uses the corrected virtualenv path.
+2. Copy the preserved cloud library into the intended browser profile using owner-only export and local merge restore. Compare counts and representative contents, then download a local backup. Keep hosted originals and Parquet archives intact.
+3. Test a real iPhone/iPad home-screen installation and a desktop installation at the production origin, including offline cold launch, editing, cooking progress, planning, shopping, restore, and update behavior. Chromium simulation does not establish iOS behavior.
+4. Exercise Mac sleep/offline, process crash, and lease reclaim with recoverable jobs; test an accessible website and public video source separately. Record source access and timing rather than assuming universal support.
+5. Verify hosted owner/other/anonymous and Storage security cases, and disable public sign-ups before inviting users. The queue is already restricted to the configured owner.
+6. Resolve the failing Supabase Keepalive workflow or consciously retire it. Keep ADR 0008 Proposed until architecture review, and leave the local-first TODO open until the remaining gates pass.
 
 ## Backup and device boundaries
 
@@ -36,4 +48,4 @@ The current worktree CI workflow adds frontend lint, TypeScript, non-watch Vites
 
 ## Release disposition
 
-No live Supabase migration, cloud-library copy, Mac installation, physical-device test, Vercel deployment, or production publishing was performed in this worktree. The release TODO remains open and no `scripts/done.py` promotion to `CHANGELOG.md` is warranted yet.
+The frontend is deployed and the hosted queue-to-Mac-to-local-draft path worked in production Chrome. Cloud-library copy, physical-device checks, and Mac recovery remain open. The release TODO remains open and no `scripts/done.py` promotion to `CHANGELOG.md` is warranted yet.

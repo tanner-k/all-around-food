@@ -56,7 +56,7 @@ Folder-specific conventions live in each `context.md`.
 
 ## 7. Deployment
 
-There is no GitHub deployment workflow. Vercel is the frontend target; the production origin and Vercel project are not yet verified here. The import worker is a separate Mac Mini LaunchAgent requiring user login and FileVault unlock. Vercel holds only public Supabase URL/anon configuration. Jev and service-role keys stay on the Mac. Do not claim a production release until the external checks in `docs/testing/local-first-pwa-release.md` are observed.
+There is no GitHub deployment workflow. Vercel serves https://all-around-food.vercel.app/app from `main` (PR #12, commit `19145a53c5e06dfea06f26e0328fe760c96a5418`). Hosted Supabase project `pkvdoucwssyjltvqsxcq` has migrations `0001`–`0005` and an existing single owner. The Mac Mini runs LaunchAgent `com.allaroundfood.worker` from its Python 3.12 virtualenv, polling every 30 seconds after login and FileVault unlock. Vercel holds only public Supabase URL/anon configuration; Jev and service-role keys stay in the Mac's mode-600 environment. Physical iPhone/iPad, sleep/crash recovery, and cloud-library copy remain unverified; see `docs/testing/local-first-pwa-release.md`.
 
 ## 8. Stack
 
