@@ -118,6 +118,21 @@ class InstallMacosWorkerTests(unittest.TestCase):
         self.assertTrue((self.root / "plutil-args").read_text().startswith("-lint "))
         self.assertEqual((self.root / "venv-python-marker").read_text(), "-\n")
 
+    def test_keeps_virtualenv_python_symlink_in_program_arguments(self) -> None:
+        venv_python = self.backend / ".venv/bin/python"
+        native_python = self.root / "native-python"
+        venv_python.rename(native_python)
+        venv_python.symlink_to(native_python)
+
+        result = self._run()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with self.output.open("rb") as file:
+            plist = plistlib.load(file)
+        self.assertEqual(
+            plist["ProgramArguments"][0], str(self.backend.resolve() / ".venv/bin/python")
+        )
+
     def test_rejects_missing_secret_without_disclosing_it(self) -> None:
         env_file = self.backend / ".env"
         env_file.write_text(env_file.read_text().replace("IMPORT_OWNER_USER_ID=owner-id\n", ""))

@@ -1,6 +1,6 @@
 # all-around-food
 
-A personal cooking app for planning meals, saving recipes, shopping, tracking pantry stock, and cooking step by step. The `/app` experience stores its everyday library in this browser's IndexedDB and is designed to reopen offline after its PWA shell is ready. Online imports use a private Supabase queue and a separate Mac Mini worker. [ADR 0008](docs/decisions/0008-local-first-pwa.md) is still proposed; this release has not passed its hosted migration and physical-device gates.
+A personal cooking app for planning meals, saving recipes, shopping, tracking pantry stock, and cooking step by step. The `/app` experience stores its everyday library in this browser's IndexedDB and is designed to reopen offline after its PWA shell is ready. Online imports use a private Supabase queue and a separate Mac Mini worker. [ADR 0008](docs/decisions/0008-local-first-pwa.md) is still proposed; physical-device and recovery checks remain open.
 
 ## Stack
 
@@ -32,7 +32,7 @@ uv run python -m allaroundfood
 uv run python -m allaroundfood.worker --watch
 ```
 
-The backend is not required for the local `/app` cooking and planning flow. The Mac worker, hosted Supabase schema, and real website/video imports still need deployment verification.
+The backend is not required for the local `/app` cooking and planning flow. A real paste-text import has been verified against the hosted queue and Mac worker; website and video source access varies and needs separate checks.
 
 ## Keep your data
 
@@ -58,7 +58,11 @@ uv run mypy
 uv run pytest
 ```
 
-Dated observed results and the remaining hosted, migration, Mac, and installed-device gates are in [the release checklist](docs/testing/local-first-pwa-release.md). No GitHub deployment workflow exists yet; Vercel setup and a stable production URL require verification before release. PRs target `dev`; `main` is the release branch.
+Dated observed results and remaining release checks are in [the release record](docs/testing/local-first-pwa-release.md). PRs target `dev`; `main` is the release branch.
+
+## Deployment
+
+Vercel serves production at https://all-around-food.vercel.app/app from `main` (PR #12, commit `19145a53c5e06dfea06f26e0328fe760c96a5418`); the production deployment succeeded. Supabase project `pkvdoucwssyjltvqsxcq` has the additive `0001`–`0005` migrations and an existing single owner configured. The Mac Mini runs the import worker as LaunchAgent `com.allaroundfood.worker`, polling every 30 seconds after login from its Python 3.12 virtualenv. Its private mode-600 environment holds Jev and service-role credentials; Vercel uses only public Supabase configuration. See [worker operation](infra/worker/README.md) and the [release record](docs/testing/local-first-pwa-release.md) before treating physical-device use or recovery as verified.
 
 ## Recent updates
 

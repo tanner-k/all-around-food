@@ -2,10 +2,10 @@
 
 ## Scope
 
-Personal Mac Mini worker supervision templates and installation checks live in `worker/`. Vercel is the frontend deployment target; no GitHub deployment workflow exists. The exact Vercel project, stable production origin, and Mac installation have not been verified in this worktree.
+Personal Mac Mini worker supervision templates and installation checks live in `worker/`. Vercel serves the production frontend at https://all-around-food.vercel.app/app from `main`; no GitHub deployment workflow exists. The hosted import schema is in Supabase project `pkvdoucwssyjltvqsxcq`.
 
-The worker runs as a macOS LaunchAgent from a native Python 3.12 virtualenv. `worker/install-macos-worker.sh` checks a specific checkout and writes a resolved plist with private logs; it does not load the agent. The Mac-only environment holds `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY_PARSING`, and `IMPORT_OWNER_USER_ID`. Vercel receives only the public Supabase URL and anon key. The worker makes outbound connections only. It cannot run before FileVault unlock and user login, and its installer does not change sleep or power settings.
+The worker runs on the Mac Mini from this checkout's `.worktrees/mac-import-worker` Python 3.12 virtualenv. Its mode-600 `backend/.env` holds the Jev and Supabase service-role credentials and the configured existing owner; `RUN_EVALS=false`. Jev, CPU-only `small.en` transcription, and Tesseract are installed. LaunchAgent `com.allaroundfood.worker` is running with the corrected virtualenv path and polls every 30 seconds after user login. `worker/install-macos-worker.sh` writes a resolved plist with private logs but does not load it. Vercel receives only the public Supabase URL and anon key. The worker makes outbound connections only and cannot run before FileVault unlock and user login.
 
 ## Conventions
 
-Do not commit secrets or deployment credentials. Test the generated plist and worker startup locally before installing. Verify the actual Mac's wake, offline, crash, and cleanup recovery before release. Keep the worker's queue protocol aligned with the deployed Supabase migration and frontend; stop any old worker before cutover. Do not run the legacy daily/Docker worker beside the leased Mac worker.
+Do not commit secrets or deployment credentials. The production Chrome test confirmed offline queue persistence, owner-scoped submission, a real Mac Jev result, local draft receipt, and acknowledgement. Mac sleep/crash recovery and physical iPhone/iPad behavior remain unverified; see `docs/testing/local-first-pwa-release.md`. Keep the worker's queue protocol aligned with the deployed Supabase migration and frontend. Do not run the legacy daily/Docker worker beside the leased Mac worker.
