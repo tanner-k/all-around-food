@@ -183,7 +183,7 @@ from pathlib import Path
 output, backend, python_bin, log_dir, worker_path, ffmpeg_bin, ytdlp_bin = (
     Path(sys.argv[1]).resolve(),
     Path(sys.argv[2]).resolve(),
-    Path(sys.argv[3]).resolve(),
+    Path(sys.argv[3]),
     Path(sys.argv[4]).resolve(),
     sys.argv[5],
     Path(sys.argv[6]).resolve(),
