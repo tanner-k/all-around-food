@@ -8,6 +8,7 @@ never import ``pywhispercpp`` directly.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -16,6 +17,15 @@ logger = logging.getLogger(__name__)
 
 class TranscriptionError(Exception):
     """Raised when the whisper.cpp model fails to load or transcribe."""
+
+
+@dataclass(frozen=True)
+class TranscriptionSegment:
+    """A text segment with start and end times in seconds."""
+
+    start_seconds: float
+    end_seconds: float
+    text: str
 
 
 class Transcriber(Protocol):
@@ -44,10 +54,12 @@ class WhisperCppTranscriber:
         model: str = "base.en",
         models_dir: Path | None = None,
         cpu_only: bool = False,
+        initial_prompt: str | None = None,
     ) -> None:
         self._model = model
         self._models_dir = models_dir
         self._cpu_only = cpu_only
+        self._initial_prompt = initial_prompt
         self._client: Any = None  # loaded lazily
 
     def _load(self) -> Any:
@@ -87,17 +99,34 @@ class WhisperCppTranscriber:
         Raises:
             TranscriptionError: If the model fails to load or transcribe.
         """
+        segments = self._decode(audio_path, initial_prompt=self._initial_prompt)
+        try:
+            return " ".join(str(seg.text).strip() for seg in segments).strip()
+        except Exception as exc:  # noqa: BLE001 - surfaced as TranscriptionError
+            raise TranscriptionError(f"Failed to transcribe {audio_path}: {exc}") from exc
+
+    def transcribe_segments(
+        self, audio_path: Path, *, initial_prompt: str | None = None
+    ) -> list[TranscriptionSegment]:
+        """Transcribe a WAV file into stripped text segments timed in seconds."""
+        segments = self._decode(audio_path, initial_prompt=initial_prompt)
+        try:
+            return [
+                TranscriptionSegment(seg.t0 / 100, seg.t1 / 100, str(seg.text).strip())
+                for seg in segments
+            ]
+        except Exception as exc:  # noqa: BLE001 - surfaced as TranscriptionError
+            raise TranscriptionError(f"Failed to transcribe {audio_path}: {exc}") from exc
+
+    def _decode(self, audio_path: Path, *, initial_prompt: str | None) -> Any:
         client = self._load()
         try:
-            segments = client.transcribe(str(audio_path))
-            text = " ".join(str(seg.text).strip() for seg in segments)
+            # pywhispercpp retains decoder parameters on its cached model.
+            return client.transcribe(str(audio_path), initial_prompt=initial_prompt or "")
         except TranscriptionError:
             raise
         except Exception as exc:  # noqa: BLE001 - surfaced as TranscriptionError
-            raise TranscriptionError(
-                f"Failed to transcribe {audio_path}: {exc}"
-            ) from exc
-        return text.strip()
+            raise TranscriptionError(f"Failed to transcribe {audio_path}: {exc}") from exc
 
 
 class FakeTranscriber:

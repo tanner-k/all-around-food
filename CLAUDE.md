@@ -38,7 +38,7 @@ all-around-food/
 
 ## 5. Global skills / MCPs
 
-- claude-api for the private backend import worker
+- Jev classification with local transcription/OCR for recipe imports (no Anthropic calls)
 - ui-ux-pro-max for UI components
 - mgrep for search when available; otherwise `rg`
 
@@ -56,7 +56,7 @@ Folder-specific conventions live in each `context.md`.
 
 ## 7. Deployment
 
-There is no GitHub deployment workflow. Vercel is the frontend target; the production origin and Vercel project are not yet verified here. The import worker is a separate Mac Mini LaunchAgent requiring user login and FileVault unlock. Vercel holds only public Supabase URL/anon configuration. Anthropic and service-role keys stay on the Mac. Do not claim a production release until the external checks in `docs/testing/local-first-pwa-release.md` are observed.
+There is no GitHub deployment workflow. Vercel is the frontend target; the production origin and Vercel project are not yet verified here. The import worker is a separate Mac Mini LaunchAgent requiring user login and FileVault unlock. Vercel holds only public Supabase URL/anon configuration. Jev and service-role keys stay on the Mac. Do not claim a production release until the external checks in `docs/testing/local-first-pwa-release.md` are observed.
 
 ## 8. Stack
 

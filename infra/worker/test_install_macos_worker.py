@@ -43,15 +43,15 @@ class InstallMacosWorkerTests(unittest.TestCase):
         )
         models = self.root / "models"
         models.mkdir()
-        (models / "ggml-base.en.bin").write_bytes(b"model")
+        (models / "ggml-small.en.bin").write_bytes(b"model")
         env_file = self.backend / ".env"
         env_file.write_text(
             "SUPABASE_URL=https://example.supabase.co\n"
             "SUPABASE_SERVICE_ROLE_KEY=super-secret\n"
-            "ANTHROPIC_API_KEY_PARSING=another-secret\n"
+            "TYPESAFE_API_KEY=another-secret\n"
             "IMPORT_OWNER_USER_ID=owner-id\n"
             "RUN_EVALS=false\n"
-            "WHISPER_MODEL=base.en\n"
+            "WHISPER_MODEL=small.en\n"
             f"WHISPER_MODELS_DIR={models}\n"
         )
         env_file.chmod(0o600)

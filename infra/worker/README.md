@@ -5,7 +5,7 @@ The personal Mac Mini runs the recipe-import watcher with its native Python
 does not need Docker Desktop. `backend/Dockerfile.worker` remains available for
 future hosted deployment.
 
-This setup only makes outbound requests: to Supabase, Anthropic, permitted
+This setup only makes outbound requests: to Supabase, Jev, permitted
 recipe/video sites, and model download hosting. Do not open ports or configure
 tunnels for the worker.
 
@@ -18,27 +18,27 @@ the install command from another machine or infer success from this repository.
 cd /actual/path/to/all-around-food/backend
 uv venv --python 3.12
 uv sync
-brew install ffmpeg
+brew install ffmpeg tesseract
 mkdir -p "$HOME/Library/Application Support/allaroundfood/whisper"
 chmod 700 "$HOME/Library/Application Support/allaroundfood" \
   "$HOME/Library/Application Support/allaroundfood/whisper"
 ```
 
 Create `backend/.env` on that Mac with mode `600`. It must contain nonempty
-`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY_PARSING`, and
-`IMPORT_OWNER_USER_ID`; set `RUN_EVALS=false`, `WHISPER_MODEL=base.en`, and
-`WHISPER_MODELS_DIR` to the directory below. Keep the service-role and Anthropic
+`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TYPESAFE_API_KEY`, and
+`IMPORT_OWNER_USER_ID`; set `RUN_EVALS=false`, `WHISPER_CPU_ONLY=true`, `WHISPER_MODEL=small.en`, and
+`WHISPER_MODELS_DIR` to the directory below. Keep the service-role and Jev
 keys on the Mac Mini; never copy them to Vercel or the frontend.
 
 ```sh
 chmod 600 /actual/path/to/all-around-food/backend/.env
 export WHISPER_MODELS_DIR="$HOME/Library/Application Support/allaroundfood/whisper"
 /actual/path/to/all-around-food/backend/.venv/bin/python -c \
-  'import os; from pywhispercpp.model import Model; Model("base.en", models_dir=os.environ["WHISPER_MODELS_DIR"])'
-test -f "$WHISPER_MODELS_DIR/ggml-base.en.bin"
+  'import os; from pywhispercpp.model import Model; Model("small.en", models_dir=os.environ["WHISPER_MODELS_DIR"])'
+test -f "$WHISPER_MODELS_DIR/ggml-small.en.bin"
 ```
 
-The model command downloads and opens the base.en file once. It does not print
+The model command downloads and opens the small.en file once. It does not print
 configuration values. The installer checks only whether required names are set,
 never their values.
 

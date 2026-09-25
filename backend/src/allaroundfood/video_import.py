@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import re
 import shutil
 import subprocess
@@ -84,23 +83,22 @@ class VideoImportSettings:
     ytdlp_bin: str = "yt-dlp"
     ffmpeg_bin: str = "ffmpeg"
     timeout_s: int = 180
-    whisper_model: str = "base.en"
+    whisper_model: str = "small.en"
     whisper_models_dir: str | None = None
+    whisper_cpu_only: bool = True
 
     @classmethod
     def from_env(cls) -> VideoImportSettings:
         """Build settings from environment variables."""
         return cls(
-            ytdlp_bin=os.environ.get("YTDLP_BIN", app_settings.ytdlp_bin),
-            ffmpeg_bin=os.environ.get("FFMPEG_BIN", app_settings.ffmpeg_bin),
-            timeout_s=int(
-                os.environ.get("VIDEO_IMPORT_TIMEOUT_S", str(app_settings.video_import_timeout_s))
+            ytdlp_bin=app_settings.ytdlp_bin,
+            ffmpeg_bin=app_settings.ffmpeg_bin,
+            timeout_s=app_settings.video_import_timeout_s,
+            whisper_model=app_settings.whisper_model,
+            whisper_models_dir=(
+                str(app_settings.whisper_models_dir) if app_settings.whisper_models_dir else None
             ),
-            whisper_model=os.environ.get("WHISPER_MODEL", app_settings.whisper_model),
-            whisper_models_dir=os.environ.get(
-                "WHISPER_MODELS_DIR",
-                str(app_settings.whisper_models_dir) if app_settings.whisper_models_dir else None,
-            ),
+            whisper_cpu_only=app_settings.whisper_cpu_only,
         )
 
 
@@ -122,20 +120,23 @@ def _fetch_video_text_sync(
     active_settings = settings or VideoImportSettings.from_env()
     platform = validate_video_url(source_url)
 
-    if transcriber is None:
-        transcriber = WhisperCppTranscriber(
-            model=active_settings.whisper_model,
-            models_dir=(
-                Path(active_settings.whisper_models_dir)
-                if active_settings.whisper_models_dir
-                else None
-            ),
-        )
-
     with TemporaryDirectory(prefix="allaroundfood-video-") as tmp:
         tmp_path = Path(tmp)
         video_path, metadata = _download_video(source_url, tmp_path, active_settings)
         caption = _metadata_caption(metadata)
+        if transcriber is None:
+            transcriber = WhisperCppTranscriber(
+                model=active_settings.whisper_model,
+                models_dir=(
+                    Path(active_settings.whisper_models_dir)
+                    if active_settings.whisper_models_dir
+                    else None
+                ),
+                cpu_only=active_settings.whisper_cpu_only,
+                initial_prompt=("Recipe context from caption: " + caption[:1200])
+                if caption
+                else None,
+            )
         audio_path = _extract_audio(video_path, tmp_path, active_settings)
         try:
             transcript = _transcribe_audio(audio_path, transcriber)

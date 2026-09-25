@@ -98,14 +98,14 @@ require_config() {
     [[ -n "$value" ]] || fail "required configuration is missing or empty: $1"
 }
 
-for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY ANTHROPIC_API_KEY_PARSING IMPORT_OWNER_USER_ID; do
+for name in SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY TYPESAFE_API_KEY IMPORT_OWNER_USER_ID; do
     require_config "$name"
 done
 [[ "$(config_value RUN_EVALS)" == "false" ]] || fail 'RUN_EVALS must be false on the personal worker'
-[[ "$(config_value WHISPER_MODEL)" == "base.en" ]] || fail 'WHISPER_MODEL must be base.en'
+[[ "$(config_value WHISPER_MODEL)" == "small.en" ]] || fail 'WHISPER_MODEL must be small.en'
 models_dir=$(config_value WHISPER_MODELS_DIR)
 [[ -n "$models_dir" ]] || fail 'required configuration is missing or empty: WHISPER_MODELS_DIR'
-[[ -f "$models_dir/ggml-base.en.bin" ]] || fail 'missing downloaded whisper base.en model: ggml-base.en.bin'
+[[ -f "$models_dir/ggml-small.en.bin" ]] || fail 'missing downloaded whisper small.en model: ggml-small.en.bin'
 
 worker_path="$backend/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
 ffmpeg_bin=$(PATH="$worker_path" command -v ffmpeg || true)

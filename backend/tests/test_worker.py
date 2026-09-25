@@ -76,6 +76,33 @@ def test_text_publishes_fenced_draft_without_cloud_recipe_write(
     assert published[0]["p_claim_token"] == "claim-1"
 
 
+def test_parser_warnings_are_published_with_draft(monkeypatch: pytest.MonkeyPatch) -> None:
+    found: list[str] = []
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_text",
+        lambda text: RecipeParseResult(recipe(), "jev", text, ["Amount uncertain"]),
+    )
+    monkeypatch.setattr(
+        worker, "finish_import_job",
+        lambda client, job_id, token, value, warnings: found.extend(warnings),
+    )
+    assert worker.process_job(object(), job())  # type: ignore[arg-type]
+    assert found == ["Amount uncertain"]
+
+
+def test_active_worker_never_runs_legacy_eval(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner")
+    monkeypatch.setattr(worker.settings, "run_evals", True)
+    monkeypatch.setattr(
+        "allaroundfood.parsing.recipe_parser.parse_recipe_from_text",
+        lambda text: RecipeParseResult(recipe(), "jev", text),
+    )
+    monkeypatch.setattr(worker, "_run_eval", lambda *args: pytest.fail("legacy eval called"))
+    monkeypatch.setattr(worker, "finish_import_job", lambda *args: None)
+    assert worker.process_job(object(), job())  # type: ignore[arg-type]
+
+
 def test_other_owner_rejected_before_source_fetch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(worker.settings, "import_owner_user_id", "owner", raising=False)
     monkeypatch.setattr(

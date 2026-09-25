@@ -41,6 +41,9 @@ def test_video_import_settings_read_env(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setenv("WHISPER_MODEL", "tiny.en")
     monkeypatch.setenv("WHISPER_MODELS_DIR", "/opt/models")
 
+    from allaroundfood.config import Settings
+
+    monkeypatch.setattr("allaroundfood.video_import.app_settings", Settings(_env_file=None))
     settings = VideoImportSettings.from_env()
 
     assert settings.ytdlp_bin == "/opt/bin/yt-dlp"
@@ -321,3 +324,32 @@ def test_check_video_import_binaries_reports_missing(
 def test_fetch_video_text_full_pipeline_public_video() -> None:
     """Exercise the real video pipeline when external services are available."""
     _fetch_video_text_sync("https://www.tiktok.com/@example/video/000")
+
+
+def test_default_video_transcription_uses_small_cpu_and_bounded_caption(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from allaroundfood import video_import
+
+    captured: dict[str, Any] = {}
+    caption = "cooking context " * 100
+
+    def build_transcriber(**kwargs: Any) -> FakeTranscriber:
+        captured.update(kwargs)
+        return FakeTranscriber("Mix rice.")
+
+    monkeypatch.setattr(video_import, "WhisperCppTranscriber", build_transcriber)
+    monkeypatch.setattr(
+        video_import,
+        "_download_video",
+        lambda url, path, settings: (path / "source.mp4", {"description": caption}),
+    )
+    monkeypatch.setattr(
+        video_import, "_extract_audio", lambda video, path, settings: path / "audio.wav"
+    )
+    result = _fetch_video_text_sync("https://www.instagram.com/reel/abc", VideoImportSettings())
+    assert captured["model"] == "small.en"
+    assert captured["cpu_only"] is True
+    assert captured["initial_prompt"] == "Recipe context from caption: " + caption[:1200]
+    assert result.caption == caption.strip()
+    assert result.transcript == "Mix rice."

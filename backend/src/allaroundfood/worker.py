@@ -41,10 +41,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("allaroundfood.worker")
 
-# Recipe-producing kinds — these link a ``result_recipe_id`` and run evals.
+# Recipe-producing kinds that publish local drafts.
 _RECIPE_KINDS = frozenset({"url", "video", "screenshot", "text"})
 
-# Storage-object extension → Anthropic image media type (default image/jpeg).
+# Storage-object extension → screenshot media type (default image/jpeg).
 _MEDIA_TYPE_BY_EXT: dict[str, str] = {
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
@@ -274,7 +274,7 @@ def _handle_recipe_kind(client: Client, job: dict[str, Any]) -> None:
     if lost is not None and lost.is_set():
         raise RuntimeError("import claim lost during parsing")
     renew_import_job(client, str(job["id"]), token)
-    finish_import_job(client, str(job["id"]), token, parse.recipe, warnings)
+    finish_import_job(client, str(job["id"]), token, parse.recipe, warnings + parse.warnings)
 
 
 def _write_receipt_observations(receipt: Receipt) -> int:

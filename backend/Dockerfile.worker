@@ -19,8 +19,8 @@
 # MODEL WEIGHTS ARE NOT BAKED IN
 #   Qwen2-VL GGUF (receipt OCR) and whisper.cpp models (video transcription) are
 #   large and are volume-mounted at /models — see the QWEN_GGUF_PATH /
-#   WHISPER_MODELS_DIR defaults below. yt-dlp is a pip dep; ffmpeg is the only
-#   apt binary the runtime needs.
+#   WHISPER_MODELS_DIR defaults below. yt-dlp is a pip dep; ffmpeg and
+#   Tesseract OCR are runtime apt binaries.
 #
 # BUILD (from repo root; build context is the backend/ directory):
 #   docker build -f backend/Dockerfile.worker -t allaroundfood-worker backend
@@ -73,10 +73,10 @@ RUN uv sync --no-dev
 # copied wholesale from the builder.
 FROM python:3.12-slim-bookworm AS runtime
 
-# ffmpeg is the sole runtime apt binary (video-import audio extraction).
+# ffmpeg extracts audio; Tesseract reads recipe screenshots locally.
 # yt-dlp ships as a pip dep inside the venv.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg tesseract-ocr tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -94,6 +94,9 @@ ENV PATH="/app/.venv/bin:$PATH" \
 # Override via --env-file / -e if your host layout differs.
 ENV QWEN_GGUF_PATH=/models/qwen2-vl.gguf \
     WHISPER_MODELS_DIR=/models/whisper \
+    WHISPER_MODEL=small.en \
+    WHISPER_CPU_ONLY=true \
+    TESSERACT_BIN=tesseract \
     FFMPEG_BIN=ffmpeg \
     YTDLP_BIN=yt-dlp
 

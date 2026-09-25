@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-09-25
+- Implement source-grounded Jev recipe parsing in the import worker
+
 ## 2026-07-04
 - Archived migrated core Parquet files under `data/archive/` after Supabase row counts matched.
 - Cut over the app from hosted server proxies to Supabase reads/writes plus the local import worker.

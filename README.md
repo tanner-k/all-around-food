@@ -20,7 +20,7 @@ pnpm --dir frontend dev
 
 Open `http://localhost:3000/app` for UI development. Add a recipe manually, plan a week, generate shopping, and update pantry without Supabase or a backend. The service worker is registered only in a production build. To verify offline use locally, stop the dev server, run `pnpm --dir frontend build` and `pnpm --dir frontend start`, then wait for **Offline ready** before disconnecting. The installed PWA opens `/app`; legacy cookbook, plan, shop, pantry, and import URLs redirect there.
 
-Online import requires the public `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the frontend environment, an owner-configured Supabase project with the reviewed additive migration, and the Mac worker. Those values are public client configuration. Keep `ANTHROPIC_API_KEY_PARSING`, `SUPABASE_SERVICE_ROLE_KEY`, and `IMPORT_OWNER_USER_ID` only in the private Mac worker environment; see [backend/context.md](backend/context.md) and [infra/worker/README.md](infra/worker/README.md). No frontend Anthropic key is used. Direct `POST /api/import/parse` and `POST /api/pantry/receipt` return 410; the personal app imports through `/app#/import`, and receipt parsing is outside this milestone.
+Online import requires the public `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the frontend environment, an owner-configured Supabase project with the reviewed additive migration, and the Mac worker. Those values are public client configuration. Keep `TYPESAFE_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `IMPORT_OWNER_USER_ID` only in the private Mac worker environment; see [backend/context.md](backend/context.md) and [infra/worker/README.md](infra/worker/README.md). Recipe imports use Jev classification, local CPU transcription, and local screenshot OCR. No Anthropic calls are made by imports. Direct `POST /api/import/parse` and `POST /api/pantry/receipt` return 410; the personal app imports through `/app#/import`, and receipt parsing is outside this milestone.
 
 To develop the backend and worker separately:
 
@@ -63,7 +63,11 @@ Dated observed results and the remaining hosted, migration, Mac, and installed-d
 ## Recent updates
 
 <!-- BEGIN:RECENT-UPDATES -->
-- Legacy feature: text shopping list to any number via Apple Messages
+- Implement source-grounded Jev recipe parsing in the import worker
+- Archived migrated core Parquet files under `data/archive/` after Supabase row counts matched.
+- Cut over the app from hosted server proxies to Supabase reads/writes plus the local import worker.
+- Removed the deferred user-facing pricing surface while keeping the backend pricing library.
+- Deleted the Python HTTP server, proxy routes, and core Parquet store path after adding Supabase evaluation stats.
 <!-- END:RECENT-UPDATES -->
 
 ## Project map

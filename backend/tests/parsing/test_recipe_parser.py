@@ -1,4 +1,4 @@
-"""Tests for the recipe parsers (Anthropic client mocked)."""
+"""Jev recipe entry points and URL safety."""
 
 from __future__ import annotations
 
@@ -6,11 +6,8 @@ from typing import Any
 
 import pytest
 
-from allaroundfood.models import Recipe
 from allaroundfood.parsing import recipe_parser
 from allaroundfood.parsing.recipe_parser import (
-    STRIPPED_TEXT_CAP,
-    WORKER_MODEL,
     parse_recipe_from_image,
     parse_recipe_from_text,
     parse_recipe_from_url,
@@ -20,175 +17,162 @@ from allaroundfood.parsing.recipe_parser import (
 from .conftest import valid_recipe_input
 
 
-class TestParseRecipeFromImage:
-    def test_returns_valid_recipe(self, make_client: Any) -> None:
-        make_client(valid_recipe_input())
-        result = parse_recipe_from_image(b"\x89PNG-bytes", "image/png")
+def _fake_parse(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
 
-        assert isinstance(result.recipe, Recipe)
-        assert result.recipe.title == "Test Pancakes"
-        assert result.stripped_text is None
+    def parse(sources: dict[str, str], **kwargs: Any) -> Any:
+        from types import SimpleNamespace
 
-    def test_forces_extract_recipe_tool_and_model(self, make_client: Any) -> None:
-        messages = make_client(valid_recipe_input())
-        parse_recipe_from_image(b"bytes", "image/jpeg")
+        from allaroundfood.models import Recipe
 
-        call = messages.calls[0]
-        assert call["model"] == WORKER_MODEL
-        assert call["tool_choice"] == {"type": "tool", "name": "extract_recipe"}
-        assert call["tools"][0]["name"] == "extract_recipe"
-        # Schema is built from pydantic, not hand-written.
-        assert "properties" in call["tools"][0]["input_schema"]
-        # The model may report insufficient evidence with empty arrays; the
-        # shared Recipe validator rejects those outputs after the tool call.
-        assert "minItems" not in call["tools"][0]["input_schema"]["properties"]["ingredients"]
-        assert "minItems" not in call["tools"][0]["input_schema"]["properties"]["steps"]
-
-    def test_image_block_is_base64_encoded(self, make_client: Any) -> None:
-        messages = make_client(valid_recipe_input())
-        parse_recipe_from_image(b"rawbytes", "image/webp")
-
-        content = messages.calls[0]["messages"][0]["content"]
-        image_block = content[0]
-        assert image_block["type"] == "image"
-        assert image_block["source"]["media_type"] == "image/webp"
-        # base64 of b"rawbytes"
-        import base64
-
-        assert image_block["source"]["data"] == base64.standard_b64encode(b"rawbytes").decode(
-            "ascii"
+        calls.append({"sources": sources, **kwargs})
+        return SimpleNamespace(
+            recipe=Recipe.model_validate(valid_recipe_input()),
+            warnings=["partial source"],
+            evidence={"count": 1},
         )
 
-    def test_worker_prompt_mentions_image(self, make_client: Any) -> None:
-        make_client(valid_recipe_input())
-        result = parse_recipe_from_image(b"x", "image/png")
-        assert "USER: [image] Extract the recipe from this image." in result.worker_prompt
-        assert result.worker_prompt.startswith("SYSTEM:\n")
-
-    def test_missing_tool_use_raises(self, make_client: Any) -> None:
-        make_client(valid_recipe_input(), include_tool_use=False)
-        with pytest.raises(RuntimeError, match="No tool_use block"):
-            parse_recipe_from_image(b"x", "image/png")
+    monkeypatch.setattr(recipe_parser, "parse_sources", parse)
+    return calls
 
 
-class TestParseRecipeFromUrl:
-    def _patch_fetch(self, monkeypatch: pytest.MonkeyPatch, html: str) -> None:
-        monkeypatch.setattr(recipe_parser, "_fetch_public_html", lambda url: html)
-
-    def test_html_strip_and_cap(self, make_client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-        # Build HTML whose visible text far exceeds the 30k cap.
-        filler = "word " * 20_000  # ~100k chars of visible text
-        html = (
-            "<html><head><script>var x=1;</script>"
-            "<style>.a{color:red}</style></head>"
-            f"<body><h1>Recipe</h1><p>{filler}</p></body></html>"
-        )
-        self._patch_fetch(monkeypatch, html)
-        make_client(valid_recipe_input())
-
-        result = parse_recipe_from_url("https://example.com/recipe")
-
-        assert result.stripped_text is not None
-        assert len(result.stripped_text) == STRIPPED_TEXT_CAP
-        # Script/style contents stripped out.
-        assert "var x=1" not in result.stripped_text
-        assert "color:red" not in result.stripped_text
-        # Tags collapsed, visible text kept.
-        assert result.stripped_text.startswith("Recipe word")
-
-    def test_user_message_is_stripped_text(
-        self, make_client: Any, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        self._patch_fetch(monkeypatch, "<html><body><p>Hello  world</p></body></html>")
-        messages = make_client(valid_recipe_input())
-
-        result = parse_recipe_from_url("https://foo.test/r")
-
-        call = messages.calls[0]
-        assert call["messages"][0]["content"] == result.stripped_text
-        assert result.stripped_text == "Hello world"
-
-    def test_url_prompt_variant(self, make_client: Any, monkeypatch: pytest.MonkeyPatch) -> None:
-        self._patch_fetch(monkeypatch, "<body>text</body>")
-        messages = make_client(valid_recipe_input())
-
-        parse_recipe_from_url("https://cooking.example/r")
-
-        system_text = messages.calls[0]["system"][0]["text"]
-        assert "The text was extracted from a webpage." in system_text
-        assert "Source URL: https://cooking.example/r" in system_text
-        # The image-specific rule 2 was replaced.
-        assert "Scan the entire image." not in system_text
+def test_text_passes_bounded_source_and_metadata(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _fake_parse(monkeypatch)
+    result = parse_recipe_from_text(" 1 cup rice.\nBoil rice. ")
+    assert calls[0]["sources"] == {"text": "1 cup rice.\nBoil rice."}
+    assert result.warnings == ["partial source"]
+    assert result.evidence == {"count": 1}
 
 
-class TestParseRecipeFromVideoText:
-    def test_video_prompt_variant_and_assembly(self, make_client: Any) -> None:
-        messages = make_client(valid_recipe_input())
-
-        result = parse_recipe_from_video_text(
-            caption="Best tacos", transcript="add beef", source_url="https://tiktok.com/x"
-        )
-
-        system_text = messages.calls[0]["system"][0]["text"]
-        assert "short-form recipe video" in system_text
-        assert "Source URL: https://tiktok.com/x" in system_text
-        assert "Scan the entire image." not in system_text
-
-        assert result.stripped_text is not None
-        assert "CAPTION:\nBest tacos" in result.stripped_text
-        assert "TRANSCRIPT:\nadd beef" in result.stripped_text
-
-    def test_empty_caption_and_transcript_raises(self, make_client: Any) -> None:
-        make_client(valid_recipe_input())
-        with pytest.raises(RuntimeError, match="No video transcript or caption"):
-            parse_recipe_from_video_text(caption="  ", transcript="", source_url="u")
-
-    def test_none_placeholders(self, make_client: Any) -> None:
-        make_client(valid_recipe_input())
-        result = parse_recipe_from_video_text(caption="only caption", transcript="", source_url="u")
-        assert result.stripped_text is not None
-        assert "TRANSCRIPT:\n(none)" in result.stripped_text
+def test_text_over_limit_rejected_before_parse(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_parse(monkeypatch)
+    with pytest.raises(ValueError, match="shorter excerpt"):
+        parse_recipe_from_text("a" * (recipe_parser.STRIPPED_TEXT_CAP + 1))
 
 
-class TestGetClient:
-    def test_raises_when_key_unset(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(recipe_parser, "_client", None)
-        monkeypatch.setattr(
-            recipe_parser.settings, "anthropic_api_key_parsing", None, raising=False
-        )
-        with pytest.raises(RuntimeError, match="ANTHROPIC_API_KEY_PARSING is not set"):
-            recipe_parser.get_client()
-        monkeypatch.setattr(recipe_parser, "_client", None)
+def test_video_keeps_caption_and_transcript_separate(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _fake_parse(monkeypatch)
+    parse_recipe_from_video_text("Best tacos", "add beef", "https://tiktok.com/x")
+    assert calls[0]["sources"] == {"caption": "Best tacos", "transcript": "add beef"}
+    assert calls[0]["source_url"] == "https://tiktok.com/x"
 
 
-def test_pasted_text_uses_no_invention_prompt(make_client: Any) -> None:
-    messages = make_client(valid_recipe_input())
-    parse_recipe_from_text("1 cup rice. Boil rice.")
-    assert "do not invent" in messages.calls[0]["system"][0]["text"].lower()
+def test_video_combined_source_limit_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_parse(monkeypatch)
+    with pytest.raises(ValueError, match="shorter excerpt"):
+        parse_recipe_from_video_text("a" * 20000, "b" * 10001, "https://tiktok.com/x")
 
 
-def test_private_url_rejected_before_client_or_claude(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(recipe_parser, "get_client", lambda: pytest.fail("Claude called"))
+def test_jsonld_preferred_with_step_sections(monkeypatch: pytest.MonkeyPatch) -> None:
+    html = (
+        '<script type="application/ld+json">'
+        '{"@type":"Recipe","name":"Bean Stew","recipeIngredient":["1 cup beans","2 cups water"],'
+        '"recipeInstructions":[{"@type":"HowToSection","name":"Cook",'
+        '"itemListElement":[{"@type":"HowToStep","text":"Simmer beans"}]}]}'
+        "</script><p>Unrelated page noise</p>"
+    )
+    monkeypatch.setattr(recipe_parser, "_fetch_public_html", lambda url: html)
+    calls = _fake_parse(monkeypatch)
+    parse_recipe_from_url("https://recipes.example/stew")
+    sent = calls[0]["sources"]["webpage"]
+    assert calls[0]["title"] == "Bean Stew"
+    assert "1 cup beans\n2 cups water" in sent
+    assert "Cook\nSimmer beans" in sent
+    assert "Unrelated page" not in sent
+
+
+def test_html_blocks_remain_separate(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        recipe_parser,
+        "_fetch_public_html",
+        lambda url: "<h1>Soup</h1><p>Peas</p><li>Boil peas</li>",
+    )
+    calls = _fake_parse(monkeypatch)
+    parse_recipe_from_url("https://recipes.example/soup")
+    assert calls[0]["sources"]["webpage"] == "Soup\nPeas\nBoil peas"
+
+
+@pytest.mark.parametrize(
+    "html",
+    [
+        "<p>" + "a" * (recipe_parser.STRIPPED_TEXT_CAP + 1) + "</p>",
+        '<script type="application/ld+json">'
+        + '{"@type":"Recipe","name":"Soup","recipeIngredient":["'
+        + "a" * recipe_parser.STRIPPED_TEXT_CAP
+        + '"]}</script>',
+    ],
+    ids=["html", "jsonld"],
+)
+def test_website_over_limit_rejected(monkeypatch: pytest.MonkeyPatch, html: str) -> None:
+    monkeypatch.setattr(recipe_parser, "_fetch_public_html", lambda url: html)
+    _fake_parse(monkeypatch)
+    with pytest.raises(ValueError, match="shorter excerpt"):
+        parse_recipe_from_url("https://recipes.example/long")
+
+
+def test_private_url_rejected_before_jev(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(recipe_parser, "parse_sources", lambda *a, **k: pytest.fail("parsed"))
     with pytest.raises(ValueError, match="public"):
         parse_recipe_from_url("http://127.0.0.1/recipe")
 
 
-def test_jsonld_recipe_is_passed_to_parser(
-    make_client: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    html = (
-        '<script type="application/ld+json">'
-        '{"@context":"https://schema.org","@type":"Recipe",'
-        '"name":"Bean Stew","recipeIngredient":["beans"],'
-        '"recipeInstructions":["Simmer beans"]}'
-        "</script><p>Unrelated page</p>"
+def test_image_ocr_uses_bounded_subprocess(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _fake_parse(monkeypatch)
+    monkeypatch.setattr(
+        recipe_parser, "settings", type("OCRSettings", (), {"tesseract_bin": "tesseract"})()
     )
-    monkeypatch.setattr(recipe_parser, "_fetch_public_html", lambda url: html)
-    messages = make_client(valid_recipe_input())
-    parse_recipe_from_url("https://recipes.example/stew")
-    sent = messages.calls[0]["messages"][0]["content"]
-    assert "Bean Stew" in sent
-    assert "Simmer beans" in sent
+    invoked: list[dict[str, Any]] = []
+
+    def run(args: Any, **kwargs: Any) -> Any:
+        from types import SimpleNamespace
+
+        invoked.append({"args": args, **kwargs})
+        return SimpleNamespace(returncode=0, stdout="1 cup rice\nBoil rice", stderr="")
+
+    monkeypatch.setattr(recipe_parser.subprocess, "run", run)
+    parse_recipe_from_image(b"image", "image/png")
+    assert calls[0]["sources"] == {"ocr": "1 cup rice\nBoil rice"}
+    assert invoked[0]["timeout"] <= 15
+
+
+def test_image_rejects_unsupported_or_oversized(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(recipe_parser.subprocess, "run", lambda *a, **k: pytest.fail("OCR called"))
+    with pytest.raises(ValueError, match="PNG, JPEG, or WebP"):
+        parse_recipe_from_image(b"x", "image/gif")
+    with pytest.raises(ValueError, match="too large"):
+        parse_recipe_from_image(b"x" * (recipe_parser.IMAGE_BYTES_CAP + 1), "image/png")
+
+
+def test_missing_ocr_advises_paste_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        recipe_parser, "settings", type("OCRSettings", (), {"tesseract_bin": "tesseract"})()
+    )
+
+    def missing(*args: Any, **kwargs: Any) -> Any:
+        raise FileNotFoundError
+
+    monkeypatch.setattr(recipe_parser.subprocess, "run", missing)
+    with pytest.raises(RuntimeError, match="paste.*text"):
+        parse_recipe_from_image(b"image", "image/png")
+
+
+def test_ocr_over_limit_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        recipe_parser.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="a" * (recipe_parser.STRIPPED_TEXT_CAP + 1),
+        ),
+    )
+    monkeypatch.setattr(
+        recipe_parser, "settings", type("OCRSettings", (), {"tesseract_bin": "tesseract"})()
+    )
+    _fake_parse(monkeypatch)
+    with pytest.raises(ValueError, match="shorter excerpt"):
+        parse_recipe_from_image(b"image", "image/png")
 
 
 def test_dns_private_address_is_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -207,6 +191,7 @@ def test_stalled_dns_respects_total_fetch_deadline(monkeypatch: pytest.MonkeyPat
 
     release = threading.Event()
     monkeypatch.setattr(recipe_parser, "FETCH_TIMEOUT_S", 0.05)
+
     def stalled_dns(*args: Any) -> list[tuple[Any, ...]]:
         release.wait(1)
         return [(None, None, None, None, ("93.184.216.34", 443))]
@@ -296,9 +281,7 @@ def test_redirect_to_loopback_is_blocked_before_second_request(
     monkeypatch.setattr(
         recipe_parser,
         "_check_public_url",
-        lambda url, deadline: check("http://127.0.0.1")
-        if "127.0.0.1" in url
-        else "93.184.216.34",
+        lambda url, deadline: check("http://127.0.0.1") if "127.0.0.1" in url else "93.184.216.34",
     )
     with pytest.raises(ValueError, match="public"):
         recipe_parser._fetch_public_html("https://recipes.example/start")

@@ -18,8 +18,10 @@ Python 3.12 + FastAPI + Polars (file-backed)
 - `yt-dlp` for fetching supported Instagram/TikTok recipe video media and metadata. Video fetch runs its Python package in an isolated child process that checks every socket destination. Only one direct HTTP(S) media stream is accepted; HLS/DASH/RTMP and split streams return a fallback error that suggests caption text or a screenshot.
 - `ffmpeg` for local-file audio extraction/transcoding before transcription; input protocols are limited to `file,pipe` so a downloaded media file cannot trigger an outbound fetch.
 - local whisper.cpp speech-to-text, in-process via the `pywhispercpp` package (no external service, no separate binary — the runtime ships in the pip wheel). See ADR 0006.
-  - `WHISPER_MODEL` selects the model by name (default `base.en`); English `.en` models suit English recipe videos. `WHISPER_MODELS_DIR` (optional) points at a directory of pre-downloaded ggml `.bin` files, or where a named model is cached.
-  - ggml model `.bin` files download on first use from huggingface.co (`tiny.en` ≈ 75 MB, `base.en` ≈ 142 MB). In network-restricted environments (including CI and some deploys) huggingface.co may be blocked, so provision the model as a file: pre-download it and point `WHISPER_MODELS_DIR` at it, or run first-use where egress is allowed. The FastAPI startup hook will log whether `yt-dlp` and `ffmpeg` resolved (ADR 0002 follow-up).
+  - `WHISPER_MODEL` selects the model by name (default `small.en`); English `.en` models suit English recipe videos. `WHISPER_MODELS_DIR` (optional) points at a directory of pre-downloaded ggml `.bin` files, or where a named model is cached.
+  - ggml model `.bin` files download on first use from huggingface.co (`tiny.en` ≈ 75 MB, `small.en` ≈ 466 MB). In network-restricted environments (including CI and some deploys) huggingface.co may be blocked, so provision the model as a file: pre-download it and point `WHISPER_MODELS_DIR` at it, or run first-use where egress is allowed. The FastAPI startup hook will log whether `yt-dlp` and `ffmpeg` resolved (ADR 0002 follow-up).
+- Local Tesseract OCR for recipe screenshots (`brew install tesseract` on macOS; included in the worker container). Set `TESSERACT_BIN` if needed. This is separate from receipt OCR.
+- Jev `jev-1.13.0` classifies source spans and relationships using `TYPESAFE_API_KEY`. Exact fractions/ranges come from local parsing. Request budgets fail visibly; missing evidence is never invented. Captions and transcripts are both parsed; original text and uncertainties remain in draft notes.
 - Playwright Chromium for pricing adapter fallback fetches: `uv run playwright install chromium`
 - Poppler for `pdf2image` receipt PDF preprocessing: `brew install poppler` on macOS
 - Qwen2-VL GGUF for real receipt OCR: `bash scripts/download_qwen.sh`, then set `QWEN_GGUF_PATH`
@@ -35,10 +37,10 @@ uv run python -m allaroundfood
 ```
 
 The personal import worker runs separately with `python -m allaroundfood.worker --watch`.
-Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY_PARSING`,
+Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `TYPESAFE_API_KEY`,
 and `IMPORT_OWNER_USER_ID` in its Mac environment. It returns recipe drafts for
 website, video, screenshot, and pasted-text jobs through fenced queue RPCs;
-manual recipe editing does not depend on it. `RUN_EVALS` defaults to false.
+manual recipe editing does not depend on it. `RUN_EVALS` is a legacy setting; imports never invoke the Anthropic judge.
 Acknowledged or expired uploads are removed in a later watch cycle. If the Mac
 is offline, that cleanup waits until it reconnects; no source is removed before
 the draft is durably published and acknowledged or expired.
