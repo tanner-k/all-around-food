@@ -5,16 +5,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Literal
 from urllib.parse import urlparse
 
+from allaroundfood.config import settings as app_settings
 from allaroundfood.models import VideoImportResult
 from allaroundfood.transcription import (
     Transcriber,
@@ -56,9 +57,7 @@ class VideoImportBinaryStatus:
     def missing(self) -> tuple[str, ...]:
         """Return the friendly names of any binaries that could not be resolved."""
         return tuple(
-            name
-            for name, path in (("yt-dlp", self.ytdlp), ("ffmpeg", self.ffmpeg))
-            if path is None
+            name for name, path in (("yt-dlp", self.ytdlp), ("ffmpeg", self.ffmpeg)) if path is None
         )
 
 
@@ -84,18 +83,22 @@ class VideoImportSettings:
     ytdlp_bin: str = "yt-dlp"
     ffmpeg_bin: str = "ffmpeg"
     timeout_s: int = 180
-    whisper_model: str = "base.en"
+    whisper_model: str = "small.en"
     whisper_models_dir: str | None = None
+    whisper_cpu_only: bool = True
 
     @classmethod
     def from_env(cls) -> VideoImportSettings:
         """Build settings from environment variables."""
         return cls(
-            ytdlp_bin=os.environ.get("YTDLP_BIN", "yt-dlp"),
-            ffmpeg_bin=os.environ.get("FFMPEG_BIN", "ffmpeg"),
-            timeout_s=int(os.environ.get("VIDEO_IMPORT_TIMEOUT_S", "180")),
-            whisper_model=os.environ.get("WHISPER_MODEL", "base.en"),
-            whisper_models_dir=os.environ.get("WHISPER_MODELS_DIR"),
+            ytdlp_bin=app_settings.ytdlp_bin,
+            ffmpeg_bin=app_settings.ffmpeg_bin,
+            timeout_s=app_settings.video_import_timeout_s,
+            whisper_model=app_settings.whisper_model,
+            whisper_models_dir=(
+                str(app_settings.whisper_models_dir) if app_settings.whisper_models_dir else None
+            ),
+            whisper_cpu_only=app_settings.whisper_cpu_only,
         )
 
 
@@ -105,9 +108,7 @@ async def fetch_video_text(
     transcriber: Transcriber | None = None,
 ) -> VideoImportResult:
     """Fetch caption and transcript text for a supported social video URL."""
-    return await asyncio.to_thread(
-        _fetch_video_text_sync, source_url, settings, transcriber
-    )
+    return await asyncio.to_thread(_fetch_video_text_sync, source_url, settings, transcriber)
 
 
 def _fetch_video_text_sync(
@@ -119,29 +120,30 @@ def _fetch_video_text_sync(
     active_settings = settings or VideoImportSettings.from_env()
     platform = validate_video_url(source_url)
 
-    if transcriber is None:
-        transcriber = WhisperCppTranscriber(
-            model=active_settings.whisper_model,
-            models_dir=(
-                Path(active_settings.whisper_models_dir)
-                if active_settings.whisper_models_dir
-                else None
-            ),
-        )
-
     with TemporaryDirectory(prefix="allaroundfood-video-") as tmp:
         tmp_path = Path(tmp)
         video_path, metadata = _download_video(source_url, tmp_path, active_settings)
         caption = _metadata_caption(metadata)
+        if transcriber is None:
+            transcriber = WhisperCppTranscriber(
+                model=active_settings.whisper_model,
+                models_dir=(
+                    Path(active_settings.whisper_models_dir)
+                    if active_settings.whisper_models_dir
+                    else None
+                ),
+                cpu_only=active_settings.whisper_cpu_only,
+                initial_prompt=("Recipe context from caption: " + caption[:1200])
+                if caption
+                else None,
+            )
         audio_path = _extract_audio(video_path, tmp_path, active_settings)
         try:
             transcript = _transcribe_audio(audio_path, transcriber)
         except VideoImportError:
             if not caption:
                 raise
-            logger.warning(
-                "Transcription failed; falling back to caption-only import."
-            )
+            logger.warning("Transcription failed; falling back to caption-only import.")
             transcript = ""
 
     cleaned_transcript = _clean_transcript(transcript)
@@ -186,12 +188,16 @@ def _download_video(
     """Download media and metadata for a source video with yt-dlp."""
     output_template = tmp_path / "source.%(ext)s"
     metadata_path = tmp_path / "metadata.json"
+    if shutil.which(settings.ytdlp_bin) is None:
+        raise VideoImportError(
+            "yt-dlp is not installed or YTDLP_BIN points to a missing binary.",
+            status_code=503,
+        )
     cmd = [
-        settings.ytdlp_bin,
-        "--no-playlist",
-        "--write-info-json",
-        "--skip-download",
-        "-o",
+        sys.executable,
+        "-m",
+        "allaroundfood.safe_ytdlp",
+        "metadata",
         str(output_template),
         source_url,
     ]
@@ -206,18 +212,20 @@ def _download_video(
     metadata = _read_metadata(info_json)
 
     cmd = [
-        settings.ytdlp_bin,
-        "--no-playlist",
-        "-f",
-        "bv*+ba/best",
-        "-o",
+        sys.executable,
+        "-m",
+        "allaroundfood.safe_ytdlp",
+        "media",
         str(output_template),
         source_url,
     ]
     _run_command(
         cmd,
         missing="yt-dlp is not installed or YTDLP_BIN points to a missing binary.",
-        failed="We could not download that video. It may be private, expired, or blocked.",
+        failed=(
+            "We could not download that video safely. "
+            "Paste its caption or upload a screenshot instead."
+        ),
         timeout_s=settings.timeout_s,
     )
 
@@ -229,14 +237,14 @@ def _download_video(
     return video_path, metadata
 
 
-def _extract_audio(
-    video_path: Path, tmp_path: Path, settings: VideoImportSettings
-) -> Path:
+def _extract_audio(video_path: Path, tmp_path: Path, settings: VideoImportSettings) -> Path:
     """Extract mono 16 kHz WAV audio with ffmpeg."""
     audio_path = tmp_path / "audio.wav"
     cmd = [
         settings.ffmpeg_bin,
         "-y",
+        "-protocol_whitelist",
+        "file,pipe",
         "-i",
         str(video_path),
         "-vn",
@@ -321,6 +329,8 @@ def _read_metadata(info_json: Path | None) -> dict[str, Any]:
     if info_json is None or not info_json.exists():
         return {}
     try:
+        if info_json.stat().st_size > 1_000_000:
+            return {}
         value = json.loads(info_json.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}

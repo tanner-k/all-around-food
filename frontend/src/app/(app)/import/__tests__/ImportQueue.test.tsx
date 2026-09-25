@@ -36,6 +36,12 @@ function job(overrides: Partial<ParseJob>): ParseJob {
     attempts: 0,
     error: null,
     result_recipe_id: null,
+    result_recipe_json: null,
+    result_warnings: [],
+    lease_until: null,
+    claim_token: null,
+    acknowledged_at: null,
+    expires_at: "2026-08-01T00:00:00Z",
     created_at: "2026-07-01T00:00:00Z",
     updated_at: "2026-07-01T00:00:00Z",
     ...overrides,
@@ -53,7 +59,34 @@ describe("ImportQueue", () => {
     expect(await screen.findByText(/Nothing queued yet/i)).toBeInTheDocument();
   });
 
-  it("renders each status, the source, and a View recipe link when done", async () => {
+  it("shows long-running processing copy", async () => {
+    const twentyMinutesAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    listJobs.mockResolvedValue([
+      job({
+        id: "processing-1",
+        status: "processing",
+        created_at: twentyMinutesAgo,
+        updated_at: twentyMinutesAgo,
+      }),
+    ]);
+
+    render(<ImportQueue />);
+
+    expect(await screen.findByText("Importing")).toBeInTheDocument();
+    expect(
+      screen.getByText(/This is taking longer than usual/i)
+    ).toBeInTheDocument();
+  });
+
+  it("shows attempts when nonzero", async () => {
+    listJobs.mockResolvedValue([job({ id: "err-1", attempts: 2 })]);
+
+    render(<ImportQueue />);
+
+    expect(await screen.findByText("Attempt 2")).toBeInTheDocument();
+  });
+
+  it("renders each status and the source", async () => {
     listJobs.mockResolvedValue([
       job({
         id: "done-1",
@@ -74,9 +107,9 @@ describe("ImportQueue", () => {
 
     render(<ImportQueue />);
 
-    expect(await screen.findByText("Done")).toBeInTheDocument();
-    expect(screen.getByText("Error")).toBeInTheDocument();
-    expect(screen.getByText("Pending")).toBeInTheDocument();
+    expect(await screen.findByText("Imported")).toBeInTheDocument();
+    expect(screen.getByText("Needs retry")).toBeInTheDocument();
+    expect(screen.getByText("Queued")).toBeInTheDocument();
 
     // Source rendering: URL and file name.
     expect(
@@ -86,9 +119,23 @@ describe("ImportQueue", () => {
 
     // Error text is shown.
     expect(screen.getByText("parser blew up")).toBeInTheDocument();
+  });
+
+  it("keeps the View recipe link working when done", async () => {
+    listJobs.mockResolvedValue([
+      job({
+        id: "done-1",
+        kind: "url",
+        source_url: "https://example.com/recipe",
+        status: "done",
+        result_recipe_id: "recipe-42",
+      }),
+    ]);
+
+    render(<ImportQueue />);
 
     // View recipe link points at the recipe.
-    const link = screen.getByRole("link", { name: /View recipe/i });
+    const link = await screen.findByRole("link", { name: /View recipe/i });
     expect(link).toHaveAttribute("href", "/cookbook/recipe-42");
   });
 

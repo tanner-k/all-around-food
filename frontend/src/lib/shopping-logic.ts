@@ -1,4 +1,4 @@
-// Pure, unit-testable shopping-list logic, ported from the FastAPI backend:
+// Pure, unit-testable shopping-list logic, ported from the former Python backend:
 //   - aisles.py       → AISLE_KEYWORDS / AISLE_ORDER / categorize()
 //   - naming.py       → normalizeName() (re-exported from @/lib/normalize)
 //   - shopping_logic.py → computePantryFlags / aggregateRecipeIngredients /
@@ -6,8 +6,7 @@
 //
 // These functions have no I/O and no Supabase dependency — the data-access
 // layer (src/lib/db/shopping.ts) composes them around DB reads/writes. Keep in
-// behavioural sync with the backend so the app produces the same lists the
-// FastAPI service did.
+// behavioural sync with the backend worker where the same pure helpers remain.
 
 import { normalizeName } from "@/lib/normalize";
 import type { Aisle, PantryItem } from "@/lib/pantry-schema";
@@ -16,6 +15,7 @@ import type {
   ShoppingListResponse,
 } from "@/lib/shopping-schema";
 import type { Recipe } from "@/lib/recipe-schema";
+import type { MealPlan, PlannedMeal } from "@/lib/meal-plan-schema";
 
 // Re-export so callers/tests can import name-normalization alongside the rest of
 // the shopping logic. Single source of truth lives in @/lib/normalize.
@@ -218,13 +218,180 @@ export function aggregateRecipeIngredients(
       checked: false,
       source: "recipe",
       source_recipe_id: entry.sourceRecipeId,
+      generated_week_of: null,
       pantry_covered: false,
       pantry_low: false,
+      needs_review: false,
       created_at: nowIso,
     };
     items.push(computePantryFlags(base, index));
   }
   return items;
+}
+
+// ── Planned-meal aggregation ───────────────────────────────────────────────
+
+/** A generated planner row with a signal for a serving size that could not scale. */
+export type PlannedShoppingItem = ShoppingListItem & { needs_review: boolean };
+
+type QuantityTerm =
+  | { kind: "numeric"; unit: string; value: number; needsReview: boolean }
+  | { kind: "text"; value: string; needsReview: boolean };
+
+interface PlannedDemand {
+  terms: QuantityTerm[];
+}
+
+const UNIT_ALIASES: Record<string, { unit: string; factor: number }> = {
+  g: { unit: "g", factor: 1 },
+  gram: { unit: "g", factor: 1 },
+  grams: { unit: "g", factor: 1 },
+  kg: { unit: "g", factor: 1000 },
+  kilogram: { unit: "g", factor: 1000 },
+  kilograms: { unit: "g", factor: 1000 },
+  ml: { unit: "mL", factor: 1 },
+  milliliter: { unit: "mL", factor: 1 },
+  milliliters: { unit: "mL", factor: 1 },
+  l: { unit: "mL", factor: 1000 },
+  liter: { unit: "mL", factor: 1000 },
+  liters: { unit: "mL", factor: 1000 },
+  oz: { unit: "oz", factor: 1 },
+  ounce: { unit: "oz", factor: 1 },
+  ounces: { unit: "oz", factor: 1 },
+  lb: { unit: "oz", factor: 16 },
+  lbs: { unit: "oz", factor: 16 },
+  pound: { unit: "oz", factor: 16 },
+  pounds: { unit: "oz", factor: 16 },
+  tsp: { unit: "tsp", factor: 1 },
+  teaspoon: { unit: "tsp", factor: 1 },
+  teaspoons: { unit: "tsp", factor: 1 },
+  tbsp: { unit: "tsp", factor: 3 },
+  tablespoon: { unit: "tsp", factor: 3 },
+  tablespoons: { unit: "tsp", factor: 3 },
+};
+
+function canonicalUnit(rawUnit: string | null): { unit: string; factor: number } {
+  const raw = rawUnit?.trim().toLowerCase().replace(/\.$/, "") ?? "";
+  const known = UNIT_ALIASES[raw];
+  if (known) return known;
+  return {
+    unit: raw.endsWith("s") && raw.length > 2 ? raw.slice(0, -1) : raw,
+    factor: 1,
+  };
+}
+
+function displayUnit(unit: string, value: number): string {
+  if (!unit || ["g", "mL", "oz", "tsp"].includes(unit)) return unit;
+  return value === 1 ? unit : `${unit}s`;
+}
+
+function formatNumber(value: number): string {
+  return String(Math.round(value * 1_000_000_000) / 1_000_000_000);
+}
+
+function plannedScale(recipe: Recipe, meal: PlannedMeal): {
+  factor: number;
+  needsReview: boolean;
+} {
+  if (meal.servings === null) return { factor: 1, needsReview: false };
+  if (recipe.servings !== null && recipe.servings > 0 && meal.servings > 0) {
+    return { factor: meal.servings / recipe.servings, needsReview: false };
+  }
+  return { factor: 1, needsReview: true };
+}
+
+function addQuantity(
+  demand: PlannedDemand,
+  quantity: Recipe["ingredients"][number]["quantity"],
+  factor: number,
+  needsReview: boolean,
+): void {
+  if (quantity.value === null || !Number.isFinite(quantity.value)) {
+    const text = quantity.as_written.trim();
+    // Text amounts cannot be scaled, so a serving change needs a human check.
+    if (text) demand.terms.push({ kind: "text", value: text, needsReview: needsReview || factor !== 1 });
+    return;
+  }
+
+  const { unit, factor: conversion } = canonicalUnit(quantity.unit);
+  const value = quantity.value * factor * conversion;
+  const existing = demand.terms.find(
+    (term): term is Extract<QuantityTerm, { kind: "numeric" }> =>
+      term.kind === "numeric" && term.unit === unit,
+  );
+  if (existing) {
+    existing.value += value;
+    existing.needsReview ||= needsReview;
+  } else {
+    demand.terms.push({ kind: "numeric", unit, value, needsReview });
+  }
+}
+
+function formatDemand(demand: PlannedDemand): {
+  quantityText: string | null;
+  needsReview: boolean;
+} {
+  const terms = demand.terms.map((term) =>
+    term.kind === "text"
+      ? term.value
+      : [formatNumber(term.value), displayUnit(term.unit, term.value)]
+          .filter(Boolean)
+          .join(" "),
+  );
+  return {
+    quantityText: terms.length ? terms.join(" + ") : null,
+    needsReview: demand.terms.some((term) => term.needsReview),
+  };
+}
+
+/**
+ * Aggregate every recipe occurrence in one weekly meal plan. Numeric compatible
+ * units are summed after the limited, safe conversions above; mass and volume
+ * never cross-convert. The ID is derived from the week and demand signature so
+ * a persistence layer can retain checked state only when demand is unchanged.
+ */
+export function aggregatePlannedIngredients(
+  plan: MealPlan,
+  recipes: Recipe[],
+  pantry: PantryItem[],
+): PlannedShoppingItem[] {
+  const recipesById = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+  const demands = new Map<string, PlannedDemand>();
+
+  for (const meal of plan.meals) {
+    const recipe = recipesById.get(meal.recipe_id);
+    if (!recipe) continue;
+    const { factor, needsReview } = plannedScale(recipe, meal);
+    for (const ingredient of recipe.ingredients) {
+      if (ingredient.optional) continue;
+      const name = normalizeName(ingredient.name);
+      if (!name) continue;
+      const demand = demands.get(name) ?? { terms: [] };
+      addQuantity(demand, ingredient.quantity, factor, needsReview);
+      demands.set(name, demand);
+    }
+  }
+
+  const index = pantryIndex(pantry);
+  return [...demands].map(([name, demand]) => {
+    const { quantityText, needsReview } = formatDemand(demand);
+    const id = `planner:${encodeURIComponent(plan.week_of)}:${encodeURIComponent(name)}:${encodeURIComponent(quantityText ?? "")}`;
+    const item: PlannedShoppingItem = {
+      id,
+      name,
+      quantity_text: quantityText,
+      aisle: categorize(name),
+      checked: false,
+      source: "planner",
+      source_recipe_id: null,
+      generated_week_of: plan.week_of,
+      pantry_covered: false,
+      pantry_low: false,
+      created_at: plan.updated_at,
+      needs_review: needsReview,
+    };
+    return { ...computePantryFlags(item, index), needs_review: needsReview };
+  });
 }
 
 // ── Grouped response (ported from shopping_logic.py) ────────────────────────

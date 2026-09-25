@@ -1,5 +1,7 @@
 # Plan: Import → Parse Queue (Phase 3) + Local Worker (Phase 4)
 
+> Historical plan. Current import behavior is the owner-only, token-fenced draft protocol in supabase/migrations/0005_local_recipe_drafts.sql and the native Mac worker described by infra/worker/README.md. Do not use this plan’s older queue RPC or Docker scheduling instructions.
+
 **Status:** Proposed
 **Date:** 2026-07-01
 **Owner:** Tanner

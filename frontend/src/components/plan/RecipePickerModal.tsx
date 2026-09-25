@@ -43,7 +43,7 @@ export function RecipePickerModal({
                 key={recipe.id}
                 type="button"
                 onClick={() => onPick(recipe.id)}
-                className="flex w-full items-center border-b border-line py-2.5 text-left text-sm text-ink transition-colors last:border-b-0 hover:text-terra"
+                className="flex min-h-11 w-full items-center border-b border-line py-2.5 text-left text-sm text-ink transition-colors last:border-b-0 hover:text-terra"
               >
                 {recipe.title}
               </button>
@@ -55,7 +55,7 @@ export function RecipePickerModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2"
+            className="min-h-11 rounded-xl border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2"
           >
             Cancel
           </button>

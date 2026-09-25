@@ -10,9 +10,9 @@ interface DropZoneProps {
     file: File
   ) => void;
   /** Optional — omitted for the receipt variant, which is image-only. */
-  onUrl?: (url: string) => void;
+  onUrl?: (url: string) => void | boolean | Promise<void | boolean>;
   /** Optional handler for Instagram/TikTok recipe videos. Falls back to onUrl. */
-  onVideoUrl?: (url: string) => void;
+  onVideoUrl?: (url: string) => void | boolean | Promise<void | boolean>;
   /** "recipe" (default) shows URL/coming-soon pills; "receipt" is image-only. */
   variant?: "recipe" | "receipt";
 }
@@ -50,16 +50,15 @@ export function DropZone({
   const urlInputRef = useRef<HTMLInputElement>(null);
   const isReceipt = variant === "receipt";
 
-  const submitUrl = useCallback((rawUrl: string) => {
+  const submitUrl = useCallback(async (rawUrl: string): Promise<boolean> => {
     const trimmed = rawUrl.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
 
     if (isVideoRecipeUrl(trimmed)) {
-      (onVideoUrl ?? onUrl)?.(trimmed);
-      return;
+      return (await (onVideoUrl ?? onUrl)?.(trimmed)) !== false;
     }
 
-    onUrl?.(trimmed);
+    return (await onUrl?.(trimmed)) !== false;
   }, [onUrl, onVideoUrl]);
 
   // Window-level paste handler
@@ -82,7 +81,7 @@ export function DropZone({
       // String — might be URL
       const text = e.clipboardData?.getData("text/plain") ?? "";
       if ((onUrl || onVideoUrl) && /^https?:\/\//.test(text.trim())) {
-        submitUrl(text);
+        void submitUrl(text);
       }
     }
 
@@ -110,12 +109,13 @@ export function DropZone({
     onImage(base64, file.type as SupportedMediaType, file);
   }
 
-  function handleUrlSubmit(e: React.FormEvent) {
+  async function handleUrlSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (urlValue.trim() && (onUrl || onVideoUrl)) {
-      submitUrl(urlValue);
-      setUrlValue("");
-      setShowUrlInput(false);
+      if (await submitUrl(urlValue)) {
+        setUrlValue("");
+        setShowUrlInput(false);
+      }
     }
   }
 
@@ -207,7 +207,7 @@ export function DropZone({
       {/* Inline URL input */}
       {showUrlInput && (
         <form
-          onSubmit={handleUrlSubmit}
+          onSubmit={(event) => { void handleUrlSubmit(event); }}
           className="flex gap-2"
         >
           <input

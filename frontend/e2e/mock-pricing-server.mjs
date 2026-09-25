@@ -61,6 +61,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (url.pathname === "/auth/v1/user") {
+    sendJson(res, 200, {
+      id: "11111111-1111-4111-8111-111111111111",
+      aud: "authenticated",
+      role: "authenticated",
+      email: "owner@example.test",
+      app_metadata: {},
+      user_metadata: {},
+      created_at: "2026-09-20T12:00:00.000Z",
+    });
+    return;
+  }
+
   if (url.pathname === "/pricing/search") {
     const hasZip = /^\d{5}$/.test(url.searchParams.get("zip") ?? "");
     const hasQuery = (url.searchParams.get("q") ?? "").length > 0;

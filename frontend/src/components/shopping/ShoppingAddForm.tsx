@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 interface ShoppingAddFormProps {
-  onAdd: (name: string, quantityText: string) => Promise<void>;
+  onAdd: (name: string, quantityText: string) => Promise<boolean>;
 }
 
 export function ShoppingAddForm({ onAdd }: ShoppingAddFormProps) {
@@ -17,9 +17,10 @@ export function ShoppingAddForm({ onAdd }: ShoppingAddFormProps) {
     if (!trimmed || busy) return;
     setBusy(true);
     try {
-      await onAdd(trimmed, quantity.trim());
-      setName("");
-      setQuantity("");
+      if (await onAdd(trimmed, quantity.trim())) {
+        setName("");
+        setQuantity("");
+      }
     } finally {
       setBusy(false);
     }

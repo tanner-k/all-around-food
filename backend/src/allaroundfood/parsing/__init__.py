@@ -1,16 +1,13 @@
-"""Recipe parsing + LLM-as-judge (port of ``frontend/src/lib/claude.ts``)."""
+"""Local recipe parsing; legacy grading loads only when explicitly requested."""
 
 from __future__ import annotations
 
-from allaroundfood.parsing.judge import (
-    GradeResult,
-    RecipeImageSource,
-    RecipeUrlTextSource,
-    grade_recipe_parse,
-)
+from typing import Any
+
 from allaroundfood.parsing.recipe_parser import (
     RecipeParseResult,
     parse_recipe_from_image,
+    parse_recipe_from_text,
     parse_recipe_from_url,
     parse_recipe_from_video_text,
 )
@@ -22,6 +19,15 @@ __all__ = [
     "RecipeUrlTextSource",
     "grade_recipe_parse",
     "parse_recipe_from_image",
+    "parse_recipe_from_text",
     "parse_recipe_from_url",
     "parse_recipe_from_video_text",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name in {"GradeResult", "RecipeImageSource", "RecipeUrlTextSource", "grade_recipe_parse"}:
+        from allaroundfood.parsing import judge
+
+        return getattr(judge, name)
+    raise AttributeError(name)

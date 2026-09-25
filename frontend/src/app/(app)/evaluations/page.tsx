@@ -1,34 +1,23 @@
 import { SectionHeader } from "@/components/SectionHeader";
 import { EvalTable } from "@/components/eval/EvalTable";
-import { BACKEND_URL } from "@/lib/backend-url";
+import {
+  getEvaluationStats,
+  listEvaluations,
+  type EvaluationStats,
+} from "@/lib/db/evaluations";
 import type { Evaluation } from "@/lib/eval-schema";
-
-interface EvalStats {
-  count: number;
-  mean_overall: number;
-  mean_accuracy: number;
-  mean_completeness: number;
-}
 
 async function getEvaluations(): Promise<Evaluation[]> {
   try {
-    const res = await fetch(`${BACKEND_URL}/evaluations`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return [];
-    return (await res.json()) as Evaluation[];
+    return await listEvaluations();
   } catch {
     return [];
   }
 }
 
-async function getStats(): Promise<EvalStats | null> {
+async function getStats(): Promise<EvaluationStats | null> {
   try {
-    const res = await fetch(`${BACKEND_URL}/evaluations/stats`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as EvalStats;
+    return await getEvaluationStats();
   } catch {
     return null;
   }
@@ -39,7 +28,7 @@ function StatNumber({
   value,
 }: {
   label: string;
-  value: string | number;
+  value: string | number | null;
 }) {
   return (
     <div className="flex flex-col gap-1">

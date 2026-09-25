@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { getPantry, setPantryItemStatus } from "@/lib/api";
+import { useState } from "react";
 import type { PantryItem, PantryStatus } from "@/lib/pantry-schema";
 import { normalizeName } from "@/lib/normalize";
 
@@ -17,6 +16,8 @@ const STATUS_OPTIONS: {
 
 interface MarkOutOfStepProps {
   ingredientNames: string[];
+  pantry: PantryItem[];
+  onSetPantryStatus: (id: string, status: PantryStatus) => Promise<void>;
   onDone: () => void;
 }
 
@@ -25,34 +26,13 @@ interface Choice {
   status: PantryStatus;
 }
 
-export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
-  const [phase, setPhase] = useState<"loading" | "ready" | "saving">(
-    "loading"
-  );
-  const [choices, setChoices] = useState<Choice[]>([]);
+export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDone }: MarkOutOfStepProps) {
+  const [phase, setPhase] = useState<"ready" | "saving">("ready");
+  const [choices, setChoices] = useState<Choice[]>(() => {
+    const wanted = new Set(ingredientNames.map(normalizeName));
+    return pantry.filter((item) => wanted.has(normalizeName(item.name))).map((item) => ({ item, status: item.status }));
+  });
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getPantry()
-      .then((pantry) => {
-        if (cancelled) return;
-        const wanted = new Set(ingredientNames.map(normalizeName));
-        const matched = pantry.filter((p) =>
-          wanted.has(normalizeName(p.name))
-        );
-        setChoices(matched.map((item) => ({ item, status: item.status })));
-        setPhase("ready");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setError("Couldn't load your pantry.");
-        setPhase("ready");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [ingredientNames]);
 
   function setStatus(id: string, status: PantryStatus) {
     setChoices((prev) =>
@@ -66,22 +46,13 @@ export function MarkOutOfStep({ ingredientNames, onDone }: MarkOutOfStepProps) {
     try {
       const changed = choices.filter((c) => c.status !== c.item.status);
       await Promise.all(
-        changed.map((c) => setPantryItemStatus(c.item.id, c.status))
+        changed.map((c) => onSetPantryStatus(c.item.id, c.status))
       );
       onDone();
     } catch {
       setError("Couldn't update some items. Try again.");
       setPhase("ready");
     }
-  }
-
-  if (phase === "loading") {
-    return (
-      <div className="flex items-center justify-center gap-3 py-12 text-ink-mute">
-        <span className="animate-pulse text-xl text-terra">⏳</span>
-        Checking your pantry…
-      </div>
-    );
   }
 
   if (choices.length === 0) {

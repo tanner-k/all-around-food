@@ -1,11 +1,4 @@
-"""Shared fakes for the parsing tests.
-
-The Anthropic SDK is mocked: ``FakeAnthropic.messages.create`` records the call
-kwargs and returns a canned response holding a single ``tool_use`` block. The
-parsing modules use a module-level singleton client (``recipe_parser._client``);
-``fake_client`` monkeypatches it (and resets afterward) so both
-``recipe_parser`` and ``judge`` (which reuses ``get_client``) are covered.
-"""
+"""Legacy judge fakes; active recipe parsing uses Jev tests separately."""
 
 from __future__ import annotations
 
@@ -14,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from allaroundfood.parsing import recipe_parser
+from allaroundfood.parsing import judge
 
 
 @dataclass
@@ -71,12 +64,12 @@ def make_client(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def
     def _factory(tool_input: Any, *, include_tool_use: bool = True) -> FakeMessages:
         messages = FakeMessages(tool_input=tool_input, include_tool_use=include_tool_use)
         client = FakeAnthropic(messages=messages)
-        monkeypatch.setattr(recipe_parser, "_client", client)
+        monkeypatch.setattr(judge, "_client", client)
         return messages
 
     yield _factory
     # Reset the singleton so real construction isn't attempted in later tests.
-    monkeypatch.setattr(recipe_parser, "_client", None)
+    monkeypatch.setattr(judge, "_client", None)
 
 
 def valid_recipe_input() -> dict[str, Any]:

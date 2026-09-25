@@ -1,4 +1,4 @@
-"""Port of ``gradeRecipeParse`` from ``frontend/src/lib/claude.ts``.
+"""Worker-side LLM-as-judge grading for recipe parses.
 
 LLM-as-judge grading of a recipe parse (model ``claude-sonnet-4-6``, forced
 ``submit_verdict`` tool). The judge system prompt is ported verbatim; it embeds
@@ -13,8 +13,25 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
+from allaroundfood.config import settings
 from allaroundfood.models import Recipe
-from allaroundfood.parsing.recipe_parser import get_client
+
+_client: Any = None
+
+
+def get_client() -> Any:
+    """Legacy judge client, isolated from active recipe parsing."""
+    global _client
+    if _client is None:
+        from anthropic import Anthropic
+
+        secret = settings.anthropic_api_key_parsing
+        key = secret.get_secret_value() if secret is not None else None
+        if not key:
+            raise RuntimeError("ANTHROPIC_API_KEY_PARSING is not set for legacy evaluations")
+        _client = Anthropic(api_key=key, max_retries=4)
+    return _client
+
 
 if TYPE_CHECKING:
     from anthropic.types import (
@@ -26,7 +43,7 @@ if TYPE_CHECKING:
         ToolUseBlock,
     )
 
-# ── Model / request constants (mirror claude.ts) ─────────────────────────────
+# ── Model / request constants ────────────────────────────────────────────────
 JUDGE_MODEL = "claude-sonnet-4-6"
 JUDGE_MAX_TOKENS = 4096
 
@@ -177,17 +194,13 @@ def grade_recipe_parse(
             )
         else:
             assert isinstance(source_content, RecipeUrlTextSource)
-            user_content.append(
-                {"type": "text", "text": f"SOURCE_TEXT:\n{source_content.text}"}
-            )
+            user_content.append({"type": "text", "text": f"SOURCE_TEXT:\n{source_content.text}"})
 
     system: list[TextBlockParam] = [
         {"type": "text", "text": judge_system, "cache_control": {"type": "ephemeral"}}
     ]
     tool_choice: ToolChoiceToolParam = {"type": "tool", "name": "submit_verdict"}
-    messages: list[MessageParam] = [
-        {"role": "user", "content": cast("Any", user_content)}
-    ]
+    messages: list[MessageParam] = [{"role": "user", "content": cast("Any", user_content)}]
     response = client.messages.create(
         model=JUDGE_MODEL,
         max_tokens=JUDGE_MAX_TOKENS,

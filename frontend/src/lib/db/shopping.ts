@@ -7,7 +7,7 @@
 // DB default, so inserts generate one client-side.
 //
 // The pure list logic (categorize / normalizeName / aggregation / grouping)
-// lives in @/lib/shopping-logic, ported from the FastAPI backend. This module
+// lives in @/lib/shopping-logic, ported from the former Python backend. This module
 // composes those helpers around DB reads/writes. Pantry flags are read straight
 // from the `pantry_items` table (query, don't import the pantry domain module).
 
@@ -116,8 +116,10 @@ export async function addManualItem(
     checked: false,
     source: "manual",
     source_recipe_id: null,
+    generated_week_of: null,
     pantry_covered: false,
     pantry_low: false,
+    needs_review: false,
     created_at: new Date().toISOString(),
   };
   const flagged = computePantryFlags(base, pantryIndex(pantry));
@@ -373,9 +375,8 @@ export async function addFromRecipes(
  * Blank lines and lines that normalize to an empty name are skipped. Returns the
  * inserted items.
  *
- * Note: there is no matching FastAPI endpoint or UI wiring today (the "Text
- * list" modal sends via iMessage, which stays on the backend). This helper is
- * provided per the port spec and is safe to wire up later.
+ * Note: there is no UI wiring today. This helper is provided per the port spec
+ * and is safe to wire up later.
  */
 export async function importTextList(
   lines: string[],
@@ -398,8 +399,10 @@ export async function importTextList(
       checked: false,
       source: "manual",
       source_recipe_id: null,
+      generated_week_of: null,
       pantry_covered: false,
       pantry_low: false,
+      needs_review: false,
       created_at: nowIso,
     };
     items.push(computePantryFlags(base, index));
