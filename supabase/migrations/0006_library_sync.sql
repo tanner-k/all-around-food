@@ -39,13 +39,35 @@ create table app_private.library_change_batches (
 revoke all on app_private.library_sync_heads, app_private.library_mutation_receipts,
   app_private.library_change_batches from public, anon, authenticated;
 
--- Server-side shape checks mirror the stable required fields in the local Zod
--- models. Additive migrations can extend this validator when models evolve.
-create function app_private.valid_library_payload(p_kind text, p_id text, p jsonb)
+-- These small checks keep malformed JSON out of the permanent journal.
+create function app_private.library_integer(p jsonb)
+returns boolean language plpgsql immutable set search_path = '' as $$
+begin
+  if coalesce(jsonb_typeof(p),'') <> 'number' then return false; end if;
+  return (p::text)::numeric = trunc((p::text)::numeric);
+exception when invalid_text_representation or numeric_value_out_of_range then return false;
+end $$;
+create function app_private.library_string_array(p jsonb)
 returns boolean language plpgsql immutable set search_path = '' as $$
 declare item jsonb;
 begin
-  if coalesce(jsonb_typeof(p),'') <> 'object' or coalesce(jsonb_typeof(p->'id'),'') <> 'string'
+  if coalesce(jsonb_typeof(p),'') <> 'array' then return false; end if;
+  for item in select value from jsonb_array_elements(p) loop
+    if coalesce(jsonb_typeof(item),'') <> 'string' then return false; end if;
+  end loop;
+  return true;
+end $$;
+revoke all on function app_private.library_integer(jsonb),
+  app_private.library_string_array(jsonb) from public, anon, authenticated;
+
+-- Stable payload shapes follow the local Zod models, with the planned-meal and
+-- cook-session identity fields specified by the sync wire contract.
+create function app_private.valid_library_payload(p_kind text, p_id text, p jsonb)
+returns boolean language plpgsql immutable set search_path = '' as $$
+declare item jsonb; n jsonb;
+begin
+  if coalesce(jsonb_typeof(p),'') <> 'object'
+    or coalesce(jsonb_typeof(p->'id'),'') <> 'string'
     or p->>'id' is distinct from p_id then return false; end if;
   if p_kind = 'recipe' then
     if not (p ?& array['description','source_url','source_attribution','prep_time_min',
@@ -55,90 +77,122 @@ begin
       or coalesce(jsonb_typeof(p->'description'),'') not in ('string','null')
       or coalesce(jsonb_typeof(p->'source_url'),'') not in ('string','null')
       or coalesce(jsonb_typeof(p->'source_attribution'),'') not in ('string','null')
-      or coalesce(jsonb_typeof(p->'prep_time_min'),'') not in ('number','null')
-      or coalesce(jsonb_typeof(p->'cook_time_min'),'') not in ('number','null')
-      or coalesce(jsonb_typeof(p->'total_time_min'),'') not in ('number','null')
-      or coalesce(jsonb_typeof(p->'servings'),'') not in ('number','null')
+      or not (coalesce(p->'prep_time_min'='null'::jsonb,false) or app_private.library_integer(p->'prep_time_min'))
+      or not (coalesce(p->'cook_time_min'='null'::jsonb,false) or app_private.library_integer(p->'cook_time_min'))
+      or not (coalesce(p->'total_time_min'='null'::jsonb,false) or app_private.library_integer(p->'total_time_min'))
+      or not (coalesce(p->'servings'='null'::jsonb,false) or app_private.library_integer(p->'servings'))
       or coalesce(jsonb_typeof(p->'yield_text'),'') not in ('string','null')
       or coalesce(jsonb_typeof(p->'cuisine'),'') not in ('string','null')
       or coalesce(jsonb_typeof(p->'course'),'') not in ('string','null')
-      or coalesce(p->>'difficulty','null') not in ('easy','medium','hard','null')
+      or not (p->'difficulty'='null'::jsonb or
+        (coalesce(jsonb_typeof(p->'difficulty'),'')='string' and p->>'difficulty' in ('easy','medium','hard')))
       or coalesce(jsonb_typeof(p->'nutrition'),'') not in ('object','null')
       or coalesce(jsonb_typeof(p->'notes'),'') not in ('string','null')
       or coalesce(jsonb_typeof(p->'storage_instructions'),'') not in ('string','null')
       or coalesce(jsonb_typeof(p->'parse_confidence'),'') not in ('number','null')
-      or (p->'parse_confidence' <> 'null'::jsonb and (p->>'parse_confidence')::numeric not between 0 and 1)
-      or (p ? 'times_made' and (coalesce(p->>'times_made','') !~ '^[0-9]+$'))
-      or (p ? 'equipment' and coalesce(jsonb_typeof(p->'equipment'),'') <> 'array')
-      or (p ? 'dietary_tags' and coalesce(jsonb_typeof(p->'dietary_tags'),'') <> 'array')
+      or (coalesce(jsonb_typeof(p->'parse_confidence'),'')='number'
+        and (p->>'parse_confidence')::numeric not between 0 and 1)
+      or (p ? 'times_made' and
+        (not app_private.library_integer(p->'times_made') or (p->>'times_made')::numeric < 0))
+      or (p ? 'equipment' and not app_private.library_string_array(p->'equipment'))
+      or (p ? 'dietary_tags' and not app_private.library_string_array(p->'dietary_tags'))
       or coalesce(jsonb_typeof(p->'ingredients'),'') <> 'array'
-      or jsonb_array_length(p->'ingredients') = 0 or coalesce(jsonb_typeof(p->'steps'),'') <> 'array'
-      or jsonb_array_length(p->'steps') = 0 or coalesce(jsonb_typeof(p->'created_at'),'') <> 'string'
+      or coalesce(jsonb_typeof(p->'steps'),'') <> 'array'
+      or coalesce(jsonb_typeof(p->'created_at'),'') <> 'string'
     then return false; end if;
+    if jsonb_array_length(p->'ingredients') = 0 or jsonb_array_length(p->'steps') = 0
+    then return false; end if;
+    if jsonb_typeof(p->'nutrition') = 'object' then
+      n := p->'nutrition';
+      if not (n ?& array['kcal','protein_g','carbs_g','fat_g','fiber_g','sugar_g','sodium_mg'])
+        or not (coalesce(n->'kcal'='null'::jsonb,false) or app_private.library_integer(n->'kcal'))
+        or coalesce(jsonb_typeof(n->'protein_g'),'') not in ('number','null')
+        or coalesce(jsonb_typeof(n->'carbs_g'),'') not in ('number','null')
+        or coalesce(jsonb_typeof(n->'fat_g'),'') not in ('number','null')
+        or coalesce(jsonb_typeof(n->'fiber_g'),'') not in ('number','null')
+        or coalesce(jsonb_typeof(n->'sugar_g'),'') not in ('number','null')
+        or coalesce(jsonb_typeof(n->'sodium_mg'),'') not in ('number','null')
+      then return false; end if;
+    end if;
     for item in select value from jsonb_array_elements(p->'ingredients') loop
       if coalesce(jsonb_typeof(item),'') <> 'object'
         or not (item ?& array['preparation','group','notes'])
         or coalesce(jsonb_typeof(item->'name'),'') <> 'string'
-        or nullif(trim(item->>'name'),'') is null
         or coalesce(jsonb_typeof(item->'quantity'),'') <> 'object'
-        or coalesce(jsonb_typeof(item#>'{quantity,as_written}'),'') <> 'string'
-        or not (item->'quantity' ?& array['value','unit'])
+        or not (item->'quantity' ?& array['value','unit','as_written'])
         or coalesce(jsonb_typeof(item#>'{quantity,value}'),'') not in ('number','null')
         or coalesce(jsonb_typeof(item#>'{quantity,unit}'),'') not in ('string','null')
+        or coalesce(jsonb_typeof(item#>'{quantity,as_written}'),'') <> 'string'
         or coalesce(jsonb_typeof(item->'preparation'),'') not in ('string','null')
         or coalesce(jsonb_typeof(item->'group'),'') not in ('string','null')
         or coalesce(jsonb_typeof(item->'notes'),'') not in ('string','null')
         or (item ? 'optional' and coalesce(jsonb_typeof(item->'optional'),'') <> 'boolean')
-        then return false; end if;
+      then return false; end if;
     end loop;
     for item in select value from jsonb_array_elements(p->'steps') loop
       if coalesce(jsonb_typeof(item),'') <> 'object'
         or not (item ?& array['duration_min','temperature_f'])
-        or coalesce(item->>'order','') !~ '^[0-9]+$'
+        or not app_private.library_integer(item->'order')
         or coalesce(jsonb_typeof(item->'instruction'),'') <> 'string'
         or coalesce(jsonb_typeof(item->'duration_min'),'') not in ('number','null')
-        or coalesce(jsonb_typeof(item->'temperature_f'),'') not in ('number','null')
-        or (item ? 'equipment' and coalesce(jsonb_typeof(item->'equipment'),'') <> 'array')
-        or (item ? 'inline_amounts' and coalesce(jsonb_typeof(item->'inline_amounts'),'') <> 'array')
-        then return false; end if;
+        or not (coalesce(item->'temperature_f'='null'::jsonb,false) or app_private.library_integer(item->'temperature_f'))
+        or (item ? 'equipment' and not app_private.library_string_array(item->'equipment'))
+        or (item ? 'inline_amounts' and not app_private.library_string_array(item->'inline_amounts'))
+      then return false; end if;
     end loop;
   elsif p_kind = 'draft' then
-    if coalesce(jsonb_typeof(p->'recipe'),'') <> 'object' or nullif(p->'recipe'->>'id','') is null
+    if coalesce(jsonb_typeof(p->'recipe'),'') <> 'object'
       or not app_private.valid_library_payload('recipe',p->'recipe'->>'id',p->'recipe')
-      or coalesce(jsonb_typeof(p->'warnings'),'') <> 'array' or coalesce(jsonb_typeof(p->'received_at'),'') <> 'string'
+      or not app_private.library_string_array(p->'warnings')
+      or coalesce(jsonb_typeof(p->'received_at'),'') <> 'string'
     then return false; end if;
-    for item in select value from jsonb_array_elements(p->'warnings') loop
-      if coalesce(jsonb_typeof(item),'') <> 'string' then return false; end if;
-    end loop;
   elsif p_kind = 'planned_meal' then
-    if coalesce(jsonb_typeof(p->'week_of'),'') <> 'string' or (p->>'week_of') !~ '^\d{4}-\d{2}-\d{2}$'
-      or coalesce(p->>'day_index','') !~ '^[0-6]$' or nullif(p->>'recipe_id','') is null
-      or coalesce(p->>'position','') !~ '^[0-9]+$'
-      or not p ? 'servings' or (p->'servings' <> 'null'::jsonb and
-        (coalesce(jsonb_typeof(p->'servings'),'') <> 'number' or (p->>'servings')::numeric <= 0))
+    if coalesce(jsonb_typeof(p->'week_of'),'') <> 'string'
+      or coalesce(p->>'week_of','') !~ '^\d{4}-\d{2}-\d{2}$'
+      or not app_private.library_integer(p->'day_index')
+      or (p->>'day_index')::numeric not between 0 and 6
+      or coalesce(jsonb_typeof(p->'recipe_id'),'') <> 'string'
+      or not app_private.library_integer(p->'position')
+      or (p->>'position')::numeric < 0
+      or not (p ? 'servings')
+      or coalesce(jsonb_typeof(p->'servings'),'') not in ('number','null')
+      or (coalesce(jsonb_typeof(p->'servings'),'')='number' and (p->>'servings')::numeric <= 0)
     then return false; end if;
   elsif p_kind = 'shopping' then
-    if coalesce(jsonb_typeof(p->'name'),'') <> 'string' or nullif(trim(p->>'name'),'') is null
+    if coalesce(jsonb_typeof(p->'name'),'') <> 'string'
       or coalesce(jsonb_typeof(p->'created_at'),'') <> 'string'
-      or (p ? 'checked' and coalesce(jsonb_typeof(p->'checked'),'') <> 'boolean')
-      or (p ? 'source' and p->>'source' not in ('manual','recipe','planner'))
-      or (p ? 'aisle' and p->>'aisle' not in
+      or (p ? 'quantity_text' and coalesce(jsonb_typeof(p->'quantity_text'),'') not in ('string','null'))
+      or (p ? 'aisle' and coalesce(p->>'aisle','') not in
         ('Produce','Dairy','Meat','Bakery','Pantry','Frozen','Beverages','Household','Other'))
+      or (p ? 'checked' and coalesce(jsonb_typeof(p->'checked'),'') <> 'boolean')
+      or (p ? 'source' and coalesce(p->>'source','') not in ('manual','recipe','planner'))
+      or (p ? 'source_recipe_id' and coalesce(jsonb_typeof(p->'source_recipe_id'),'') not in ('string','null'))
+      or (p ? 'generated_week_of' and coalesce(jsonb_typeof(p->'generated_week_of'),'') not in ('string','null'))
+      or (p ? 'pantry_covered' and coalesce(jsonb_typeof(p->'pantry_covered'),'') <> 'boolean')
+      or (p ? 'pantry_low' and coalesce(jsonb_typeof(p->'pantry_low'),'') <> 'boolean')
+      or (p ? 'needs_review' and coalesce(jsonb_typeof(p->'needs_review'),'') <> 'boolean')
     then return false; end if;
   elsif p_kind = 'pantry' then
-    if coalesce(jsonb_typeof(p->'name'),'') <> 'string' or nullif(trim(p->>'name'),'') is null
-      or coalesce(p->>'status','') not in ('in_stock','low','out')
-      or coalesce(p->>'aisle','') not in ('Produce','Dairy','Meat','Bakery','Pantry','Frozen','Beverages','Household','Other')
-      or coalesce(jsonb_typeof(p->'aisle_overridden'),'') <> 'boolean'
-      or coalesce(jsonb_typeof(p->'created_at'),'') <> 'string' or coalesce(jsonb_typeof(p->'updated_at'),'') <> 'string'
+    if coalesce(jsonb_typeof(p->'name'),'') <> 'string'
+      or coalesce(jsonb_typeof(p->'created_at'),'') <> 'string'
+      or coalesce(jsonb_typeof(p->'updated_at'),'') <> 'string'
+      or (p ? 'status' and coalesce(p->>'status','') not in ('in_stock','low','out'))
+      or (p ? 'aisle' and coalesce(p->>'aisle','') not in
+        ('Produce','Dairy','Meat','Bakery','Pantry','Frozen','Beverages','Household','Other'))
+      or (p ? 'aisle_overridden' and coalesce(jsonb_typeof(p->'aisle_overridden'),'') <> 'boolean')
+      or (p ? 'notes' and coalesce(jsonb_typeof(p->'notes'),'') not in ('string','null'))
     then return false; end if;
   elsif p_kind = 'cook_session' then
-    if nullif(p->>'session_id','') is null or p->>'session_id' is distinct from p_id
-      or nullif(p->>'recipe_id','') is null or coalesce(jsonb_typeof(p->'started_at'),'') <> 'string'
-      or coalesce(p->>'step','') !~ '^[0-9]+$' or coalesce(p->>'layout','') not in ('step','scroll')
-      or not p ? 'timer_end_at' or not p ? 'paused_seconds'
-      or (p->'timer_end_at' <> 'null'::jsonb and coalesce(jsonb_typeof(p->'timer_end_at'),'') <> 'number')
-      or (p->'paused_seconds' <> 'null'::jsonb and coalesce(jsonb_typeof(p->'paused_seconds'),'') <> 'number')
+    if coalesce(jsonb_typeof(p->'session_id'),'') <> 'string'
+      or p->>'session_id' is distinct from p_id
+      or coalesce(jsonb_typeof(p->'recipe_id'),'') <> 'string'
+      or coalesce(jsonb_typeof(p->'started_at'),'') <> 'string'
+      or not app_private.library_integer(p->'step')
+      or (p->>'step')::numeric < 0
+      or coalesce(p->>'layout','') not in ('step','scroll')
+      or coalesce(jsonb_typeof(p->'timer_end_at'),'') not in ('number','null')
+      or coalesce(jsonb_typeof(p->'paused_seconds'),'') not in ('number','null')
+      or (p ? 'completed_at' and coalesce(jsonb_typeof(p->'completed_at'),'') not in ('string','null'))
     then return false; end if;
   else return false;
   end if;

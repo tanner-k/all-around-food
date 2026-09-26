@@ -117,7 +117,7 @@ do $$ declare r jsonb; p jsonb; begin
     raise exception 'bad payload accepted';
   exception when others then if sqlerrm='bad payload accepted' then raise; end if; end;
 end $$;
-do $$ declare recipe jsonb; r jsonb; begin
+do $$ declare recipe jsonb; r jsonb; bad jsonb; item jsonb; begin
   recipe := jsonb_build_object('id','recipe-one','title','Soup','description',null,'source_url',null,
     'source_attribution',null,'prep_time_min',null,'cook_time_min',null,'total_time_min',null,
     'servings',null,'yield_text',null,'ingredients',jsonb_build_array(jsonb_build_object('name','Water',
@@ -128,6 +128,38 @@ do $$ declare recipe jsonb; r jsonb; begin
     'equipment',jsonb_build_array(),'cuisine',null,'course',null,'dietary_tags',jsonb_build_array(),
     'difficulty',null,'nutrition',null,'notes',null,'storage_instructions',null,
     'created_at','2026-09-25T00:00:00Z','times_made',0,'parse_confidence',null);
+  -- Every rejected shape would be stored in the immutable journal if push accepts it.
+  bad := jsonb_build_array(
+    jsonb_build_object('kind','recipe','payload',jsonb_set(recipe,'{nutrition}','{}')),
+    jsonb_build_object('kind','recipe','payload',jsonb_set(recipe,'{equipment}','[42]')),
+    jsonb_build_object('kind','recipe','payload',jsonb_set(recipe,'{dietary_tags}','[42]')),
+    jsonb_build_object('kind','recipe','payload',jsonb_set(recipe,'{ingredients,0,quantity,unit}','42')),
+    jsonb_build_object('kind','recipe','payload',jsonb_set(recipe,'{steps,0,equipment}','[42]')),
+    jsonb_build_object('kind','recipe','payload',jsonb_set(recipe,'{prep_time_min}','1.5')),
+    jsonb_build_object('kind','recipe','payload',jsonb_set(recipe,'{difficulty}','"null"')),
+    jsonb_build_object('kind','shopping','entity_id','42','payload','{"id":42,"name":"X","created_at":"now"}'::jsonb),
+    jsonb_build_object('kind','shopping','payload','{"id":"bad","name":"X","created_at":"now","quantity_text":42}'::jsonb),
+    jsonb_build_object('kind','shopping','payload','{"id":"bad","name":"X","created_at":"now","source":null}'::jsonb),
+    jsonb_build_object('kind','shopping','payload','{"id":"bad","name":"X","created_at":"now","pantry_low":null}'::jsonb),
+    jsonb_build_object('kind','shopping','payload','{"id":"bad","name":"X","created_at":"now","generated_week_of":5}'::jsonb),
+    jsonb_build_object('kind','shopping','payload','{"id":"bad","name":"X"}'::jsonb),
+    jsonb_build_object('kind','pantry','payload','{"id":"bad","name":"X","created_at":"now","updated_at":"now","notes":42}'::jsonb),
+    jsonb_build_object('kind','planned_meal','payload','{"id":"bad","week_of":"2026-09-21","day_index":1,"recipe_id":42,"servings":2,"position":0}'::jsonb),
+    jsonb_build_object('kind','planned_meal','payload','{"id":"bad","week_of":"2026-09-21","day_index":1.5,"recipe_id":"r","servings":2,"position":0}'::jsonb),
+    jsonb_build_object('kind','cook_session','payload','{"id":"bad","session_id":"bad","recipe_id":42,"started_at":"now","step":0,"layout":"step","timer_end_at":null,"paused_seconds":null}'::jsonb),
+    jsonb_build_object('kind','cook_session','payload','{"id":"bad","session_id":"bad","recipe_id":"r","started_at":"now","step":0,"layout":"step","timer_end_at":null,"paused_seconds":null,"completed_at":42}'::jsonb),
+    jsonb_build_object('kind','draft','payload',jsonb_build_object('id','bad','recipe',recipe,'warnings',jsonb_build_array(42),'received_at','now')));
+  for item in select value from jsonb_array_elements(bad) loop
+    begin
+      perform public.push_library_changes(jsonb_build_object('protocol_version',1,'mutation_id','invalid-shape',
+        'changes',jsonb_build_array(jsonb_build_object('kind',item->>'kind',
+          'entity_id',coalesce(item->>'entity_id',case when item->>'kind'='recipe' then 'recipe-one' else 'bad' end),
+          'base_revision',null,'payload',item->'payload','deleted',false))));
+      raise exception 'client-invalid payload accepted: %', item;
+    exception when others then
+      if sqlstate <> '22023' or sqlerrm <> 'invalid library change' then raise; end if;
+    end;
+  end loop;
   r := public.push_library_changes(jsonb_build_object('protocol_version',1,'mutation_id','all-kinds',
     'changes',jsonb_build_array(
       jsonb_build_object('kind','recipe','entity_id','recipe-one','base_revision',null,'payload',recipe,'deleted',false),
@@ -143,6 +175,16 @@ do $$ declare recipe jsonb; r jsonb; begin
           'paused_seconds',null),'deleted',false))));
   if r->>'status' <> 'accepted' or jsonb_array_length(r->'records') <> 4
     then raise exception 'all kinds group: %',r; end if;
+  recipe := jsonb_set(recipe,'{nutrition}',
+    '{"kcal":null,"protein_g":null,"carbs_g":null,"fat_g":null,"fiber_g":null,"sugar_g":null,"sodium_mg":null}'::jsonb);
+  r := public.push_library_changes(jsonb_build_object('protocol_version',1,'mutation_id','valid-defaults',
+    'changes',jsonb_build_array(
+      jsonb_build_object('kind','recipe','entity_id','recipe-one','base_revision',4,'payload',recipe,'deleted',false),
+      jsonb_build_object('kind','pantry','entity_id','pantry-defaults','base_revision',null,
+        'payload',jsonb_build_object('id','pantry-defaults','name','Rice',
+          'created_at','2026-09-25T00:00:00Z','updated_at','2026-09-25T00:00:00Z'),'deleted',false))));
+  if r->>'status' <> 'accepted' or jsonb_array_length(r->'records') <> 2
+    then raise exception 'valid defaults/nutrition group: %',r; end if;
 end $$;
 reset role;
 
