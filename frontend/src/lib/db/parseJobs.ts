@@ -70,9 +70,11 @@ export function classifyUrlKind(url: string): "video" | "url" {
  * `video` job; everything else enqueues a `url` job. Sends only `kind` +
  * `source_url`; the rest of the row defaults server-side.
  */
-export async function enqueueUrlJob(url: string, id = crypto.randomUUID(), expectedOwner?: string): Promise<ParseJob> {
+export async function enqueueUrlJob(url: string, id = crypto.randomUUID(), expectedOwner?: string, assertAccount: () => void = () => undefined): Promise<ParseJob> {
+  assertAccount();
   const supabase = createClient();
   if (expectedOwner) await verifyExpectedOwner(supabase, expectedOwner);
+  assertAccount();
   const kind = classifyUrlKind(url);
 
   const { data, error } = await supabase
@@ -81,6 +83,7 @@ export async function enqueueUrlJob(url: string, id = crypto.randomUUID(), expec
     .select("*")
     .single();
 
+  assertAccount();
   if (error?.code === "23505") return getJob(id);
   if (error) throw new Error(`Failed to enqueue URL job: ${error.message}`);
   return data as ParseJob;
@@ -117,17 +120,20 @@ export async function enqueueImageJob(
   kind: "screenshot" | "receipt",
   id = crypto.randomUUID(),
   expectedOwner?: string,
+  assertAccount: () => void = () => undefined,
 ): Promise<ParseJob> {
   if (!Object.hasOwn(EXT_BY_MEDIA_TYPE, file.type)) {
     throw new Error("Upload a JPEG, PNG, or WebP image");
   }
   if (file.size > 10 * 1024 * 1024) throw new Error("Image exceeds 10 MB");
+  assertAccount();
   const supabase = createClient();
 
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
+  assertAccount();
   if (authError) throw new Error(`Not signed in: ${authError.message}`);
   if (!user) throw new Error("Not signed in");
   if (expectedOwner && user.id !== expectedOwner)
@@ -141,6 +147,7 @@ export async function enqueueImageJob(
       contentType: file.type || undefined,
       upsert: false,
     });
+  assertAccount();
   if (uploadError && !/already exists|duplicate/i.test(uploadError.message))
     throw new Error(`Failed to upload image: ${uploadError.message}`);
 
@@ -150,6 +157,7 @@ export async function enqueueImageJob(
     .select("*")
     .single();
 
+  assertAccount();
   if (error?.code === "23505") return getJob(id);
   if (error) throw new Error(`Failed to enqueue image job: ${error.message}`);
   return data as ParseJob;
@@ -164,10 +172,13 @@ export async function enqueueTextJob(
   kind: "text" | "shopping_list",
   id = crypto.randomUUID(),
   expectedOwner?: string,
+  assertAccount: () => void = () => undefined,
 ): Promise<ParseJob> {
   if (!text.trim() || text.length > 50_000) throw new Error("Text must be 1–50,000 characters");
+  assertAccount();
   const supabase = createClient();
   if (expectedOwner) await verifyExpectedOwner(supabase, expectedOwner);
+  assertAccount();
 
   const { data, error } = await supabase
     .from(TABLE)
@@ -175,6 +186,7 @@ export async function enqueueTextJob(
     .select("*")
     .single();
 
+  assertAccount();
   if (error?.code === "23505") return getJob(id);
   if (error) throw new Error(`Failed to enqueue text job: ${error.message}`);
   return data as ParseJob;

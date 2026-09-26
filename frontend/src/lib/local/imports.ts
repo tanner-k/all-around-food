@@ -216,10 +216,10 @@ async function flushPending(account: LocalAccount): Promise<void> {
     if (current.state === "queued") {
       try {
         const remote = current.kind === "screenshot"
-          ? await enqueueImageJob(new File([current.upload!], `${current.id}.png`, { type: current.upload!.type }), "screenshot", current.id, owner)
+          ? await enqueueImageJob(new File([current.upload!], `${current.id}.png`, { type: current.upload!.type }), "screenshot", current.id, owner, () => assertCurrentLocalAccount(account))
           : current.kind === "text"
-            ? await enqueueTextJob(current.payload_text!, "text", current.id, owner)
-            : await enqueueUrlJob(current.source_url!, current.id, owner);
+            ? await enqueueTextJob(current.payload_text!, "text", current.id, owner, () => assertCurrentLocalAccount(account))
+            : await enqueueUrlJob(current.source_url!, current.id, owner, () => assertCurrentLocalAccount(account));
         if (!isCurrentLocalAccount(account)) return;
         current = { ...current, state: "submitted", upload: null, error: null };
         await replaceImport(current, account); // Keep the Blob until the row itself is confirmed.
@@ -257,8 +257,12 @@ export async function retryLocalImport(id: string, account = captureLocalAccount
   const db = await getLocalDB(account);
   assertCurrentLocalAccount(account);
   const record = LocalImportSchema.parse(await db.get("imports", id));
-  if (record.state === "replaced" && record.replacement_id)
-    return LocalImportSchema.parse(await db.get("imports", record.replacement_id));
+  assertCurrentLocalAccount(account);
+  if (record.state === "replaced" && record.replacement_id) {
+    const replacement = await db.get("imports", record.replacement_id);
+    assertCurrentLocalAccount(account);
+    return LocalImportSchema.parse(replacement);
+  }
   if (record.state !== "error") throw new Error("Import is not waiting for retry");
   const owner = await signedInOwner(account);
   if (!canSyncLocalImports() || !owner || record.owner_id !== owner)
@@ -269,6 +273,7 @@ export async function retryLocalImport(id: string, account = captureLocalAccount
     try {
       remote = await retryJob(id);
     } catch (error) {
+      assertCurrentLocalAccount(account);
       retryError = error;
       try {
         remote = await getJob(id); // The RPC may have succeeded before its response was lost.

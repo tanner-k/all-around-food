@@ -14,7 +14,19 @@ import { currentMonday } from "@/lib/week";
 import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
 import { localHref, type LocalRoute } from "@/lib/local/navigation";
 import { addPantryItem, addPlannedMeal, addRecipesToShopping, addShoppingItem, beginCookSession, completeCookSession, completeShopping, generateWeekShopping, putRecipe, removePantryItem, removePlannedMeal, removeShoppingItem, saveCookProgress, setPantryStatus, setPlannedServings, setShoppingChecked } from "@/lib/local/repository";
+import { assertCurrentLocalAccount, captureLocalAccount, type LocalAccount } from "@/lib/local/db";
 import type { LibrarySnapshot } from "@/lib/local/schema";
+
+// Bind before child queues schedule work; only new operations and publication
+// are cancelled. An already-started transaction may finish in its original DB.
+function bound<Args extends unknown[], Result>(account: LocalAccount, operation: (...args: Args) => Promise<Result>) {
+  return async (...args: Args): Promise<Result> => {
+    assertCurrentLocalAccount(account);
+    const result = await operation(...args);
+    assertCurrentLocalAccount(account);
+    return result;
+  };
+}
 
 function blankRecipe(): Recipe {
   return RecipeSchema.parse({
@@ -44,14 +56,15 @@ function MissingRecipe() {
 }
 
 export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot: LibrarySnapshot }) {
+  const [account] = useState(captureLocalAccount);
   const recipe = "recipeId" in route ? snapshot.recipes.find((item) => item.id === route.recipeId) : undefined;
   const progress = recipe ? snapshot.cook_progress.find((item) => item.recipe_id === recipe.id) : undefined;
 
   useEffect(() => {
     if (route.view === "cook" && recipe && (!progress || !progress.session_id)) {
-      void beginCookSession(recipe.id);
+      void bound(account, beginCookSession)(recipe.id).catch(() => undefined);
     }
-  }, [route.view, recipe, progress]);
+  }, [route.view, recipe, progress, account]);
 
   if (route.view === "settings") return <DataSettings />;
 
@@ -74,10 +87,11 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
   if (route.view === "recipe") {
     if (!recipe) return <MissingRecipe />;
     return <RecipeDetail recipe={recipe} onMarkCooked={async () => {
-      const session = await beginCookSession(recipe.id);
-      await completeCookSession(recipe.id, session.session_id!);
+      const session = await bound(account, beginCookSession)(recipe.id);
+      await bound(account, completeCookSession)(recipe.id, session.session_id!);
     }} onStartCook={async () => {
-      await beginCookSession(recipe.id, true);
+      await bound(account, beginCookSession)(recipe.id, true);
+      assertCurrentLocalAccount(account);
       window.location.hash = localHref("cook", recipe.id).split("#")[1];
     }} />;
   }
@@ -85,7 +99,8 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
   if (route.view === "edit") {
     if (route.recipeId && !recipe) return <MissingRecipe />;
     const save = async (saved: Recipe) => {
-      await putRecipe(saved);
+      await bound(account, putRecipe)(saved);
+      assertCurrentLocalAccount(account);
       window.location.hash = localHref("recipe", saved.id).split("#")[1];
     };
     return recipe
@@ -96,8 +111,8 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
   if (route.view === "cook") {
     if (!recipe) return <MissingRecipe />;
     if (!progress?.session_id) return <p role="status" className="text-ink-mute">Opening cook mode…</p>;
-    return <CookMode key={`${recipe.id}:${progress.session_id}`} recipe={recipe} progress={progress} pantry={snapshot.pantry} onSaveProgress={saveCookProgress}
-      onComplete={(sessionId) => completeCookSession(recipe.id, sessionId)} onSetPantryStatus={setPantryStatus} />;
+    return <CookMode key={`${recipe.id}:${progress.session_id}`} recipe={recipe} progress={progress} pantry={snapshot.pantry} onSaveProgress={bound(account, saveCookProgress)}
+      onComplete={(sessionId) => bound(account, completeCookSession)(recipe.id, sessionId)} onSetPantryStatus={bound(account, setPantryStatus)} />;
   }
 
   if (route.view === "plan") {
@@ -105,15 +120,15 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
     const plan = snapshot.meal_plans.find((item) => item.week_of === weekOf) ?? { week_of: weekOf, meals: [], updated_at: new Date().toISOString() };
     return <><SectionHeader number="01" scene="THE WEEK" title={<>Plan your <em className="italic text-terra">week</em>.</>} description="Add recipes to each day, then turn them into a shopping list." />
       <div className="mt-12"><PlanView key={weekOf} weekOf={weekOf} initialPlan={plan} recipes={snapshot.recipes.map((item) => ({ id: item.id, title: item.title, servings: item.servings }))}
-        onAdd={addPlannedMeal} onRemove={removePlannedMeal} onServingsChange={setPlannedServings} onGenerate={generateWeekShopping} /></div></>;
+        onAdd={bound(account, addPlannedMeal)} onRemove={bound(account, removePlannedMeal)} onServingsChange={bound(account, setPlannedServings)} onGenerate={bound(account, generateWeekShopping)} /></div></>;
   }
 
   if (route.view === "shop") return <><SectionHeader number="03" scene="SHOPPING" title={<>What you <em className="italic text-terra">actually</em> need.</>} description="Grouped by store section. Pantry stock is flagged." />
     <div className="mt-12"><ShoppingListView items={snapshot.shopping} recipeOptions={snapshot.recipes.map(({ id, title }) => ({ id, title }))}
-      onAdd={addShoppingItem} onAddRecipes={addRecipesToShopping} onCheck={setShoppingChecked} onDelete={removeShoppingItem} onComplete={completeShopping} /></div></>;
+      onAdd={bound(account, addShoppingItem)} onAddRecipes={bound(account, addRecipesToShopping)} onCheck={bound(account, setShoppingChecked)} onDelete={bound(account, removeShoppingItem)} onComplete={bound(account, completeShopping)} /></div></>;
 
   if (route.view === "pantry") return <><SectionHeader number="04" scene="YOUR KITCHEN" title={<>What&apos;s <em className="italic text-terra">on hand</em>.</>} description="Track ingredients. Mark what is running low so your shopping list stays current." />
-    <div className="mt-12"><PantryView items={snapshot.pantry} onAdd={addPantryItem} onStatusChange={setPantryStatus} onDelete={removePantryItem} /></div></>;
+    <div className="mt-12"><PantryView items={snapshot.pantry} onAdd={bound(account, addPantryItem)} onStatusChange={bound(account, setPantryStatus)} onDelete={bound(account, removePantryItem)} /></div></>;
 
   if (route.view === "import") return <LocalImports drafts={snapshot.drafts} />;
 

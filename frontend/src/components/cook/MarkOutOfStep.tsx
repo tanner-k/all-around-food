@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { PantryItem, PantryStatus } from "@/lib/pantry-schema";
+import { captureLocalAccount, isCurrentLocalAccount } from "@/lib/local/db";
 import { normalizeName } from "@/lib/normalize";
 
 const STATUS_OPTIONS: {
@@ -27,6 +28,8 @@ interface Choice {
 }
 
 export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDone }: MarkOutOfStepProps) {
+  const [account] = useState(captureLocalAccount);
+  const finish = () => { if (isCurrentLocalAccount(account)) onDone(); };
   const [phase, setPhase] = useState<"ready" | "saving">("ready");
   const [choices, setChoices] = useState<Choice[]>(() => {
     const wanted = new Set(ingredientNames.map(normalizeName));
@@ -41,6 +44,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
   }
 
   async function handleSave() {
+    if (!isCurrentLocalAccount(account)) return;
     setPhase("saving");
     setError(null);
     try {
@@ -48,7 +52,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
       await Promise.all(
         changed.map((c) => onSetPantryStatus(c.item.id, c.status))
       );
-      onDone();
+      finish();
     } catch {
       setError("Couldn't update some items. Try again.");
       setPhase("ready");
@@ -69,7 +73,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
         </div>
         <button
           type="button"
-          onClick={onDone}
+          onClick={finish}
           className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-[#A55230] active:bg-[#A55230]"
         >
           Finish
@@ -138,7 +142,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
         </button>
         <button
           type="button"
-          onClick={onDone}
+          onClick={finish}
           disabled={phase === "saving"}
           className="min-h-14 w-full rounded-xl border border-line bg-paper font-semibold text-ink transition-colors hover:bg-paper-2 active:bg-paper-2 disabled:opacity-60"
         >

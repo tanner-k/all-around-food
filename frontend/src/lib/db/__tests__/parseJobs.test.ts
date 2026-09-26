@@ -127,3 +127,37 @@ it("reuses the stable image path after an ambiguous insert without overwriting t
     expect.objectContaining({ upsert: false }));
   expect(insert).toHaveBeenCalledTimes(2);
 });
+
+function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; }
+const submitters = [
+  (guard: () => void) => enqueueUrlJob("https://example.com", job.id, "owner-a", guard),
+  (guard: () => void) => enqueueTextJob("toast", "text", job.id, "owner-a", guard),
+  (guard: () => void) => enqueueImageJob(new File(["png"], "a.png", { type: "image/png" }), "screenshot", job.id, "owner-a", guard),
+];
+it.each(submitters)("stops enqueue after stale Auth verification", async (submit) => {
+  const auth = deferred<{ data: { user: { id: string } }; error: null }>();
+  getUser.mockReturnValueOnce(auth.promise);
+  let active = true;
+  const pending = submit(() => { if (!active) throw new Error("stale"); });
+  active = false; auth.resolve({ data: { user: { id: "owner-a" } }, error: null });
+  await expect(pending).rejects.toThrow("stale");
+  expect(insert).not.toHaveBeenCalled(); expect(upload).not.toHaveBeenCalled();
+});
+it.each(submitters)("stops duplicate recovery after stale insert", async (submit) => {
+  const inserted = deferred<{ data: null; error: { code: string } }>();
+  single.mockReturnValueOnce(inserted.promise);
+  let active = true;
+  const pending = submit(() => { if (!active) throw new Error("stale"); });
+  await vi.waitFor(() => expect(insert).toHaveBeenCalled());
+  active = false; inserted.resolve({ data: null, error: { code: "23505" } });
+  await expect(pending).rejects.toThrow("stale");
+  expect(single).toHaveBeenCalledTimes(1);
+});
+it("stops image insert after stale upload", async () => {
+  const uploaded = deferred<{ error: null }>(); upload.mockReturnValueOnce(uploaded.promise);
+  let active = true;
+  const pending = submitters[2](() => { if (!active) throw new Error("stale"); });
+  await vi.waitFor(() => expect(upload).toHaveBeenCalled());
+  active = false; uploaded.resolve({ error: null });
+  await expect(pending).rejects.toThrow("stale"); expect(insert).not.toHaveBeenCalled();
+});

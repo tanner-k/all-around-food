@@ -198,7 +198,7 @@ describe("durable local recipe imports", () => {
     await closeLocalDB();
     vi.stubGlobal("navigator", { onLine: true });
     await flushLocalImports();
-    expect(enqueueImageJob).toHaveBeenCalledWith(expect.any(File), "screenshot", jobId, owner);
+    expect(enqueueImageJob).toHaveBeenCalledWith(expect.any(File), "screenshot", jobId, owner, expect.any(Function));
     expect((await records()).import).toMatchObject({ state: "submitted", upload: null });
   });
 
@@ -208,7 +208,7 @@ describe("durable local recipe imports", () => {
     await flushLocalImports();
     expect((await records()).import).toMatchObject({ state: "queued", upload: expect.any(Blob) });
     await flushLocalImports();
-    expect(enqueueImageJob).toHaveBeenNthCalledWith(2, expect.any(File), "screenshot", jobId, owner);
+    expect(enqueueImageJob).toHaveBeenNthCalledWith(2, expect.any(File), "screenshot", jobId, owner, expect.any(Function));
     expect((await records()).import?.upload).toBeNull();
   });
 
@@ -228,7 +228,7 @@ describe("durable local recipe imports", () => {
     expect((await records()).import).toMatchObject({ state: "queued", payload_text: "Toast bread" });
     currentUser = owner;
     await flushLocalImports();
-    expect(enqueueTextJob).toHaveBeenCalledWith("Toast bread", "text", jobId, owner);
+    expect(enqueueTextJob).toHaveBeenCalledWith("Toast bread", "text", jobId, owner, expect.any(Function));
   });
 
   it("does not fetch jobs when hidden and records expired results for retry", async () => {
@@ -346,7 +346,7 @@ describe("durable local recipe imports", () => {
     expect((await retryLocalImport(jobId)).id).toBe(replacementId);
     await flushLocalImports();
     expect(enqueueUrlJob).toHaveBeenCalledTimes(2);
-    expect(enqueueUrlJob).toHaveBeenNthCalledWith(2, "https://example.com/toast", replacementId, owner);
+    expect(enqueueUrlJob).toHaveBeenNthCalledWith(2, "https://example.com/toast", replacementId, owner, expect.any(Function));
   });
 
   it("asks for media reselection if an expired screenshot has already uploaded", async () => {
@@ -434,7 +434,7 @@ describe("durable local recipe imports", () => {
     await closeLocalDB();
     await flushLocalImports();
     expect(enqueueImageJob).toHaveBeenCalledTimes(2);
-    expect(enqueueImageJob).toHaveBeenNthCalledWith(2, expect.any(File), "screenshot", replacementId, owner);
+    expect(enqueueImageJob).toHaveBeenNthCalledWith(2, expect.any(File), "screenshot", replacementId, owner, expect.any(Function));
   });
 
   it("returns the same replacement if screenshot reselection is repeated", async () => {
@@ -532,4 +532,49 @@ describe("durable local recipe imports", () => {
     expect((await records()).import).toMatchObject({ state: "saved", acknowledged: true });
     expect(ackJob).toHaveBeenCalledTimes(2);
   });
+});
+
+it.each([1, 2])("rejects replaced-import switch during read %s", async (switchRead) => {
+  await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
+  const db = await getLocalDB(); const original = (await db.get("imports", jobId))!;
+  await db.put("imports", { ...original, state: "replaced", replacement_id: replacementId });
+  await db.put("imports", { ...original, id: replacementId });
+  const get = db.get.bind(db); let count = 0;
+  const spy = vi.spyOn(db, "get").mockImplementation(async (...args) => {
+    const row = await get(...args);
+    if (++count === switchRead) { signOutLocalAccount(); selectVerifiedAccount(other); }
+    return row;
+  });
+  await expect(retryLocalImport(jobId)).rejects.toThrow("Local account changed");
+  expect(spy).toHaveBeenCalledTimes(switchRead);
+});
+it("does not recover a retry rejected after switching account", async () => {
+  await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
+  const db = await getLocalDB(); const row = (await db.get("imports", jobId))!;
+  await db.put("imports", { ...row, state: "error", error: "failed" });
+  retryJob.mockImplementationOnce(async () => { signOutLocalAccount(); selectVerifiedAccount(other); throw new Error("network lost"); });
+  await expect(retryLocalImport(jobId)).rejects.toThrow("Local account changed");
+  expect(getJob).not.toHaveBeenCalled();
+});
+it("queues receipt, edit, and atomic recipe/draft Save groups", async () => {
+  await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
+  await receiveImportDraft(job(jobId, "done"));
+  const db = await getLocalDB();
+  expect((await db.getAll("sync_outbox"))[0].changes).toMatchObject([{ kind: "draft", entity_id: jobId, deleted: false }]);
+  const draft = (await db.get("drafts", jobId))!;
+  await updateImportDraft(jobId, { ...draft.recipe, title: "Edited toast" });
+  expect((await db.getAll("sync_outbox"))[1].changes).toMatchObject([{ kind: "draft", payload: { recipe: { title: "Edited toast" } } }]);
+  await acceptDraft(jobId, draft.recipe);
+  expect((await db.getAll("sync_outbox"))[2].changes).toMatchObject([{ kind: "recipe", deleted: false }, { kind: "draft", deleted: true, payload: null }]);
+});
+it("preserves the draft when Save outbox preparation fails", async () => {
+  await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
+  await receiveImportDraft(job(jobId, "done"));
+  const db = await getLocalDB(); const draft = await db.get("drafts", jobId);
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  await expect(acceptDraft(jobId, { ...recipeFixture(), notes: "x".repeat(1024 * 1024) })).rejects.toThrow("1 MiB");
+  const reopened = await getLocalDB();
+  expect(await reopened.get("drafts", jobId)).toEqual(draft);
+  expect(await reopened.get("recipes", jobId)).toBeUndefined();
+  expect(await reopened.getAll("sync_outbox")).toHaveLength(1);
 });
