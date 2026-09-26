@@ -13,6 +13,7 @@ import { closeLocalDB, getLocalDB, selectVerifiedAccount, signOutLocalAccount, t
 import {
   acceptDraft,
   flushLocalImports,
+  listLocalImports,
   queueLocalImport,
   receiveImportDraft,
   retryLocalImport,
@@ -99,6 +100,47 @@ afterEach(async () => {
 });
 
 describe("durable local recipe imports", () => {
+  it("rejects a local import list that finishes after an account switch", async () => {
+    const dbA = await getLocalDB();
+    let started!: () => void;
+    let finish!: () => void;
+    const reading = new Promise<void>((resolve) => { started = resolve; });
+    vi.spyOn(dbA, "getAll").mockImplementationOnce(async () => {
+      started();
+      await new Promise<void>((resolve) => { finish = resolve; });
+      return [];
+    });
+    const pending = listLocalImports();
+    await reading;
+    signOutLocalAccount();
+    selectVerifiedAccount(other);
+    finish();
+    await expect(pending).rejects.toThrow("Local account changed");
+  });
+
+  it("rejects a retry's follow-up import read after an account switch", async () => {
+    const queued = await queueLocalImport({ kind: "url", source_url: "https://example.com/toast" });
+    const dbA = await getLocalDB();
+    await dbA.put("imports", { ...queued, state: "error", error: "Parser unavailable" });
+    let started!: () => void;
+    let finish!: () => void;
+    const reading = new Promise<void>((resolve) => { started = resolve; });
+    retryJob.mockImplementationOnce(async () => {
+      const stale = await dbA.get("imports", jobId);
+      vi.spyOn(dbA, "get").mockImplementationOnce(async () => {
+        started();
+        await new Promise<void>((resolve) => { finish = resolve; });
+        return stale;
+      });
+      return job(jobId, "done");
+    });
+    const pending = retryLocalImport(jobId);
+    await reading;
+    signOutLocalAccount();
+    selectVerifiedAccount(other);
+    finish();
+    await expect(pending).rejects.toThrow("Local account changed");
+  });
   it("does not close B or emit B storage errors for a late A write failure", async () => {
     const dbA = await getLocalDB();
     let fail!: (error: Error) => void;

@@ -41,7 +41,9 @@ export async function queueLocalImport(input: LocalImportInput, account = captur
 export async function listLocalImports(account = captureLocalAccount()): Promise<LocalImport[]> {
   const db = await getLocalDB(account);
   assertCurrentLocalAccount(account);
-  return LocalImportSchema.array().parse(await db.getAll("imports"));
+  const records = await db.getAll("imports");
+  assertCurrentLocalAccount(account);
+  return LocalImportSchema.array().parse(records);
 }
 
 /** Persist each review edit; a late edit cannot recreate a draft after Save. */
@@ -280,7 +282,11 @@ export async function retryLocalImport(id: string, account = captureLocalAccount
       return markRetried(id, account);
     if (remote?.status === "done") {
       await receiveImportDraft(remote, account);
-      return LocalImportSchema.parse(await (await getLocalDB(account)).get("imports", id));
+      const resultDB = await getLocalDB(account);
+      assertCurrentLocalAccount(account);
+      const result = await resultDB.get("imports", id);
+      assertCurrentLocalAccount(account);
+      return LocalImportSchema.parse(result);
     }
     if (remote?.status === "error" && remote.attempts < 3 && Date.parse(remote.expires_at) > Date.now())
       throw retryError ?? new Error("Import retry remains in error");
