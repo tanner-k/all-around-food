@@ -265,7 +265,7 @@ describe("local repository", () => {
 
     await putRecipe(recipeFixture());
     window.dispatchEvent(new Event("focus"));
-    otherTab.postMessage("committed");
+    otherTab.postMessage("aaf-local");
 
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(3));
     otherTab.close();

@@ -5,6 +5,7 @@ import { exportBackup, parseBackup, restoreBackup, type MigrationReport } from "
 import { downloadBackupFile, fetchSupabaseBackup, migrateSupabaseLibrary } from "@/lib/local/migrate";
 import { readSnapshot, saveSetting } from "@/lib/local/repository";
 import type { LibrarySnapshot } from "@/lib/local/schema";
+import { assertCurrentLocalAccount, captureLocalAccount, isCurrentLocalAccount } from "@/lib/local/db";
 
 type Counts = Record<keyof LibrarySnapshot, number>;
 const storeNames: (keyof LibrarySnapshot)[] = ["recipes", "meal_plans", "shopping", "pantry", "cook_progress", "drafts", "settings"];
@@ -31,69 +32,80 @@ export function DataSettings() {
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
-    const snapshot = await readSnapshot();
+    const account = captureLocalAccount();
+    const snapshot = await readSnapshot(account);
+    assertCurrentLocalAccount(account);
     setLocal(counts(snapshot));
     const stamp = snapshot.settings.find((item) => item.key === "last_backup_at")?.value;
     setLastBackup(typeof stamp === "string" ? stamp : null);
     setBackupDue(typeof stamp !== "string" || Date.now() - new Date(stamp).getTime() > 7 * 24 * 60 * 60 * 1000);
-    if (navigator.storage?.estimate) setEstimate(await navigator.storage.estimate());
-    if (navigator.storage?.persisted) setPersistent(await navigator.storage.persisted());
+    if (navigator.storage?.estimate) { const value = await navigator.storage.estimate(); assertCurrentLocalAccount(account); setEstimate(value); }
+    if (navigator.storage?.persisted) { const value = await navigator.storage.persisted(); assertCurrentLocalAccount(account); setPersistent(value); }
   }
 
   useEffect(() => {
-    void readSnapshot().then((snapshot) => {
+    const account = captureLocalAccount();
+    void readSnapshot(account).then((snapshot) => {
+      if (!isCurrentLocalAccount(account)) return;
       setLocal(counts(snapshot));
       const stamp = snapshot.settings.find((item) => item.key === "last_backup_at")?.value;
       setLastBackup(typeof stamp === "string" ? stamp : null);
       setBackupDue(typeof stamp !== "string" || Date.now() - new Date(stamp).getTime() > 7 * 24 * 60 * 60 * 1000);
-      if (navigator.storage?.estimate) void navigator.storage.estimate().then(setEstimate);
-      if (navigator.storage?.persisted) void navigator.storage.persisted().then(setPersistent);
+      if (navigator.storage?.estimate) void navigator.storage.estimate().then((value) => { if (isCurrentLocalAccount(account)) setEstimate(value); });
+      if (navigator.storage?.persisted) void navigator.storage.persisted().then((value) => { if (isCurrentLocalAccount(account)) setPersistent(value); });
     }).catch((failure) => setError(`Local storage unavailable: ${message(failure)}. Save is blocked until it works.`));
   }, []);
 
   async function run(action: () => Promise<void>) {
+    const account = captureLocalAccount();
     setBusy(true);
     setError(null);
     setReport(null);
-    try { await action(); await refresh(); }
-    catch (failure) { setError(message(failure)); }
-    finally { setBusy(false); }
+    try { await action(); assertCurrentLocalAccount(account); await refresh(); }
+    catch (failure) { if (isCurrentLocalAccount(account)) setError(message(failure)); }
+    finally { if (isCurrentLocalAccount(account)) setBusy(false); }
   }
 
   async function downloadLocal() {
-    const json = await exportBackup();
-    downloadBackupFile(json, `all-around-food-backup-${new Date().toISOString().slice(0, 10)}.json`);
-    await saveSetting({ key: "last_backup_at", value: new Date().toISOString() });
+    const account = captureLocalAccount();
+    const json = await exportBackup(account);
+    downloadBackupFile(json, `all-around-food-backup-${new Date().toISOString().slice(0, 10)}.json`, account);
+    await saveSetting({ key: "last_backup_at", value: new Date().toISOString() }, account);
   }
 
   async function restoreFile(file: File, mode: "merge" | "replace") {
+    const account = captureLocalAccount();
     const json = await file.text();
+    assertCurrentLocalAccount(account);
     const parsed = parseBackup(json);
     if (parsed.errors.length) { setReport({ stores: Object.fromEntries(storeNames.map((name) => [name, { inserted: 0, skipped: 0 }])) as MigrationReport["stores"], validation_errors: parsed.errors }); return; }
     let options;
     if (mode === "replace") {
-      const preRestoreBackup = await exportBackup();
-      downloadBackupFile(preRestoreBackup, `all-around-food-before-restore-${new Date().toISOString().slice(0, 10)}.json`);
+      const preRestoreBackup = await exportBackup(account);
+      downloadBackupFile(preRestoreBackup, `all-around-food-before-restore-${new Date().toISOString().slice(0, 10)}.json`, account);
       if (!window.confirm("A backup download of your current local library was started. Confirm that the file is saved on your device before replacing every local recipe, plan, shopping item, pantry item, draft, cooking progress record, and setting. Continue?")) return;
       options = { confirmed: true, preRestoreBackup };
     }
-    setReport(await restoreBackup(json, mode, options));
+    setReport(await restoreBackup(json, mode, options, account));
   }
 
   async function prepareCloud() {
-    const json = await fetchSupabaseBackup();
+    const account = captureLocalAccount();
+    const json = await fetchSupabaseBackup(account);
     const parsed = parseBackup(json);
     if (!parsed.backup) throw new Error(parsed.errors.join(" "));
-    downloadBackupFile(json, `all-around-food-cloud-export-${new Date().toISOString().slice(0, 10)}.json`);
+    downloadBackupFile(json, `all-around-food-cloud-export-${new Date().toISOString().slice(0, 10)}.json`, account);
     setCloudJson(json);
     setCloud(counts(parsed.backup.library));
   }
 
   async function copyCloud() {
+    const account = captureLocalAccount();
     if (!cloudJson) throw new Error("Download the cloud export first.");
-    const result = await migrateSupabaseLibrary(cloudJson);
+    const result = await migrateSupabaseLibrary(cloudJson, account);
+    assertCurrentLocalAccount(account);
     setReport(result);
-    if (!result.validation_errors.length) await saveSetting({ key: "last_migration", value: new Date().toISOString() });
+    if (!result.validation_errors.length) await saveSetting({ key: "last_migration", value: new Date().toISOString() }, account);
   }
 
   return <section className="mx-auto max-w-3xl space-y-8 px-4 py-8 text-ink">

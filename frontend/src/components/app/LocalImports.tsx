@@ -10,28 +10,9 @@ import { acceptDraft, listLocalImports, queueLocalImport, reselectScreenshotImpo
 import { localHref } from "@/lib/local/navigation";
 import { subscribeToLocalChanges } from "@/lib/local/repository";
 import type { LocalImport, RecipeDraft } from "@/lib/local/schema";
-import { createClient } from "@/lib/supabase/client";
+import { captureLocalAccount, isCurrentLocalAccount } from "@/lib/local/db";
 
-const ownerKey = "aaf-import-owner-id";
 const publicConfig = () => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
-async function knownOwner(): Promise<string | null> {
-  const cached = window.localStorage.getItem(ownerKey);
-  if (!publicConfig()) return cached;
-  try {
-    const { data, error } = await createClient().auth.getSession();
-    const current = data.session?.user.id;
-    if (current) {
-      window.localStorage.setItem(ownerKey, current);
-      return current;
-    }
-    if (!error && navigator.onLine) {
-      window.localStorage.removeItem(ownerKey); // Explicitly signed out; bind a new request on its first signed-in flush.
-      return null;
-    }
-  } catch { /* An offline request can still use the last known owner. */ }
-  return cached;
-}
 
 function importSource(row: LocalImport): string {
   if (row.source_url) return row.source_url;
@@ -40,6 +21,7 @@ function importSource(row: LocalImport): string {
 }
 
 export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
+  const [account] = useState(captureLocalAccount);
   const [imports, setImports] = useState<LocalImport[]>([]);
   const [text, setText] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -47,18 +29,19 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
   const [retrying, setRetrying] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
-    void listLocalImports().then(setImports).catch(() => setNotice("Unable to read local imports. Check browser storage and retry."));
-  }, []);
+    void listLocalImports(account).then((rows) => { if (isCurrentLocalAccount(account)) setImports(rows); }).catch(() => { if (isCurrentLocalAccount(account)) setNotice("Unable to read local imports. Check browser storage and retry."); });
+  }, [account]);
   useEffect(() => {
     refresh();
-    return subscribeToLocalChanges(refresh);
-  }, [refresh]);
+    return subscribeToLocalChanges(refresh, account);
+  }, [refresh, account]);
 
   async function queue(input: LocalImportInput): Promise<boolean> {
     setBusy(true);
     setNotice(null);
     try {
-      await queueLocalImport({ ...input, owner_id: await knownOwner() });
+      await queueLocalImport(input, account);
+      if (!isCurrentLocalAccount(account)) return false;
       setNotice("Saved locally. Import processing will resume when you are online and signed in.");
       refresh();
       return true;
@@ -71,7 +54,7 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
   async function retry(id: string) {
     setRetrying(id);
     setNotice(null);
-    try { await retryLocalImport(id); refresh(); }
+    try { await retryLocalImport(id, account); if (isCurrentLocalAccount(account)) refresh(); }
     catch (error) { setNotice(error instanceof Error ? error.message : "Could not retry import"); }
     finally { setRetrying(null); }
   }
@@ -79,7 +62,7 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
   async function reselect(id: string, file: File) {
     setRetrying(id);
     setNotice(null);
-    try { await reselectScreenshotImport(id, file); refresh(); }
+    try { await reselectScreenshotImport(id, file, account); if (isCurrentLocalAccount(account)) refresh(); }
     catch (error) { setNotice(error instanceof Error ? error.message : "Could not queue screenshot"); }
     finally { setRetrying(null); }
   }
@@ -120,9 +103,10 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
       <h2 className="font-serif text-2xl text-ink">Ready to review</h2>
       <div className="mt-5 space-y-8">{drafts.map((draft) => <div key={draft.id} className="rounded-2xl border border-line bg-paper p-5">
         <RecipeReview recipe={draft.recipe} warnings={draft.warnings} saveLabel="Save to cookbook"
-          onChange={(recipe) => updateImportDraft(draft.id, recipe)}
+          onChange={(recipe) => updateImportDraft(draft.id, recipe, account)}
           onSave={async (recipe) => {
-            const saved = await acceptDraft(draft.id, recipe);
+            const saved = await acceptDraft(draft.id, recipe, account);
+            if (!isCurrentLocalAccount(account)) return;
             window.location.hash = localHref("recipe", saved.id).split("#")[1];
           }} />
       </div>)}</div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getLocalDB } from "@/lib/local/db";
+import { assertCurrentLocalAccount, captureLocalAccount, getLocalDB } from "@/lib/local/db";
 import { readSnapshot, saveSetting, subscribeToLocalChanges } from "@/lib/local/repository";
 
 type InstallPrompt = Event & {
@@ -24,12 +24,15 @@ function checkReady(worker: ServiceWorker): Promise<{ ready: boolean; buildId?: 
 }
 
 async function waitForCommittedWrites() {
-  const db = await getLocalDB();
+  const account = captureLocalAccount();
+  const db = await getLocalDB(account);
+  assertCurrentLocalAccount(account);
   const tx = db.transaction(
     ["recipes", "meal_plans", "shopping", "pantry", "cook_progress", "drafts", "imports", "settings"],
     "readwrite",
   );
   await tx.done;
+  assertCurrentLocalAccount(account);
 }
 
 export default function ServiceWorkerRegister() {
@@ -88,10 +91,12 @@ export default function ServiceWorkerRegister() {
       });
     };
     const maybeRequestPersistence = async () => {
-      if (persistenceRequest.current || !navigator.storage?.persist) return;
+      const account = captureLocalAccount();
+      if (!account.dbName || persistenceRequest.current || !navigator.storage?.persist) return;
       persistenceRequest.current = true;
       try {
-        const snapshot = await readSnapshot();
+        const snapshot = await readSnapshot(account);
+        assertCurrentLocalAccount(account);
         const hasSavedData = [snapshot.recipes, snapshot.meal_plans, snapshot.shopping,
           snapshot.pantry, snapshot.cook_progress, snapshot.drafts].some((items) => items.length > 0);
         if (hasSavedData && !snapshot.settings.some((item) => item.key === "storage_persistence_requested")) {

@@ -2,18 +2,16 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, expect, it, vi } from "vitest";
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
 import { LocalImports } from "../LocalImports";
+import { selectVerifiedAccount } from "@/lib/local/db";
 
 const { listLocalImports, queueLocalImport, retryLocalImport, reselectScreenshotImport,
-  updateImportDraft, acceptDraft, createClient } = vi.hoisted(() => ({
+  updateImportDraft, acceptDraft } = vi.hoisted(() => ({
   listLocalImports: vi.fn(), queueLocalImport: vi.fn(), retryLocalImport: vi.fn(),
-  reselectScreenshotImport: vi.fn(), updateImportDraft: vi.fn(), acceptDraft: vi.fn(), createClient: vi.fn(),
+  reselectScreenshotImport: vi.fn(), updateImportDraft: vi.fn(), acceptDraft: vi.fn(),
 }));
 vi.mock("@/lib/local/imports", () => ({
   listLocalImports, queueLocalImport, retryLocalImport, reselectScreenshotImport, updateImportDraft, acceptDraft,
 }));
-vi.mock("@/lib/supabase/client", () => ({ createClient }));
-
-let getSession: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.resetAllMocks();
   window.localStorage.clear();
@@ -21,18 +19,17 @@ beforeEach(() => {
   queueLocalImport.mockResolvedValue({ id: "queued" });
   updateImportDraft.mockResolvedValue(undefined);
   acceptDraft.mockResolvedValue({ ...recipeFixture(), id: "job-1" });
-  getSession = vi.fn().mockResolvedValue({ data: { session: { user: { id: "owner" } } }, error: null });
-  createClient.mockReturnValue({ auth: { getSession } });
+  selectVerifiedAccount("owner");
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "public-key";
   Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
 });
 
-it("queues pasted recipe text with the cached owner and keeps manual entry", async () => {
+it("queues pasted recipe text for the verified account and keeps manual entry", async () => {
   render(<LocalImports drafts={[]} />);
   fireEvent.change(screen.getByLabelText("Recipe text"), { target: { value: "Toast the bread." } });
   fireEvent.click(screen.getByRole("button", { name: "Import pasted text" }));
-  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith({ kind: "text", payload_text: "Toast the bread.", owner_id: "owner" }));
+  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith({ kind: "text", payload_text: "Toast the bread." }, expect.objectContaining({ ownerId: "owner" })));
   expect(screen.getByRole("link", { name: /Enter a recipe manually/ })).toHaveAttribute("href", "/app#/cookbook/new");
 });
 
@@ -43,12 +40,12 @@ it("shows warnings, persists review edits, and saves only on explicit Save", asy
   expect(acceptDraft).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Edit" }));
   fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "My toast" } });
-  await waitFor(() => expect(updateImportDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" })));
+  await waitFor(() => expect(updateImportDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" }), expect.objectContaining({ ownerId: "owner" })));
   fireEvent.change(screen.getByLabelText("Servings"), { target: { value: "4" } });
-  await waitFor(() => expect(updateImportDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ servings: 4 })));
+  await waitFor(() => expect(updateImportDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ servings: 4 }), expect.objectContaining({ ownerId: "owner" })));
   expect(acceptDraft).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Save to cookbook" }));
-  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" })));
+  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" }), expect.objectContaining({ ownerId: "owner" })));
 });
 
 it("requires a new screenshot for an expired uploaded request", async () => {
@@ -58,38 +55,38 @@ it("requires a new screenshot for an expired uploaded request", async () => {
   expect(screen.getByLabelText("Reselect screenshot")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Reselect screenshot"), { target: { files: [new File(["png"], "toast.png", { type: "image/png" })] } });
-  await waitFor(() => expect(reselectScreenshotImport).toHaveBeenCalledWith("old", expect.any(File)));
+  await waitFor(() => expect(reselectScreenshotImport).toHaveBeenCalledWith("old", expect.any(File), expect.objectContaining({ ownerId: "owner" })));
 });
 
-it("clears a prior owner after explicit sign-out before queueing new work", async () => {
+it("ignores the legacy import-owner cache", async () => {
   window.localStorage.setItem("aaf-import-owner-id", "old-owner");
-  getSession.mockResolvedValue({ data: { session: null }, error: null });
   render(<LocalImports drafts={[]} />);
   fireEvent.change(screen.getByLabelText("Recipe text"), { target: { value: "Soup" } });
   fireEvent.click(screen.getByRole("button", { name: "Import pasted text" }));
-  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith({ kind: "text", payload_text: "Soup", owner_id: null }));
-  expect(window.localStorage.getItem("aaf-import-owner-id")).toBeNull();
+  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith(
+    { kind: "text", payload_text: "Soup" }, expect.objectContaining({ ownerId: "owner" }),
+  ));
 });
 
-it("retains a known owner when offline and Auth is unavailable", async () => {
-  window.localStorage.setItem("aaf-import-owner-id", "old-owner");
+it("uses the previously verified account while offline", async () => {
   Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
-  getSession.mockRejectedValue(new Error("offline"));
   render(<LocalImports drafts={[]} />);
   fireEvent.change(screen.getByLabelText("Recipe text"), { target: { value: "Soup" } });
   fireEvent.click(screen.getByRole("button", { name: "Import pasted text" }));
-  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith({ kind: "text", payload_text: "Soup", owner_id: "old-owner" }));
+  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith(
+    { kind: "text", payload_text: "Soup" }, expect.objectContaining({ ownerId: "owner" }),
+  ));
   Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
 });
 
-it("uses the newly signed-in account for a new request after an account switch", async () => {
-  window.localStorage.setItem("aaf-import-owner-id", "old-owner");
-  getSession.mockResolvedValue({ data: { session: { user: { id: "new-owner" } } }, error: null });
+it("uses a newly verified account for new requests", async () => {
+  selectVerifiedAccount("new-owner");
   render(<LocalImports drafts={[]} />);
   fireEvent.change(screen.getByLabelText("Recipe text"), { target: { value: "Soup" } });
   fireEvent.click(screen.getByRole("button", { name: "Import pasted text" }));
-  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith({ kind: "text", payload_text: "Soup", owner_id: "new-owner" }));
-  expect(window.localStorage.getItem("aaf-import-owner-id")).toBe("new-owner");
+  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith(
+    { kind: "text", payload_text: "Soup" }, expect.objectContaining({ ownerId: "new-owner" }),
+  ));
 });
 
 it("keeps pasted text and URL available after a local queue failure", async () => {
@@ -102,7 +99,7 @@ it("keeps pasted text and URL available after a local queue failure", async () =
   fireEvent.click(screen.getByRole("button", { name: "🔗 URL" }));
   fireEvent.change(screen.getByPlaceholderText("Paste a recipe URL, TikTok, or Instagram Reel"), { target: { value: "https://example.com/soup" } });
   fireEvent.click(screen.getByRole("button", { name: /^Import$/ }));
-  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith(expect.objectContaining({ source_url: "https://example.com/soup" })));
+  await waitFor(() => expect(queueLocalImport).toHaveBeenCalledWith(expect.objectContaining({ source_url: "https://example.com/soup" }), expect.objectContaining({ ownerId: "owner" })));
   expect(screen.getByPlaceholderText("Paste a recipe URL, TikTok, or Instagram Reel")).toHaveValue("https://example.com/soup");
 });
 
@@ -118,7 +115,7 @@ it("waits for the review edit commit before explicit Save", async () => {
   expect(acceptDraft).not.toHaveBeenCalled();
   await waitFor(() => expect(updateImportDraft).toHaveBeenCalledTimes(1));
   await act(async () => { finish(); });
-  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" })));
+  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" }), expect.objectContaining({ ownerId: "owner" })));
 });
 
 it("reports a failed draft write and retries it", async () => {
@@ -145,7 +142,7 @@ it("freezes review fields while explicit Save is pending", async () => {
   fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "First title" } });
   await screen.findByText("All changes saved locally");
   fireEvent.click(screen.getByRole("button", { name: "Save to cookbook" }));
-  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "First title" })));
+  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "First title" }), expect.objectContaining({ ownerId: "owner" })));
   expect(screen.getByLabelText("Recipe title")).toBeDisabled();
   fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "Later title" } });
   expect(screen.getByLabelText("Recipe title")).toHaveValue("First title");

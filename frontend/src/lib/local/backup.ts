@@ -3,7 +3,7 @@ import { MealPlanSchema } from "@/lib/meal-plan-schema";
 import { PantryItemSchema } from "@/lib/pantry-schema";
 import { RecipeSchema } from "@/lib/recipe-schema";
 import { ShoppingListItemSchema } from "@/lib/shopping-schema";
-import { closeLocalDB, getLocalDB, reportStorageIssue } from "./db";
+import { assertCurrentLocalAccount, captureLocalAccount, closeLocalDB, getLocalDB, isCurrentLocalAccount, reportStorageIssue, type LocalAccount } from "./db";
 import { notifyChange, readSnapshot } from "./repository";
 import { CookProgressSchema, RecipeDraftSchema, SettingSchema, type LibrarySnapshot } from "./schema";
 
@@ -91,12 +91,14 @@ export function parseBackup(json: string): { backup?: BackupEnvelope; errors: st
   return errors.length ? { errors } : { backup: parsed.data, errors };
 }
 
-export async function exportBackup(): Promise<string> {
+export async function exportBackup(account = captureLocalAccount()): Promise<string> {
+  const snapshot = await readSnapshot(account);
+  assertCurrentLocalAccount(account);
   return JSON.stringify({
     format: "all-around-food",
     version: 1,
     exported_at: new Date().toISOString(),
-    library: await readSnapshot(),
+    library: snapshot,
   } satisfies BackupEnvelope);
 }
 
@@ -106,7 +108,9 @@ export async function restoreBackup(
   json: string,
   mode: "merge" | "replace",
   options: ReplaceOptions = {},
+  account: LocalAccount = captureLocalAccount(),
 ): Promise<MigrationReport> {
+  assertCurrentLocalAccount(account);
   const report = emptyReport();
   const { backup, errors } = parseBackup(json);
   report.validation_errors.push(...errors);
@@ -126,7 +130,8 @@ export async function restoreBackup(
   }
 
   try {
-    const db = await getLocalDB();
+    const db = await getLocalDB(account);
+    assertCurrentLocalAccount(account);
     const tx = db.transaction([...storeNames], "readwrite");
     void tx.done.catch(() => undefined);
     try {
@@ -160,10 +165,13 @@ export async function restoreBackup(
       throw error;
     }
   } catch (error) {
-    await closeLocalDB();
-    reportStorageIssue("Unable to restore the local library.", error);
+    if (isCurrentLocalAccount(account)) {
+      await closeLocalDB();
+      reportStorageIssue("Unable to restore the local library.", error);
+    }
     throw error;
   }
-  notifyChange();
+  assertCurrentLocalAccount(account);
+  notifyChange(account);
   return report;
 }

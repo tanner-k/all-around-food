@@ -9,7 +9,7 @@ vi.hoisted(async () => {
 });
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
 import type { ParseJob } from "@/lib/db/parseJobs";
-import { closeLocalDB, getLocalDB, type LocalDBSchema } from "../db";
+import { closeLocalDB, getLocalDB, selectVerifiedAccount, signOutLocalAccount, type LocalDBSchema } from "../db";
 import {
   acceptDraft,
   flushLocalImports,
@@ -60,7 +60,7 @@ async function records(id = jobId) {
 async function deleteLocalDB() {
   await closeLocalDB();
   await new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase("aaf-local");
+    const request = indexedDB.deleteDatabase(`aaf-local:${owner}`);
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
     request.onblocked = () => reject(new Error("database deletion blocked"));
@@ -70,6 +70,7 @@ async function deleteLocalDB() {
 beforeEach(async () => {
   await deleteLocalDB();
   vi.resetAllMocks();
+  selectVerifiedAccount(owner);
   currentUser = owner;
   createClient.mockReturnValue({ auth: { getUser: async () => ({ data: { user: currentUser ? { id: currentUser } : null }, error: null }) } });
   enqueueUrlJob.mockImplementation(async (_url, id) => job(id));
@@ -78,18 +79,40 @@ beforeEach(async () => {
   getJob.mockImplementation(async (id) => job(id));
   retryJob.mockImplementation(async (id) => job(id));
   ackJob.mockImplementation(async (id) => job(id, "done"));
-  const randomUUID = vi.fn().mockReturnValueOnce(jobId).mockReturnValue(replacementId);
+  let nextId = 0;
+  const randomUUID = vi.fn(() => `00000000-0000-4000-8000-${String(++nextId).padStart(12, "0")}`);
   vi.stubGlobal("crypto", { randomUUID });
   vi.stubGlobal("navigator", { onLine: true });
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
 });
 afterEach(async () => {
   await deleteLocalDB();
+  signOutLocalAccount();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("durable local recipe imports", () => {
+  it("keeps a late A import response out of B after sign-out", async () => {
+    await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
+    let finish!: () => void;
+    let started!: () => void;
+    const sent = new Promise<void>((resolve) => { started = resolve; });
+    enqueueTextJob.mockImplementationOnce(async () => {
+      started();
+      await new Promise<void>((resolve) => { finish = resolve; });
+      return job(jobId);
+    });
+    const flushing = flushLocalImports();
+    await sent;
+    signOutLocalAccount();
+    selectVerifiedAccount(other);
+    finish();
+    await flushing;
+    expect(await (await getLocalDB()).getAll("imports")).toHaveLength(0);
+    selectVerifiedAccount(owner);
+    expect((await records()).import).toMatchObject({ state: "queued", payload_text: "Toast" });
+  });
   it("persists the UUID and request before offline submission, then resumes after reopening", async () => {
     const image = new Blob(["png"], { type: "image/png" });
     vi.stubGlobal("navigator", { onLine: false });
