@@ -25,12 +25,34 @@ export type PullResponse = {
     has_more: boolean;
 };
 export type LibraryTransport = {
-    push(request: PushRequest): Promise<unknown>;
-    pull(afterRevision: number, maxRevisions: number): Promise<unknown>;
+    push(request: PushRequest, signal?: AbortSignal): Promise<unknown>;
+    pull(afterRevision: number, maxRevisions: number, signal?: AbortSignal): Promise<unknown>;
 };
-export type SyncErrorCategory = 'auth' | 'transient' | 'validation' | 'protocol' | 'account';
+export type SyncErrorCategory = 'auth' | 'transient' | 'validation' | 'protocol' | 'account' | 'paused';
 export class LibrarySyncError extends Error {
     constructor(public category: SyncErrorCategory, message: string) { super(message); }
+}
+/** Deadline rejection prevents late values from reaching receipt/cursor processing. */
+export function withLibraryDeadline<T>(operation: (signal: AbortSignal) => PromiseLike<T>, parent?: AbortSignal): Promise<T> {
+    const controller = new AbortController();
+    return new Promise<T>((resolve, reject) => {
+        let settled = false;
+        const finish = (callback: () => void) => { if (settled)
+            return; settled = true; clearTimeout(timer); parent?.removeEventListener('abort', cancel); callback(); };
+        const cancel = () => finish(() => { controller.abort(); reject(new LibrarySyncError('paused', 'Library sync paused.')); });
+        const timer = setTimeout(() => finish(() => { controller.abort(); reject(new LibrarySyncError('transient', 'Library request timed out; retry sync.')); }), 30000);
+        parent?.addEventListener('abort', cancel, { once: true });
+        if (parent?.aborted) {
+            cancel();
+            return;
+        }
+        try {
+            Promise.resolve(operation(controller.signal)).then(value => finish(() => resolve(value)), error => finish(() => reject(error)));
+        }
+        catch (error) {
+            finish(() => reject(error));
+        }
+    });
 }
 const revision = z.number().int().nonnegative().safe();
 export function parsePush(value: unknown, request: PushRequest): PushResponse {
@@ -38,8 +60,9 @@ export function parsePush(value: unknown, request: PushRequest): PushResponse {
         const response = z.discriminatedUnion('status', [z.object({ status: z.literal('accepted'), revision: revision.refine(n => n > 0), records: z.array(z.unknown()) }), z.object({ status: z.literal('conflict'), records: z.array(z.unknown()) })]).parse(value);
         if (response.status === 'conflict') {
             const records = response.records.map(validateConflictRecord);
-            if (request.changes.some(c => !records.some(r => r.kind === c.kind && r.entity_id === c.entity_id)))
-                throw Error('Incomplete conflict group.');
+            const targets = records.map(r => `${r.kind}:${r.entity_id}`);
+            if (!records.length || new Set(targets).size !== records.length || records.some(r => !request.changes.some(c => c.kind === r.kind && c.entity_id === r.entity_id)))
+                throw Error('Invalid conflict targets.');
             return { ...response, records };
         }
         const records = response.records.map(validateRecord);
@@ -95,10 +118,22 @@ export function createLibraryTransport(client: {
             code?: string;
             status?: number;
         } | null;
-    }>;
+    }> & {
+        abortSignal?(signal: AbortSignal): PromiseLike<{
+            data: unknown;
+            status?: number;
+            error: {
+                message: string;
+                code?: string;
+                status?: number;
+            } | null;
+        }>;
+    };
 }, ownerId: string): LibraryTransport {
     const account = captureLocalAccount();
-    async function call(name: string, args: Record<string, unknown>) {
+    async function call(name: string, args: Record<string, unknown>, signal: AbortSignal) {
+        if (signal.aborted)
+            throw new LibrarySyncError('paused', 'Library sync paused.');
         assertCurrentLocalAccount(account);
         if (account.ownerId !== ownerId)
             throw new LibrarySyncError('auth', 'Sign in to sync.');
@@ -106,7 +141,12 @@ export function createLibraryTransport(client: {
         assertCurrentLocalAccount(account);
         if (auth.error || auth.data.user?.id !== ownerId)
             throw new LibrarySyncError('auth', 'Sign in to sync.');
-        const result = await client.rpc(name, args);
+        if (signal.aborted)
+            throw new LibrarySyncError('paused', 'Library sync paused.');
+        const rpc = client.rpc(name, args);
+        const result = await (rpc.abortSignal ? rpc.abortSignal(signal) : rpc);
+        if (signal.aborted)
+            throw new LibrarySyncError('paused', 'Library sync paused.');
         assertCurrentLocalAccount(account);
         if (result.error) {
             const error = result.error;
@@ -115,5 +155,5 @@ export function createLibraryTransport(client: {
         }
         return result.data;
     }
-    return { push: request => call('push_library_changes', { p_request: request }), pull: (after, max) => call('pull_library_changes', { p_after_revision: after, p_max_revisions: max }) };
+    return { push: (request, parent) => withLibraryDeadline(signal => call('push_library_changes', { p_request: request }, signal), parent), pull: (after, max, parent) => withLibraryDeadline(signal => call('pull_library_changes', { p_after_revision: after, p_max_revisions: max }, signal), parent) };
 }

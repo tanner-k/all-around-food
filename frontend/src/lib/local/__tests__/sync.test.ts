@@ -192,3 +192,117 @@ it('reports incomplete pagination at the bounded pass limit', async () => {
     expect(result.error?.category).toBe('transient');
     expect(result.lastSuccessAt).toBeNull();
 });
+it('accepts SQL partial conflict targets and reviews the complete mixed group', async () => {
+    const { enqueueSyncGroup } = await import('../sync-state');
+    const { listLibraryConflicts } = await import('../sync');
+    const db = await getLocalDB();
+    const tx = db.transaction(['recipes', 'sync_outbox', 'sync_shadow'], 'readwrite');
+    await tx.objectStore('sync_shadow').put({ key: `recipe:${recipeFixture().id}`, revision: 1, payload: recipeFixture(), deleted: false });
+    await enqueueSyncGroup(tx, [{ kind: 'recipe', entity_id: recipeFixture().id, payload: recipeFixture(), deleted: false }, { kind: 'recipe', entity_id: 'new-recipe', payload: { ...recipeFixture(), id: 'new-recipe' }, deleted: false }]);
+    await tx.done;
+    const result = await syncLibraryOnce({ verifiedOwnerId: owner, transport: { push: async () => ({ status: 'conflict', records: [record(3)] }), pull: async () => ({ protocol_version: 1, batches: [], next_revision: 0, has_more: false }) } });
+    expect(result.error).toBeUndefined();
+    const [review] = await listLibraryConflicts();
+    expect(review.remote).toHaveLength(2);
+    expect(review.remote[1]).toEqual({ kind: 'recipe', entity_id: 'new-recipe', absent: true });
+});
+it('rejects unrelated and duplicate conflict targets', async () => {
+    const { parsePush } = await import('@/lib/db/librarySync');
+    const request = { protocol_version: 1 as const, mutation_id: crypto.randomUUID(), changes: [{ kind: 'recipe' as const, entity_id: recipeFixture().id, payload: recipeFixture(), deleted: false, base_revision: null }] };
+    expect(() => parsePush({ status: 'conflict', records: [record(), record()] }, request)).toThrow();
+    expect(() => parsePush({ status: 'conflict', records: [{ kind: 'recipe', entity_id: 'other', absent: true }] }, request)).toThrow();
+});
+it('times out a stuck request, retries immutable bodies and discards its late response', async () => {
+    const { vi } = await import('vitest');
+    await putRecipe(recipeFixture());
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+        const sent: unknown[] = [];
+        let entered!: () => void;
+        const entry = new Promise<void>(r => entered = r);
+        let late!: (value: unknown) => void;
+        const first = new Promise(resolve => late = resolve);
+        const transport = { push: async (request: unknown) => { sent.push(structuredClone(request)); if (sent.length === 1) {
+                entered();
+                return first;
+            } return new Promise(() => { }); }, pull: async () => null };
+        const pass = syncLibraryOnce({ verifiedOwnerId: owner, transport, sleep: async () => { } });
+        await entry;
+        await vi.advanceTimersByTimeAsync(91000);
+        const result = await pass;
+        expect(result.error?.category).toBe('transient');
+        expect(sent).toHaveLength(3);
+        expect(sent[0]).toEqual(sent[1]);
+        expect(sent[1]).toEqual(sent[2]);
+        late({ status: 'accepted', revision: 1, records: [record()] });
+        await Promise.resolve();
+        const db = await getLocalDB();
+        expect(await db.getAll('sync_outbox')).toHaveLength(1);
+        expect(await db.get('sync_meta', 'lease')).toBeUndefined();
+    }
+    finally {
+        vi.useRealTimers();
+    }
+});
+it('bounds Auth verification and never starts an RPC after its late success', async () => {
+    const { vi } = await import('vitest');
+    const { createLibraryTransport } = await import('@/lib/db/librarySync');
+    let resolveAuth!: (value: {
+        data: {
+            user: {
+                id: string;
+            };
+        };
+        error: null;
+    }) => void;
+    const auth = new Promise<{
+        data: {
+            user: {
+                id: string;
+            };
+        };
+        error: null;
+    }>(r => resolveAuth = r);
+    let rpcCalls = 0;
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+        const transport = createLibraryTransport({ auth: { getUser: () => auth }, rpc: async () => { rpcCalls++; return { data: null, error: null }; } }, owner);
+        const result = transport.pull(0, 10).catch(error => error);
+        await vi.advanceTimersByTimeAsync(30001);
+        expect(await result).toMatchObject({ category: 'transient' });
+        resolveAuth({ data: { user: { id: owner } }, error: null });
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(rpcCalls).toBe(0);
+    }
+    finally {
+        vi.useRealTimers();
+    }
+});
+it('aborts the real RPC builder and pauses without starting a later request', async () => {
+    const { createLibraryTransport } = await import('@/lib/db/librarySync');
+    const controller = new AbortController();
+    let aborted = false;
+    let calls = 0;
+    const transport = createLibraryTransport({ auth: { getUser: async () => ({ data: { user: { id: owner } }, error: null }) }, rpc: () => { calls++; const pending = new Promise<{
+            data: unknown;
+            error: null;
+        }>(() => { }); return Object.assign(pending, { abortSignal: (signal: AbortSignal) => { signal.addEventListener('abort', () => aborted = true); return pending; } }); } }, owner);
+    const pending = transport.pull(0, 10, controller.signal).catch(error => error);
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort();
+    expect(await pending).toMatchObject({ category: 'paused' });
+    expect(aborted).toBe(true);
+    expect(calls).toBe(1);
+});
+it('pauses during an upload without retrying or starting pull', async () => {
+    await putRecipe(recipeFixture());
+    const controller = new AbortController();
+    let pulls = 0;
+    const result = await syncLibraryOnce({ verifiedOwnerId: owner, signal: controller.signal, transport: { push: async () => { controller.abort(); return { status: 'accepted', revision: 1, records: [record()] }; }, pull: async () => { pulls++; return null; } } });
+    expect(result.error?.category).toBe('paused');
+    expect(pulls).toBe(0);
+    expect(await (await getLocalDB()).getAll('sync_outbox')).toHaveLength(1);
+    expect(await (await getLocalDB()).get('sync_meta', 'lease')).toBeUndefined();
+});

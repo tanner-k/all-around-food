@@ -1,6 +1,6 @@
 import { notifyChange } from './repository';
 import type { IDBPTransaction } from 'idb';
-import { LibrarySyncError, parsePull, parsePush, type LibraryTransport, type PushRequest, type SyncErrorCategory } from '@/lib/db/librarySync';
+import { LibrarySyncError, withLibraryDeadline, parsePull, parsePush, type LibraryTransport, type PushRequest, type SyncErrorCategory } from '@/lib/db/librarySync';
 import { assertCurrentLocalAccount, captureLocalAccount, getLocalDB, type LocalAccount, type LocalDBSchema } from './db';
 import { validateRecord, validateConflictRecord, type ConflictRecord, type RemoteRecord } from './sync-codecs';
 import { RecipeSchema } from '@/lib/recipe-schema';
@@ -27,6 +27,7 @@ export type SyncOptions = {
     sleep?: (ms: number) => Promise<void>;
     now?: () => number;
     maxPages?: number;
+    signal?: AbortSignal;
 };
 async function apply(tx: Tx, row: RemoteRecord, dirty: boolean) {
     const key = syncEntityKey(row.kind, row.entity_id);
@@ -75,6 +76,8 @@ export async function syncLibraryOnce(options: SyncOptions): Promise<SyncResult>
     let acquired = false;
     const guard = () => {
         assertCurrentLocalAccount(account);
+        if (options.signal?.aborted)
+            throw new LibrarySyncError('paused', 'Library sync paused.');
         if (!account.ownerId || options.verifiedOwnerId !== account.ownerId)
             throw new LibrarySyncError('auth', 'Sign in to sync.');
     };
@@ -109,11 +112,11 @@ export async function syncLibraryOnce(options: SyncOptions): Promise<SyncResult>
             return { ...await getLibrarySyncStatus(account, kinds), busy: true };
         const timer = setInterval(() => { void lease().catch(() => undefined); }, 5000);
         try {
-            async function remote<T>(operation: () => Promise<T>): Promise<T> {
+            async function remote<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
                 for (let attempt = 0;; attempt++) {
                     guard();
                     try {
-                        const result = await operation();
+                        const result = await withLibraryDeadline(operation, options.signal);
                         guard();
                         return result;
                     }
@@ -147,7 +150,7 @@ export async function syncLibraryOnce(options: SyncOptions): Promise<SyncResult>
                 await freeze.done;
                 guard();
                 const request: PushRequest = { protocol_version: 1, mutation_id: group.mutation_id, changes: group.changes };
-                const response = parsePush(await remote(() => options.transport.push(structuredClone(request))), request);
+                const response = parsePush(await remote(signal => options.transport.push(structuredClone(request), signal)), request);
                 guard();
                 const tx = db.transaction([...stores], 'readwrite');
                 const current = await tx.objectStore('sync_outbox').get(group.mutation_id);
@@ -190,7 +193,7 @@ export async function syncLibraryOnce(options: SyncOptions): Promise<SyncResult>
                 const cursorRow = await db.get('sync_meta', 'pull_cursor');
                 guard();
                 const cursor = typeof cursorRow?.value === 'number' ? cursorRow.value : 0;
-                const page = parsePull(await remote(() => options.transport.pull(cursor, 10)), cursor);
+                const page = parsePull(await remote(signal => options.transport.pull(cursor, 10, signal)), cursor);
                 guard();
                 const tx = db.transaction([...stores], 'readwrite');
                 const live = await tx.objectStore('sync_meta').get('pull_cursor');
@@ -263,10 +266,12 @@ async function conflictRemote(tx: Tx, group: SyncOutbox, original: unknown): Pro
     const latest: ConflictRecord[] = [];
     for (const change of group.changes) {
         const remote = records.find(r => r.kind === change.kind && r.entity_id === change.entity_id);
-        if (!remote)
-            throw new LibrarySyncError('protocol', 'Incomplete conflict group.');
+        // SQL returns only failed CAS targets. Non-conflicting members matched their frozen base.
+        // Reconstruct only from a known server shadow, or a null base's explicit absence.
         const shadow = await tx.objectStore('sync_shadow').get(syncEntityKey(change.kind, change.entity_id));
-        latest.push(shadow ? validateRecord({ ...change, ...shadow, schema_version: 1, updated_at: new Date(0).toISOString() }) : remote);
+        if (!remote && change.base_revision !== null && (!shadow || shadow.revision < change.base_revision))
+            throw new LibrarySyncError('protocol', 'Download the missing server version before reviewing this group.');
+        latest.push(shadow ? validateRecord({ ...change, ...shadow, schema_version: 1, updated_at: new Date(0).toISOString() }) : remote ?? { kind: change.kind, entity_id: change.entity_id, absent: true });
     }
     return latest;
 }
