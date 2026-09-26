@@ -63,3 +63,8 @@ The evaluation dashboard uses the owner-scoped Supabase `evaluation_stats` view.
 ## Shared import drafts
 - Foreground import polling discovers the verified owner's submitted queue even on devices without local jobs. Only queue metadata is copied; unsent screenshots and pasted source text remain on the submitting device. Unsubmitted offline requests appear elsewhere only after upload.
 - Worker-completed draft content arrives through library sync, never a duplicate local null-base create from parse queue results. Completed metadata waits for library sync before review/acknowledgement; recipe/draft Save is one conditional group. Restored account-local drafts without a shadow or queued predecessor explicitly queue a draft-create predecessor before Save; account enrollment normally supplies that predecessor.
+
+## Planning, shopping, and pantry sync
+- Each planned occurrence has a persisted ID and position; `meal_plans` remains a weekly local projection. Independent offline additions sort by position then ID. Missing recipe references remain visible/recoverable.
+- Full-stage planning, shopping, and pantry actions commit one bounded outbox group with their entity writes. Shopping generation uses explicit removed-row tombstones and preserves checked state for unchanged demand. Completion groups pantry stock with purchased-row removal.
+- Shopping coverage flags are derived locally from pantry records after sync and never uploaded. Pantry records retain independent IDs even when names match. Cooking sync/codecs remain a separate integration gate before enabling full rollout.

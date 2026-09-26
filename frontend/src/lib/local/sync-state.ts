@@ -15,7 +15,7 @@ export type SyncShadow = { key: string; revision: number; payload: unknown | nul
 export type SyncConflict = { key: string; local: unknown | null; remote: unknown | null; created_at: string };
 export const syncEntityKey = (kind: SyncKind, entityId: string): string => `${kind}:${entityId}`;
 
-type SyncStores = "recipes" | "drafts" | "imports" | "sync_outbox" | "sync_shadow";
+type SyncStores = "recipes" | "drafts" | "imports" | "meal_plans" | "shopping" | "pantry" | "sync_outbox" | "sync_shadow";
 type SyncTx = IDBPTransaction<LocalDBSchema, SyncStores[], "readwrite">;
 
 /** Called inside the entity write transaction. The runner resolves each dependency from its accepted predecessor before freezing. */

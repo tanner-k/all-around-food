@@ -56,3 +56,16 @@ it("asks for fresh review if the reviewed server version changes", async () => {
     fireEvent.click(screen.getByRole("button", { name: "Use this device version" }));
     expect(await screen.findByText(/versions changed while/)).toBeTruthy();
 });
+it.each([
+    { kind: 'planned_meal', heading: 'Planned meal', payload: { id: 'item', week_of: '2026-09-21', day_index: 1, recipe_id: 'missing-recipe', servings: 4, position: 2 }, detail: 'Tuesday', field: 'Recipe reference' },
+    { kind: 'shopping', heading: 'Shopping item', payload: { id: 'item', name: 'Bread', quantity_text: '2 slices', checked: true }, detail: '2 slices', field: 'Purchased' },
+    { kind: 'pantry', heading: 'Pantry item', payload: { id: 'item', name: 'Bread', status: 'in_stock', notes: 'Top shelf' }, detail: 'In stock', field: 'Stock level' },
+])('labels $kind conflict versions in ordinary language', async ({ kind, heading, payload, detail, field }) => {
+    m.list.mockResolvedValue([{ account: base.account, mutationId: 'collection', reviewToken: 'token', local: [{ kind, entity_id: 'item', payload, deleted: false }], remote: [{ kind, entity_id: 'item', absent: true }] }]);
+    render(<SyncStatus sync={{ ...base, status: { ...base.status, conflicts: 1 } }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Review changes' }));
+    expect(await screen.findByText(heading)).toBeTruthy();
+    expect(screen.getByText(detail)).toBeTruthy();
+    expect(screen.getByText(field)).toBeTruthy();
+    expect(screen.getByText('Not saved in the cloud')).toBeTruthy();
+});

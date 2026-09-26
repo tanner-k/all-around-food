@@ -110,7 +110,11 @@ export function pantryIndex(
 ): Map<string, PantryItem> {
   const index = new Map<string, PantryItem>();
   for (const item of pantryItems) {
-    index.set(normalizeName(item.name), item);
+    const key = normalizeName(item.name);
+    const previous = index.get(key);
+    const rank = { out: 0, low: 1, in_stock: 2 };
+    if (!previous || rank[item.status] > rank[previous.status] || (rank[item.status] === rank[previous.status] && item.id < previous.id))
+      index.set(key, item);
   }
   return index;
 }

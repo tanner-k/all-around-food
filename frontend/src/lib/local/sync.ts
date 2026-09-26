@@ -1,12 +1,15 @@
-import { notifyChange } from './repository';
+import { notifyChange, refreshShoppingFlags } from './repository';
 import type { IDBPTransaction } from 'idb';
 import { LibrarySyncError, withLibraryDeadline, parsePull, parsePush, type LibraryTransport, type PushRequest, type SyncErrorCategory } from '@/lib/db/librarySync';
 import { assertCurrentLocalAccount, captureLocalAccount, getLocalDB, type LocalAccount, type LocalDBSchema } from './db';
 import { validateRecord, validateConflictRecord, type ConflictRecord, type RemoteRecord } from './sync-codecs';
 import { RecipeSchema } from '@/lib/recipe-schema';
 import { RecipeDraftSchema } from './schema';
+import { PlannedOccurrenceSchema, PlannedMealSchema, withPlannedMealIds } from '@/lib/meal-plan-schema';
+import { ShoppingListItemSchema } from '@/lib/shopping-schema';
+import { PantryItemSchema } from '@/lib/pantry-schema';
 import { syncEntityKey, type SyncKind, type SyncOutbox } from './sync-state';
-const stores = ['recipes', 'drafts', 'sync_outbox', 'sync_shadow', 'sync_conflicts', 'sync_meta'] as const;
+const stores = ['recipes', 'drafts', 'meal_plans', 'shopping', 'pantry', 'sync_outbox', 'sync_shadow', 'sync_conflicts', 'sync_meta'] as const;
 type Tx = IDBPTransaction<LocalDBSchema, typeof stores[number][], 'readwrite'>;
 export type SyncResult = {
     pending: number;
@@ -40,17 +43,47 @@ async function apply(tx: Tx, row: RemoteRecord, dirty: boolean) {
     await tx.objectStore('sync_shadow').put({ key, revision: row.revision, payload: row.payload, deleted: row.deleted });
     if (dirty)
         return;
+    await materialize(tx, row);
+}
+/** Shared entity writes for receipts, pull, and reviewed conflict choices. */
+async function materialize(tx: Tx, row: RemoteRecord) {
     if (row.kind === 'recipe') {
-        if (row.deleted)
-            await tx.objectStore('recipes').delete(row.entity_id);
-        else
-            await tx.objectStore('recipes').put(RecipeSchema.parse(row.payload));
+        if (row.deleted) await tx.objectStore('recipes').delete(row.entity_id);
+        else await tx.objectStore('recipes').put(RecipeSchema.parse(row.payload));
     }
     if (row.kind === 'draft') {
-        if (row.deleted)
-            await tx.objectStore('drafts').delete(row.entity_id);
-        else
-            await tx.objectStore('drafts').put(RecipeDraftSchema.parse(row.payload));
+        if (row.deleted) await tx.objectStore('drafts').delete(row.entity_id);
+        else await tx.objectStore('drafts').put(RecipeDraftSchema.parse(row.payload));
+    }
+    if (row.kind === 'shopping') {
+        if (row.deleted) await tx.objectStore('shopping').delete(row.entity_id);
+        else await tx.objectStore('shopping').put(ShoppingListItemSchema.parse(row.payload));
+    }
+    if (row.kind === 'pantry') {
+        if (row.deleted) await tx.objectStore('pantry').delete(row.entity_id);
+        else await tx.objectStore('pantry').put(PantryItemSchema.parse(row.payload));
+    }
+    if (row.kind === 'planned_meal') {
+        const occurrence = row.deleted ? null : PlannedOccurrenceSchema.parse(row.payload);
+        const plans = await tx.objectStore('meal_plans').getAll();
+        let inserted = false;
+        for (const raw of plans) {
+            const plan = withPlannedMealIds(raw);
+            const meals = plan.meals.filter(meal => meal.id !== row.entity_id);
+            if (occurrence?.week_of === plan.week_of) {
+                const meal = PlannedMealSchema.parse(occurrence);
+                meals.push(meal);
+                inserted = true;
+            }
+            if (meals.length !== plan.meals.length || occurrence?.week_of === plan.week_of) {
+                meals.sort((a, b) => a.position! - b.position! || (a.id! < b.id! ? -1 : a.id! > b.id! ? 1 : 0));
+                await tx.objectStore('meal_plans').put({ ...plan, meals, updated_at: row.updated_at });
+            }
+        }
+        if (occurrence && !inserted) {
+            const { week_of, ...meal } = occurrence;
+            await tx.objectStore('meal_plans').put({ week_of, meals: [meal], updated_at: row.updated_at });
+        }
     }
 }
 const matches = (group: SyncOutbox, row: {
@@ -183,6 +216,7 @@ export async function syncLibraryOnce(options: SyncOptions): Promise<SyncResult>
                         await apply(tx, row, remaining.some(g => matches(g, row)));
                     await tx.objectStore('sync_conflicts').delete(current.mutation_id);
                 }
+                await refreshShoppingFlags(tx);
                 await tx.done;
                 guard();
                 notifyChange(account);
@@ -205,6 +239,7 @@ export async function syncLibraryOnce(options: SyncOptions): Promise<SyncResult>
                 for (const batch of page.batches)
                     for (const row of batch.records)
                         await apply(tx, row, groups.some(g => matches(g, row)));
+                await refreshShoppingFlags(tx);
                 await tx.objectStore('sync_meta').put({ key: 'pull_cursor', value: page.next_revision });
                 await tx.done;
                 guard();
@@ -358,19 +393,9 @@ export async function resolveLibraryConflict(review: LibraryConflictReview, choi
     for (const change of resolvedChanges) {
         const latest = all.filter(g => g.sequence > group.sequence && matches(g, change)).sort((a, b) => b.sequence - a.sequence)[0]?.changes.find(c => c.kind === change.kind && c.entity_id === change.entity_id) ?? change;
         const row = validateRecord({ ...latest, schema_version: 1, revision: 1, updated_at: new Date().toISOString() });
-        if (row.kind === 'recipe') {
-            if (row.deleted)
-                await tx.objectStore('recipes').delete(row.entity_id);
-            else
-                await tx.objectStore('recipes').put(RecipeSchema.parse(row.payload));
-        }
-        else if (row.kind === 'draft') {
-            if (row.deleted)
-                await tx.objectStore('drafts').delete(row.entity_id);
-            else
-                await tx.objectStore('drafts').put(RecipeDraftSchema.parse(row.payload));
-        }
+        await materialize(tx, row);
     }
+    await refreshShoppingFlags(tx);
     await tx.done;
     assertCurrentLocalAccount(account);
     notifyChange(account);
