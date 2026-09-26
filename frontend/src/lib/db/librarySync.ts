@@ -37,8 +37,14 @@ export function withLibraryDeadline<T>(operation: (signal: AbortSignal) => Promi
     const controller = new AbortController();
     return new Promise<T>((resolve, reject) => {
         let settled = false;
-        const finish = (callback: () => void) => { if (settled)
-            return; settled = true; clearTimeout(timer); parent?.removeEventListener('abort', cancel); callback(); };
+        const finish = (callback: () => void) => {
+            if (settled)
+                return;
+            settled = true;
+            clearTimeout(timer);
+            parent?.removeEventListener('abort', cancel);
+            callback();
+        };
         const cancel = () => finish(() => { controller.abort(); reject(new LibrarySyncError('paused', 'Library sync paused.')); });
         const timer = setTimeout(() => finish(() => { controller.abort(); reject(new LibrarySyncError('transient', 'Library request timed out; retry sync.')); }), 30000);
         parent?.addEventListener('abort', cancel, { once: true });
@@ -139,7 +145,17 @@ export function createLibraryTransport(client: {
             throw new LibrarySyncError('auth', 'Sign in to sync.');
         const auth = await client.auth.getUser();
         assertCurrentLocalAccount(account);
-        if (auth.error || auth.data.user?.id !== ownerId)
+        if (auth.error) {
+            const error = auth.error as {
+                status?: number;
+                name?: string;
+                message?: string;
+            };
+            const status = error.status ?? 0;
+            const transient = status === 0 || status === 429 || status >= 500 || error.name === 'AuthRetryableFetchError';
+            throw new LibrarySyncError(transient ? 'transient' : 'auth', transient ? (error.message ?? 'Identity verification is temporarily unavailable.') : 'Sign in to sync.');
+        }
+        if (auth.data.user?.id !== ownerId)
             throw new LibrarySyncError('auth', 'Sign in to sync.');
         if (signal.aborted)
             throw new LibrarySyncError('paused', 'Library sync paused.');

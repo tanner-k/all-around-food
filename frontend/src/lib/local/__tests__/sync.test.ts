@@ -222,10 +222,14 @@ it('times out a stuck request, retries immutable bodies and discards its late re
         const entry = new Promise<void>(r => entered = r);
         let late!: (value: unknown) => void;
         const first = new Promise(resolve => late = resolve);
-        const transport = { push: async (request: unknown) => { sent.push(structuredClone(request)); if (sent.length === 1) {
-                entered();
-                return first;
-            } return new Promise(() => { }); }, pull: async () => null };
+        const transport = { push: async (request: unknown) => {
+                sent.push(structuredClone(request));
+                if (sent.length === 1) {
+                    entered();
+                    return first;
+                }
+                return new Promise(() => { });
+            }, pull: async () => null };
         const pass = syncLibraryOnce({ verifiedOwnerId: owner, transport, sleep: async () => { } });
         await entry;
         await vi.advanceTimersByTimeAsync(91000);
@@ -284,10 +288,14 @@ it('aborts the real RPC builder and pauses without starting a later request', as
     const controller = new AbortController();
     let aborted = false;
     let calls = 0;
-    const transport = createLibraryTransport({ auth: { getUser: async () => ({ data: { user: { id: owner } }, error: null }) }, rpc: () => { calls++; const pending = new Promise<{
-            data: unknown;
-            error: null;
-        }>(() => { }); return Object.assign(pending, { abortSignal: (signal: AbortSignal) => { signal.addEventListener('abort', () => aborted = true); return pending; } }); } }, owner);
+    const transport = createLibraryTransport({ auth: { getUser: async () => ({ data: { user: { id: owner } }, error: null }) }, rpc: () => {
+            calls++;
+            const pending = new Promise<{
+                data: unknown;
+                error: null;
+            }>(() => { });
+            return Object.assign(pending, { abortSignal: (signal: AbortSignal) => { signal.addEventListener('abort', () => aborted = true); return pending; } });
+        } }, owner);
     const pending = transport.pull(0, 10, controller.signal).catch(error => error);
     await Promise.resolve();
     await Promise.resolve();
@@ -305,4 +313,91 @@ it('pauses during an upload without retrying or starting pull', async () => {
     expect(pulls).toBe(0);
     expect(await (await getLocalDB()).getAll('sync_outbox')).toHaveLength(1);
     expect(await (await getLocalDB()).get('sync_meta', 'lease')).toBeUndefined();
+});
+// PostgreSQL jsonb timestamptz output from migration0006 uses an ISO offset and microseconds.
+const sqlRecord = (revision = 1) => ({ ...record(revision), updated_at: '2026-09-25T12:34:56.123456+00:00' });
+it('decodes SQL-shaped ACK, conflict and pull timestamps', async () => {
+    const { parsePush, parsePull } = await import('@/lib/db/librarySync');
+    const request = { protocol_version: 1 as const, mutation_id: crypto.randomUUID(), changes: [{ kind: 'recipe' as const, entity_id: recipeFixture().id, payload: recipeFixture(), deleted: false, base_revision: null }] };
+    expect(parsePush({ status: 'accepted', revision: 1, records: [sqlRecord()] }, request).status).toBe('accepted');
+    expect(parsePush({ status: 'conflict', records: [sqlRecord()] }, request).status).toBe('conflict');
+    expect(parsePull({ protocol_version: 1, batches: [{ revision: 1, records: [sqlRecord()] }], next_revision: 1, has_more: false }, 0).next_revision).toBe(1);
+});
+it('chooses SQL remote versions without deleting an absent mixed-group target', async () => {
+    const { enqueueSyncGroup } = await import('../sync-state');
+    const { listLibraryConflicts, resolveLibraryConflict } = await import('../sync');
+    const db = await getLocalDB();
+    const tx = db.transaction(['recipes', 'sync_outbox', 'sync_shadow'], 'readwrite');
+    await tx.objectStore('sync_shadow').put({ key: `recipe:${recipeFixture().id}`, revision: 1, payload: recipeFixture(), deleted: false });
+    await tx.objectStore('recipes').put({ ...recipeFixture(), id: 'new' });
+    await enqueueSyncGroup(tx, [{ kind: 'recipe', entity_id: recipeFixture().id, payload: recipeFixture(), deleted: false }, { kind: 'recipe', entity_id: 'new', payload: { ...recipeFixture(), id: 'new' }, deleted: false }]);
+    await tx.done;
+    await syncLibraryOnce({ verifiedOwnerId: owner, transport: { push: async () => ({ status: 'conflict', records: [sqlRecord(3)] }), pull: async () => ({ protocol_version: 1, batches: [], next_revision: 0, has_more: false }) } });
+    const [review] = await listLibraryConflicts();
+    await resolveLibraryConflict(review, 'remote');
+    const result = await syncLibraryOnce({ verifiedOwnerId: owner, transport: { push: async (request) => {
+                if (request.changes.some(c => c.deleted && c.base_revision === null))
+                    return { status: 'conflict', records: [{ kind: 'recipe', entity_id: 'new', absent: true }] };
+                return { status: 'accepted', revision: 4, records: [sqlRecord(4)] };
+            }, pull: async () => ({ protocol_version: 1, batches: [], next_revision: 0, has_more: false }) } });
+    expect(result.conflicts).toBe(0);
+    expect(result.pending).toBe(0);
+    expect(await db.get('recipes', 'new')).toBeUndefined();
+});
+it('discards an all-absent rejected creation while retaining a newer dependent edit', async () => {
+    const { listLibraryConflicts, resolveLibraryConflict } = await import('../sync');
+    await putRecipe(recipeFixture());
+    await syncLibraryOnce({ verifiedOwnerId: owner, transport: { push: async () => ({ status: 'conflict', records: [{ kind: 'recipe', entity_id: recipeFixture().id, absent: true }] }), pull: async () => ({ protocol_version: 1, batches: [], next_revision: 0, has_more: false }) } });
+    const [review] = await listLibraryConflicts();
+    await putRecipe({ ...recipeFixture(), title: 'Newer edit' });
+    await resolveLibraryConflict(review, 'remote');
+    const db = await getLocalDB();
+    const groups = await db.getAll('sync_outbox');
+    expect(groups).toHaveLength(1);
+    expect(groups[0].depends_on).toEqual([]);
+    expect(groups[0].changes[0].base_revision).toBeNull();
+    expect((await db.getAll('recipes'))[0].title).toBe('Newer edit');
+});
+it('drops an all-absent remote choice without sending a replacement', async () => {
+    const { listLibraryConflicts, resolveLibraryConflict } = await import('../sync');
+    await putRecipe(recipeFixture());
+    await syncLibraryOnce({ verifiedOwnerId: owner, transport: { push: async () => ({ status: 'conflict', records: [{ kind: 'recipe', entity_id: recipeFixture().id, absent: true }] }), pull: async () => ({ protocol_version: 1, batches: [], next_revision: 0, has_more: false }) } });
+    const [review] = await listLibraryConflicts();
+    await resolveLibraryConflict(review, 'remote');
+    const db = await getLocalDB();
+    expect(await db.getAll('sync_outbox')).toHaveLength(0);
+    expect(await db.getAll('recipes')).toHaveLength(0);
+});
+it('classifies returned retryable Auth errors without starting RPC', async () => {
+    const { createLibraryTransport } = await import('@/lib/db/librarySync');
+    let calls = 0;
+    for (const status of [0, 429, 503]) {
+        const transport = createLibraryTransport({ auth: { getUser: async () => ({ data: { user: null }, error: { status, message: 'Temporary verification failure' } }) }, rpc: async () => { calls++; return { data: null, error: null }; } }, owner);
+        await expect(transport.pull(0, 10)).rejects.toMatchObject({ category: 'transient' });
+    }
+    expect(calls).toBe(0);
+});
+it('keeps invalid or missing verified identity as auth without an RPC', async () => {
+    const { createLibraryTransport } = await import('@/lib/db/librarySync');
+    let calls = 0;
+    for (const error of [null, { status: 401, message: 'Invalid JWT' }]) {
+        const transport = createLibraryTransport({ auth: { getUser: async () => ({ data: { user: null }, error }) }, rpc: async () => { calls++; return { data: null, error: null }; } }, owner);
+        await expect(transport.pull(0, 10)).rejects.toMatchObject({ category: 'auth' });
+    }
+    expect(calls).toBe(0);
+});
+it('preserves a newer deletion of an absent creation as a local no-op', async () => {
+    const { enqueueSyncGroup } = await import('../sync-state');
+    const { listLibraryConflicts, resolveLibraryConflict } = await import('../sync');
+    await putRecipe(recipeFixture());
+    await syncLibraryOnce({ verifiedOwnerId: owner, transport: { push: async () => ({ status: 'conflict', records: [{ kind: 'recipe', entity_id: recipeFixture().id, absent: true }] }), pull: async () => ({ protocol_version: 1, batches: [], next_revision: 0, has_more: false }) } });
+    const [review] = await listLibraryConflicts();
+    const db = await getLocalDB();
+    const tx = db.transaction(['recipes', 'sync_outbox', 'sync_shadow'], 'readwrite');
+    await tx.objectStore('recipes').delete(recipeFixture().id);
+    await enqueueSyncGroup(tx, [{ kind: 'recipe', entity_id: recipeFixture().id, payload: null, deleted: true }]);
+    await tx.done;
+    await resolveLibraryConflict(review, 'remote');
+    expect(await db.getAll('sync_outbox')).toHaveLength(0);
+    expect(await db.getAll('recipes')).toHaveLength(0);
 });

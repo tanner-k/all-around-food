@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { RecipeSchema } from '@/lib/recipe-schema';
 import { RecipeDraftSchema } from './schema';
 const kind = z.enum(['recipe', 'draft', 'planned_meal', 'shopping', 'pantry', 'cook_session']);
-export const RemoteRecordSchema = z.object({ kind, entity_id: z.string().min(1), schema_version: z.literal(1), revision: z.number().int().positive().safe(), payload: z.unknown(), deleted: z.boolean(), updated_at: z.string().datetime() });
+export const RemoteRecordSchema = z.object({ kind, entity_id: z.string().min(1), schema_version: z.literal(1), revision: z.number().int().positive().safe(), payload: z.unknown(), deleted: z.boolean(), updated_at: z.string().datetime({ offset: true }) });
 export const AbsentRecordSchema = z.object({ kind, entity_id: z.string().min(1), absent: z.literal(true) });
 export type RemoteRecord = z.infer<typeof RemoteRecordSchema>;
 export type ConflictRecord = RemoteRecord | z.infer<typeof AbsentRecordSchema>;

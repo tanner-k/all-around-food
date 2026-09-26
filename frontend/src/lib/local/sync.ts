@@ -309,7 +309,9 @@ export async function resolveLibraryConflict(review: LibraryConflictReview, choi
         await tx.done;
         return false;
     }
-    const changes = group.changes.map(change => { const row = remote.find(r => r.kind === change.kind && r.entity_id === change.entity_id)!; const selected = edited?.find(c => c.kind === change.kind && c.entity_id === change.entity_id); const desired = selected ?? (choice === 'remote' ? { ...change, payload: 'absent' in row ? null : row.payload, deleted: 'absent' in row ? true : row.deleted } : change); return { ...desired, base_revision: 'absent' in row ? null : row.revision }; });
+    const resolvedChanges = group.changes.map(change => { const row = remote.find(r => r.kind === change.kind && r.entity_id === change.entity_id)!; const selected = edited?.find(c => c.kind === change.kind && c.entity_id === change.entity_id); const desired = selected ?? (choice === 'remote' ? { ...change, payload: 'absent' in row ? null : row.payload, deleted: 'absent' in row ? true : row.deleted } : change); return { ...desired, base_revision: 'absent' in row ? null : row.revision }; });
+    const discarded = resolvedChanges.filter(change => choice === 'remote' && !edited?.some(c => c.kind === change.kind && c.entity_id === change.entity_id) && remote.some(r => r.kind === change.kind && r.entity_id === change.entity_id && 'absent' in r));
+    const changes = resolvedChanges.filter(change => !discarded.includes(change));
     try {
         for (const change of changes)
             validateRecord({ ...change, schema_version: 1, revision: 1, updated_at: new Date().toISOString() });
@@ -320,13 +322,40 @@ export async function resolveLibraryConflict(review: LibraryConflictReview, choi
         throw error;
     }
     const replacement = { ...group, mutation_id: crypto.randomUUID(), status: 'pending' as const, changes };
-    await tx.objectStore('sync_outbox').add(replacement);
+    if (changes.length)
+        await tx.objectStore('sync_outbox').add(replacement);
     const all = await tx.objectStore('sync_outbox').getAll();
-    for (const dependent of all.filter(g => g.depends_on.includes(group.mutation_id)))
-        await tx.objectStore('sync_outbox').put({ ...dependent, depends_on: dependent.depends_on.map(id => id === group.mutation_id ? replacement.mutation_id : id) });
+    const replaced = new Map<string, {
+        id: string | null;
+        changes: SyncOutbox['changes'];
+        discarded: SyncOutbox['changes'];
+    }>([
+        [group.mutation_id, { id: changes.length ? replacement.mutation_id : null, changes, discarded }],
+    ]);
+    for (const dependent of all.filter(g => g.sequence > group.sequence).sort((a, b) => a.sequence - b.sequence)) {
+        if (!dependent.depends_on.some(id => replaced.has(id)))
+            continue;
+        const noOps: SyncOutbox['changes'] = [];
+        const updated = dependent.changes.flatMap(change => {
+            const prior = all.filter(g => g.sequence < dependent.sequence && matches(g, change)).sort((a, b) => a.sequence - b.sequence).at(-1);
+            const cancelled = prior && replaced.get(prior.mutation_id)?.discarded.some(c => c.kind === change.kind && c.entity_id === change.entity_id);
+            if (cancelled && change.deleted) {
+                noOps.push(change);
+                return [];
+            }
+            return [{ ...change, base_revision: cancelled ? null : change.base_revision }];
+        });
+        const dependencies = [...new Set(dependent.depends_on.flatMap(id => { const prior = replaced.get(id); return prior ? (prior.id && prior.changes.some(c => updated.some(item => item.kind === c.kind && item.entity_id === c.entity_id)) ? [prior.id] : []) : [id]; }))];
+        if (!updated.length)
+            await tx.objectStore('sync_outbox').delete(dependent.mutation_id);
+        else
+            await tx.objectStore('sync_outbox').put({ ...dependent, changes: updated, depends_on: dependencies });
+        if (noOps.length)
+            replaced.set(dependent.mutation_id, { id: updated.length ? dependent.mutation_id : null, changes: updated, discarded: noOps });
+    }
     await tx.objectStore('sync_outbox').delete(group.mutation_id);
     await tx.objectStore('sync_conflicts').delete(group.mutation_id);
-    for (const change of changes) {
+    for (const change of resolvedChanges) {
         const latest = all.filter(g => g.sequence > group.sequence && matches(g, change)).sort((a, b) => b.sequence - a.sequence)[0]?.changes.find(c => c.kind === change.kind && c.entity_id === change.entity_id) ?? change;
         const row = validateRecord({ ...latest, schema_version: 1, revision: 1, updated_at: new Date().toISOString() });
         if (row.kind === 'recipe') {
