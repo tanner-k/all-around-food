@@ -111,10 +111,16 @@ async function signedInOwner(account: LocalAccount): Promise<string | null> {
   }
 }
 
+class ImportSourceUnavailable extends Error {}
+
 async function writeLocal<T>(account: LocalAccount, message: string, operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
+    if (error instanceof ImportSourceUnavailable) {
+      assertCurrentLocalAccount(account);
+      throw error;
+    }
     await reportAccountStorageFailure(account, message, error);
     throw error;
   }
@@ -209,10 +215,21 @@ export function flushLocalImports(account = captureLocalAccount()): Promise<void
   return task;
 }
 
+class ImportSyncPaused extends Error {}
+
 async function flushPending(account: LocalAccount): Promise<void> {
   const owner = await signedInOwner(account);
   if (!owner || !canSyncLocalImports()) return;
-  const jobs = await listImportJobs(owner, () => assertCurrentLocalAccount(account));
+  let jobs: ImportQueueJob[];
+  try {
+    jobs = await listImportJobs(owner, () => {
+      assertCurrentLocalAccount(account);
+      if (!canSyncLocalImports()) throw new ImportSyncPaused();
+    });
+  } catch (error) {
+    if (error instanceof ImportSyncPaused) return;
+    throw error;
+  }
   assertCurrentLocalAccount(account);
   if (!canSyncLocalImports()) return;
   await receiveQueueMetadata(jobs, account);
@@ -352,7 +369,15 @@ async function replaceExpired(id: string, account: LocalAccount): Promise<LocalI
     }
     if (current.kind === "screenshot" && !current.upload) {
       tx.abort();
-      throw new Error("Select the screenshot again to retry this import");
+      throw new ImportSourceUnavailable("Select the screenshot again to retry this import");
+    }
+    if (current.kind === "text" && !current.payload_text?.trim()) {
+      tx.abort();
+      throw new ImportSourceUnavailable("Paste the recipe text above to submit a new import");
+    }
+    if ((current.kind === "url" || current.kind === "video") && !current.source_url?.trim()) {
+      tx.abort();
+      throw new ImportSourceUnavailable("Enter the recipe URL above to submit a new import");
     }
     const next = LocalImportSchema.parse({ ...current, id: crypto.randomUUID(), state: "queued",
       acknowledged: false, error: null, replacement_id: null, created_at: new Date().toISOString() });

@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { deleteDB } from "idb";
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
 import { closeLocalDB, getLocalDB, selectVerifiedAccount, signOutLocalAccount } from "../db";
-import { acceptDraft, flushLocalImports, receiveImportDraft } from "../imports";
+import { acceptDraft, flushLocalImports, receiveImportDraft, retryLocalImport, queueLocalImport } from "../imports";
 import { syncLibraryOnce } from "../sync";
-import type { ParseJob } from "@/lib/db/parseJobs";
+import { retryJob, getJob, type ParseJob } from "@/lib/db/parseJobs";
 const { listImportJobs, ackJob, createClient } = vi.hoisted(() => ({ listImportJobs: vi.fn(), ackJob: vi.fn(), createClient: vi.fn() }));
 vi.mock("@/lib/db/parseJobs", async (importOriginal) => ({ ImportQueueJobSchema: (await importOriginal<typeof import("@/lib/db/parseJobs")>()).ImportQueueJobSchema, listImportJobs, ackJob, getJob: vi.fn(), enqueueImageJob: vi.fn(), enqueueTextJob: vi.fn(), enqueueUrlJob: vi.fn(), retryJob: vi.fn() }));
 vi.mock("@/lib/supabase/client", () => ({ createClient }));
@@ -92,4 +92,29 @@ it("queues a conditional recipe update with the draft tombstone when both record
   const [group] = await db.getAll("sync_outbox");
   expect(group.changes).toMatchObject([{ kind: "recipe", base_revision: 4, payload: { title: "Reviewed update" } }, { kind: "draft", base_revision: 3, deleted: true }]);
   expect(await db.get("drafts", id)).toBeUndefined();
+});
+
+it.each(["text", "url", "video"] as const)("preserves a discovered expired %s import when its source is unavailable", async (kind) => {
+  listImportJobs.mockResolvedValue([{ ...remote("error"), kind, source_url: null, attempts: 3, error: "Import expired; submit again" }]);
+  await flushLocalImports();
+  const db = await getLocalDB(); const original = await db.get("imports", id);
+  await expect(retryLocalImport(id)).rejects.toThrow(kind === "text" ? "Paste the recipe text" : "Enter the recipe URL");
+  expect(await db.getAll("imports")).toEqual([original]);
+  await flushLocalImports(); expect(await db.getAll("imports")).toEqual([original]);
+});
+it.each(["text", "url", "video"] as const)("preserves a discovered exhausted %s import when its source is unavailable", async (kind) => {
+  const failed = { ...remote("error"), kind, source_url: null, attempts: 3, error: "Import attempts exhausted" };
+  listImportJobs.mockResolvedValue([failed]); await flushLocalImports();
+  vi.mocked(retryJob).mockRejectedValueOnce(new Error("import cannot be retried"));
+  vi.mocked(getJob).mockResolvedValueOnce(failed as ParseJob);
+  const db = await getLocalDB(); const original = await db.get("imports", id);
+  await expect(retryLocalImport(id)).rejects.toThrow(kind === "text" ? "Paste the recipe text" : "Enter the recipe URL");
+  expect(await db.getAll("imports")).toEqual([original]);
+});
+it.each(["text", "url", "video"] as const)("retries an expired same-device %s import with its retained source", async (kind) => {
+  const local = await queueLocalImport({ kind, source_url: kind === "text" ? null : "https://example.com/toast", payload_text: kind === "text" ? "Toast bread" : null });
+  const db = await getLocalDB(); await db.put("imports", { ...local, state: "error", error: "Import expired; submit again" });
+  const replacement = await retryLocalImport(local.id);
+  expect(replacement).toMatchObject({ state: "queued", source_url: local.source_url, payload_text: local.payload_text });
+  expect((await db.get("imports", local.id))?.replacement_id).toBe(replacement.id);
 });

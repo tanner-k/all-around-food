@@ -1,0 +1,22 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { deleteDB } from "idb";
+import { flushLocalImports } from "../imports";
+import { selectVerifiedAccount, signOutLocalAccount, closeLocalDB } from "../db";
+const { auth, from } = vi.hoisted(() => ({ auth: vi.fn(), from: vi.fn() }));
+vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ auth: { getUser: auth }, from }) }));
+const owner = "11111111-1111-4111-8111-111111111111";
+afterEach(async () => { signOutLocalAccount(); await closeLocalDB(); await deleteDB(`aaf-local:${owner}`); vi.resetAllMocks(); });
+it.each(["hidden", "offline"])("pauses normally before metadata request when %s during discovery Auth", async (transition) => {
+  selectVerifiedAccount(owner);
+  Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+  const identity = { data: { user: { id: owner } }, error: null };
+  let resolve!: (value: typeof identity) => void;
+  auth.mockResolvedValueOnce(identity).mockImplementationOnce(() => new Promise(r => { resolve = r; }));
+  from.mockReturnValue({ select: () => ({ eq: () => ({ in: () => ({ order: async () => ({ data: [], error: null }) }) }) }) });
+  const pending = flushLocalImports(); await vi.waitFor(() => expect(auth).toHaveBeenCalledTimes(2));
+  if (transition === "hidden") Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+  else Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+  resolve(identity); await expect(pending).resolves.toBeUndefined();
+  expect(from).not.toHaveBeenCalled();
+});

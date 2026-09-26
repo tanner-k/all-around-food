@@ -217,16 +217,16 @@ export async function listJobs(): Promise<ParseJob[]> {
 }
 
 /** Owner-wide queue metadata, including imports submitted on another device. */
-export async function listImportJobs(expectedOwner: string, assertAccount: () => void): Promise<ImportQueueJob[]> {
-  assertAccount();
+export async function listImportJobs(expectedOwner: string, assertAllowed: () => void): Promise<ImportQueueJob[]> {
+  assertAllowed();
   const supabase = createClient();
   await verifyExpectedOwner(supabase, expectedOwner);
-  assertAccount();
+  assertAllowed();
   const { data, error } = await supabase.from(TABLE)
     .select("id,kind,source_url,status,attempts,error,acknowledged_at,expires_at,created_at,updated_at")
     .eq("user_id", expectedOwner).in("kind", ["url", "video", "screenshot", "text"])
     .order("created_at", { ascending: false });
-  assertAccount();
+  assertAllowed();
   if (error) throw new Error(`Failed to read import queue: ${error.message}`);
   return ImportQueueJobSchema.array().parse(data ?? []);
 }
