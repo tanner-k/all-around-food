@@ -10,15 +10,21 @@ import { GET } from "./route";
 
 it("returns successful sign-in to the local import view", async () => {
   const response = await GET(new NextRequest("https://food.example/auth/confirm?code=one"));
-  expect(response.headers.get("location")).toBe("https://food.example/app#/import");
+  expect(response.headers.get("location")).toBe("https://food.example/app?account-confirmed=1#/import");
 });
 
 it("rejects a cross-origin auth return URL", async () => {
   const response = await GET(new NextRequest("https://food.example/auth/confirm?code=one&next=https%3A%2F%2Fevil.example%2F"));
-  expect(response.headers.get("location")).toBe("https://food.example/app#/import");
+  expect(response.headers.get("location")).toBe("https://food.example/app?account-confirmed=1#/import");
 });
 
 it("allows a same-origin auth return URL", async () => {
   const response = await GET(new NextRequest("https://food.example/auth/confirm?code=one&next=%2Fapp%23%2Fsettings"));
-  expect(response.headers.get("location")).toBe("https://food.example/app#/settings");
+  expect(response.headers.get("location")).toBe("https://food.example/app?account-confirmed=1#/settings");
+});
+
+it("does not issue a confirmation hint when authentication fails", async () => {
+  exchangeCodeForSession.mockResolvedValueOnce({ error: {message:"expired"} } as never);
+  const response = await GET(new NextRequest("https://food.example/auth/confirm?code=expired"));
+  expect(response.headers.get("location")).toBe("https://food.example/login?error=auth");
 });

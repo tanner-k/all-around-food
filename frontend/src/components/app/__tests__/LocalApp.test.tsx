@@ -20,7 +20,7 @@ afterEach(clearDatabase);
 it("loads the local cookbook and follows hash navigation in both directions", async () => {
   await putRecipe(recipeFixture());
   render(<LocalApp />);
-  expect(screen.getByRole("status")).toHaveTextContent("Opening your local cookbook");
+  expect(screen.getByText("Opening your local cookbook…")).toBeInTheDocument();
   expect(await screen.findByText("Toast")).toBeInTheDocument();
 
   act(() => { window.location.hash = "#/cookbook/recipe-1"; window.dispatchEvent(new Event("hashchange")); });

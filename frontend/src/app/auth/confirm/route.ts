@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      next.searchParams.set("account-confirmed", "1");
       return NextResponse.redirect(next);
     }
   }
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
     if (!error) {
+      next.searchParams.set("account-confirmed", "1");
       return NextResponse.redirect(next);
     }
   }

@@ -6,9 +6,12 @@ import { captureLocalAccount, isCurrentLocalAccount, subscribeToLocalAccountChan
 import { parseLocalRoute, type LocalRoute } from "@/lib/local/navigation";
 import type { LibrarySnapshot } from "@/lib/local/schema";
 import { LocalScreens } from "./LocalScreens";
+import { SyncStatus } from "./SyncStatus";
+import { useLibrarySync } from "./useLibrarySync";
 import { useLocalImportSync } from "./useLocalImportSync";
 
 export function LocalApp() {
+  const sync = useLibrarySync();
   useLocalImportSync();
   const [account, setAccount] = useState(captureLocalAccount);
   const [route, setRoute] = useState<LocalRoute>({ view: "plan" });
@@ -45,6 +48,7 @@ export function LocalApp() {
 
   return (
     <>
+      <SyncStatus sync={sync} />
       {error && <div role="alert" className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-red-800">
         {error} <button type="button" onClick={refresh} className="underline">Retry</button>
       </div>}

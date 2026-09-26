@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { BookOpen, Package, CalendarDays, ShoppingBasket, Plus, type LucideIcon } from "lucide-react";
+import { BookOpen, Package, CalendarDays, ShoppingBasket, Plus, Settings, type LucideIcon } from "lucide-react";
 import { localHref, parseLocalRoute } from "@/lib/local/navigation";
 
 type Tab = { href: string; label: string; Icon: LucideIcon };
@@ -13,6 +13,7 @@ const TABS: Tab[] = [
   { href: localHref("shop"), label: "Shop", Icon: ShoppingBasket },
   { href: localHref("pantry"), label: "Pantry", Icon: Package },
   { href: localHref("import"), label: "Import", Icon: Plus },
+  { href: localHref("settings"), label: "Settings", Icon: Settings },
 ];
 
 const COOK_ROUTE = /^\/cookbook\/[^/]+\/cook(\/|$)/;
@@ -36,7 +37,7 @@ export function MobileTabBar() {
       aria-label="Mobile navigation"
       className="fixed bottom-0 inset-x-0 z-50 md:hidden border-t border-line bg-paper/80 backdrop-blur pb-[env(safe-area-inset-bottom)]"
     >
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-6">
         {TABS.map(({ href, label, Icon }) => {
           const tabView = parseLocalRoute(href.split("#")[1]).view;
           const active = view === tabView || (tabView === "cookbook" && ["recipe", "edit"].includes(view));

@@ -54,9 +54,11 @@ export function useLocalImportSync(): void {
     window.addEventListener("online", run);
     window.addEventListener("focus", run);
     document.addEventListener("visibilitychange", run);
-    const { data: { subscription } } = client.auth.onAuthStateChange(() => run());
+    let authTimer: ReturnType<typeof setTimeout> | undefined;
+    const { data: { subscription } } = client.auth.onAuthStateChange(() => { clearTimeout(authTimer); authTimer = setTimeout(run, 0); });
     return () => {
       active = false;
+      clearTimeout(authTimer);
       window.removeEventListener("online", run);
       window.removeEventListener("focus", run);
       document.removeEventListener("visibilitychange", run);

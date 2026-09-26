@@ -54,3 +54,8 @@ The evaluation dashboard uses the owner-scoped Supabase `evaluation_stats` view.
 - Co-locate `Component.tsx` + `Component.test.tsx` + `Component.module.css`
 - Local `/app` components use `lib/local/repository.ts`. The hidden legacy `/prices` page uses `lib/pricing-client.ts` and the retained pricing proxies. Do not add FastAPI or Supabase calls to ordinary local screens.
 - Before adding a new dependency, check whether it duplicates something already in `package.json`
+
+## Account library sync
+- `LocalApp` owns `useLibrarySync` and `SyncStatus`: freshly verified identities select isolated local libraries, foreground passes use cancellable sync, and conflict review retains both versions with recoverable exports. Auth callbacks schedule checks outside Supabase’s lock. Explicit sign-out stays closed until a successful confirmation return is freshly verified.
+- `NEXT_PUBLIC_ACCOUNT_SYNC_STAGE=off|recipes|all` defaults to `off`. Off preserves account databases and queues while pausing cloud activity; recipes uploads recipes/drafts and labels other collections as device-only. Enable all only after the remaining collection codecs and mutations pass integration checks.
+- Account restore/copy remains guarded until reviewed account migration is implemented. Cached app readiness and cloud library status remain separate.
