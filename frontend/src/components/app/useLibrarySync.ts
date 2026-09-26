@@ -20,6 +20,7 @@ export function useLibrarySync() {
     const [authRequired, setAuthRequired] = useState(false);
     const [ready, setReady] = useState(false);
     const manual = useRef<() => void>(() => { });
+    const confirmation = useRef<typeof account | null>(null);
     useEffect(() => subscribeToLocalAccountChange(() => { setAccount(captureLocalAccount()); setStatus(empty); setAuthRequired(false); setRunning(false); }), []);
     useEffect(() => {
         let alive = true;
@@ -32,12 +33,15 @@ export function useLibrarySync() {
         const foreground = () => navigator.onLine && document.visibilityState === "visible";
         const configured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
         const url = new URL(window.location.href);
-        let confirmation = url.searchParams.get("account-confirmed") === "1";
-        if (confirmation) {
+        // Effect replay preserves this intent; a different account generation revokes it.
+        if (confirmation.current !== account)
+            confirmation.current = null;
+        if (url.searchParams.get("account-confirmed") === "1") {
+            confirmation.current = account;
             url.searchParams.delete("account-confirmed");
             window.history.replaceState(null, "", url);
         }
-        const canVerify = () => confirmation || window.localStorage.getItem("aaf-local-signed-out") !== "1";
+        const canVerify = () => confirmation.current === account || window.localStorage.getItem("aaf-local-signed-out") !== "1";
         const client = stage !== "off" && configured ? createClient() : null;
         async function refresh(schedule = false) {
             if (!account.ownerId || !current())
@@ -72,7 +76,7 @@ export function useLibrarySync() {
                     return;
                 }
                 setAuthRequired(false);
-                confirmation = false;
+                confirmation.current = null;
                 if (account.ownerId !== data.user.id || !account.dbName) {
                     selectVerifiedAccount(data.user.id);
                     return;
