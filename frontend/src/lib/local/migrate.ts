@@ -32,6 +32,8 @@ export function downloadBackupFile(json: string, filename: string, account: Loca
 
 /** Download the legacy snapshot first, then merge without replacing local edits. */
 export async function migrateSupabaseLibrary(cloudJson?: string, account = captureLocalAccount()): Promise<MigrationReport> {
+  assertCurrentLocalAccount(account);
+  if (account.ownerId) throw new Error("Cloud copy requires synced enrollment. Keep the downloaded export and retry after account migration is available.");
   const cloud = cloudJson ?? await fetchSupabaseBackup(account);
   assertCurrentLocalAccount(account);
   const parsed = parseBackup(cloud);

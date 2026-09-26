@@ -111,6 +111,7 @@ export async function restoreBackup(
   account: LocalAccount = captureLocalAccount(),
 ): Promise<MigrationReport> {
   assertCurrentLocalAccount(account);
+  if (account.ownerId) throw new Error("Account restore requires synced enrollment. Keep this backup and retry after account migration is available.");
   const report = emptyReport();
   const { backup, errors } = parseBackup(json);
   report.validation_errors.push(...errors);

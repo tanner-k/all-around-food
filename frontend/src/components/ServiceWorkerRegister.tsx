@@ -101,7 +101,8 @@ export default function ServiceWorkerRegister() {
           snapshot.pantry, snapshot.cook_progress, snapshot.drafts].some((items) => items.length > 0);
         if (hasSavedData && !snapshot.settings.some((item) => item.key === "storage_persistence_requested")) {
           await navigator.storage.persist();
-          await saveSetting({ key: "storage_persistence_requested", value: new Date().toISOString() });
+          assertCurrentLocalAccount(account);
+          await saveSetting({ key: "storage_persistence_requested", value: new Date().toISOString() }, account);
         }
       } catch {
         // A storage error is already reported by the local repository.

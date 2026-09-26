@@ -4,7 +4,8 @@ import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
 import { captureLocalAccount, closeLocalDB, getLocalDB, selectVerifiedAccount, signOutLocalAccount } from "../db";
 import { putRecipe, readSnapshot } from "../repository";
 import { enqueueSyncGroup } from "../sync-state";
-import { exportBackup } from "../backup";
+import { exportBackup, restoreBackup } from "../backup";
+import { migrateSupabaseLibrary } from "../migrate";
 
 const a = "11111111-1111-4111-8111-111111111111";
 const b = "22222222-2222-4222-8222-222222222222";
@@ -78,7 +79,7 @@ it("retains a committed outbox group after closing and reopening storage", async
   expect(await db.getAll("recipes")).toHaveLength(1);
 });
 
-it("serializes overlapping edits in two tabs through one outbox store", async () => {
+it("serializes overlapping edits in one browser context through one outbox store", async () => {
   selectVerifiedAccount(a);
   const recipe = recipeFixture();
   await Promise.all([
@@ -160,4 +161,36 @@ it("does not export A data after B becomes active", async () => {
   await expect(exporting).rejects.toThrow("Local account changed");
   const exportedB = JSON.parse(await exportBackup()) as { library: { recipes: unknown[] } };
   expect(exportedB.library.recipes).toHaveLength(0);
+});
+
+
+it("does not start a cached A write after synchronous sign-out", async () => {
+  selectVerifiedAccount(a);
+  await getLocalDB(); // Force the cached-connection path.
+  const pending = putRecipe(recipeFixture());
+  signOutLocalAccount();
+  await expect(pending).rejects.toThrow("Local account changed");
+  selectVerifiedAccount(a);
+  const db = await getLocalDB();
+  expect(await db.getAll("recipes")).toHaveLength(0);
+  expect(await db.getAll("sync_outbox")).toHaveLength(0);
+});
+
+it("invalidates A when another tab changes the stored account", async () => {
+  selectVerifiedAccount(a);
+  const captured = captureLocalAccount();
+  window.localStorage.setItem("aaf-verified-local-owner", b);
+  window.dispatchEvent(new StorageEvent("storage", {
+    key: "aaf-verified-local-owner", newValue: b,
+  }));
+  expect(captureLocalAccount().dbName).toBe("");
+  await expect(getLocalDB(captured)).rejects.toThrow("Local account changed");
+});
+
+it("blocks verified-account restore and cloud copy until enrollment can queue them", async () => {
+  selectVerifiedAccount(a);
+  const backup = await exportBackup();
+  await expect(restoreBackup(backup, "merge")).rejects.toThrow(/synced enrollment/i);
+  await expect(migrateSupabaseLibrary(backup)).rejects.toThrow(/synced enrollment/i);
+  expect((await (await getLocalDB()).getAll("recipes"))).toHaveLength(0);
 });
