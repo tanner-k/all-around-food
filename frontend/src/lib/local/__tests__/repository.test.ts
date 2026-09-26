@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { IDBPObjectStore } from "idb";
-import { closeLocalDB, getLocalDB, type LocalDBSchema } from "../db";
+import { closeLocalDB, getLocalDB, selectLegacyGuest, selectVerifiedAccount, signOutLocalAccount, type LocalDBSchema } from "../db";
 import {
   putRecipe,
+  addPlannedMeal,
   beginCookSession,
   completeCookSession,
   readSnapshot,
@@ -25,10 +26,39 @@ async function deleteLocalDB(): Promise<void> {
   });
 }
 
-beforeEach(deleteLocalDB);
-afterEach(deleteLocalDB);
+beforeEach(async () => { await deleteLocalDB(); selectLegacyGuest(); });
+afterEach(async () => { await deleteLocalDB(); signOutLocalAccount(); });
 
 describe("local repository", () => {
+  it("does not report a late A planner failure to B", async () => {
+    const a = "11111111-1111-4111-8111-111111111111";
+    const b = "22222222-2222-4222-8222-222222222222";
+    selectVerifiedAccount(b);
+    const dbB = await getLocalDB();
+    selectVerifiedAccount(a);
+    const dbA = await getLocalDB();
+    vi.spyOn(dbA, "transaction").mockImplementationOnce(() => {
+      signOutLocalAccount();
+      selectVerifiedAccount(b);
+      throw new Error("A read failed");
+    });
+    const storageError = vi.fn();
+    window.addEventListener("aaf-local-storage-error", storageError);
+    try {
+      await expect(addPlannedMeal("2026-09-21", 0, "recipe-1")).rejects.toThrow("A read failed");
+      expect(storageError).not.toHaveBeenCalled();
+      await expect(dbB.getAll("meal_plans")).resolves.toEqual([]);
+    } finally {
+      window.removeEventListener("aaf-local-storage-error", storageError);
+      vi.restoreAllMocks();
+      await closeLocalDB();
+      for (const id of [a, b]) await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.deleteDatabase(`aaf-local:${id}`);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+  });
   it("defaults locally generated planner and shopping markers", () => {
     expect(
       PlannedMealSchema.parse({ day_index: 0, recipe_id: "recipe-1" }).servings,

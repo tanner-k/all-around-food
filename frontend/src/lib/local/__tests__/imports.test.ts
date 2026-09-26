@@ -65,6 +65,12 @@ async function deleteLocalDB() {
     request.onerror = () => reject(request.error);
     request.onblocked = () => reject(new Error("database deletion blocked"));
   });
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(`aaf-local:${other}`);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error("other database deletion blocked"));
+  });
 }
 
 beforeEach(async () => {
@@ -93,6 +99,31 @@ afterEach(async () => {
 });
 
 describe("durable local recipe imports", () => {
+  it("does not close B or emit B storage errors for a late A write failure", async () => {
+    const dbA = await getLocalDB();
+    let fail!: (error: Error) => void;
+    let started!: () => void;
+    const startedWriting = new Promise<void>((resolve) => { started = resolve; });
+    vi.spyOn(dbA, "put").mockImplementationOnce(async () => {
+      started();
+      return new Promise<never>((_resolve, reject) => { fail = reject; });
+    });
+    const storageError = vi.fn();
+    window.addEventListener("aaf-local-storage-error", storageError);
+    try {
+      const writing = queueLocalImport({ kind: "text", payload_text: "Toast" });
+      await startedWriting;
+      signOutLocalAccount();
+      selectVerifiedAccount(other);
+      const dbB = await getLocalDB();
+      fail(new Error("A disk failed"));
+      await expect(writing).rejects.toThrow("A disk failed");
+      expect(storageError).not.toHaveBeenCalled();
+      await expect(dbB.getAll("imports")).resolves.toEqual([]);
+    } finally {
+      window.removeEventListener("aaf-local-storage-error", storageError);
+    }
+  });
   it("keeps a late A import response out of B after sign-out", async () => {
     await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
     let finish!: () => void;

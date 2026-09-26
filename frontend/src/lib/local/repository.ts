@@ -6,7 +6,7 @@ import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
 import { ShoppingListItemSchema, type ShoppingListItem } from "@/lib/shopping-schema";
 import { aggregatePlannedIngredients, aggregateRecipeIngredients, categorize, recomputeAllFlags } from "@/lib/shopping-logic";
 import { normalizeName } from "@/lib/normalize";
-import { assertCurrentLocalAccount, captureLocalAccount, closeLocalDB, getLocalDB, isCurrentLocalAccount, reportStorageIssue, type LocalAccount } from "./db";
+import { assertCurrentLocalAccount, captureLocalAccount, getLocalDB, isCurrentLocalAccount, reportAccountStorageFailure, type LocalAccount } from "./db";
 import { enqueueSyncGroup } from "./sync-state";
 import {
   CookProgressSchema,
@@ -81,7 +81,7 @@ export async function readSnapshot(account = captureLocalAccount()): Promise<Lib
       settings: SettingSchema.array().parse(settings),
     };
   } catch (error) {
-    if (isCurrentLocalAccount(account)) { await closeLocalDB(); reportStorageIssue("Unable to read local storage.", error); }
+    await reportAccountStorageFailure(account, "Unable to read local storage.", error);
     throw error;
   }
 }
@@ -97,7 +97,7 @@ export async function putRecipe(input: Recipe): Promise<void> {
     if (account.ownerId) await enqueueSyncGroup(tx, [{ kind: "recipe", entity_id: recipe.id, payload: recipe, deleted: false }]);
     await tx.done;
   } catch (error) {
-    if (isCurrentLocalAccount(account)) { await closeLocalDB(); reportStorageIssue("Unable to save recipe locally.", error); }
+    await reportAccountStorageFailure(account, "Unable to save recipe locally.", error);
     throw error;
   }
   notifyChange(account);
@@ -112,7 +112,7 @@ export async function saveMealPlan(input: MealPlan): Promise<void> {
     const tx = db.transaction("meal_plans", "readwrite");
     await Promise.all([tx.store.put(plan), tx.done]);
   } catch (error) {
-    if (isCurrentLocalAccount(account)) { await closeLocalDB(); reportStorageIssue("Unable to save meal plan locally.", error); }
+    await reportAccountStorageFailure(account, "Unable to save meal plan locally.", error);
     throw error;
   }
   notifyChange(account);
@@ -138,7 +138,7 @@ export async function saveCookProgress(input: CookProgressPatch): Promise<void> 
     }));
     await tx.done;
   } catch (error) {
-    if (isCurrentLocalAccount(account)) { await closeLocalDB(); reportStorageIssue("Unable to save cook progress locally.", error); }
+    await reportAccountStorageFailure(account, "Unable to save cook progress locally.", error);
     throw error;
   }
   notifyChange(account);
@@ -161,7 +161,7 @@ export async function beginCookSession(recipeId: string, forceNew = false): Prom
     notifyChange(account);
     return progress;
   } catch (error) {
-    if (isCurrentLocalAccount(account)) { await closeLocalDB(); reportStorageIssue("Unable to start cooking session.", error); }
+    await reportAccountStorageFailure(account, "Unable to start cooking session.", error);
     throw error;
   }
 }
@@ -185,7 +185,7 @@ export async function completeCookSession(recipeId: string, sessionId: string): 
     notifyChange(account);
     return true;
   } catch (error) {
-    if (isCurrentLocalAccount(account)) { await closeLocalDB(); reportStorageIssue("Unable to complete cooking session.", error); }
+    await reportAccountStorageFailure(account, "Unable to complete cooking session.", error);
     throw error;
   }
 }
@@ -198,7 +198,7 @@ export async function saveSetting(input: Setting, account = captureLocalAccount(
     const tx = db.transaction("settings", "readwrite");
     await Promise.all([tx.store.put(setting), tx.done]);
   } catch (error) {
-    if (isCurrentLocalAccount(account)) { await closeLocalDB(); reportStorageIssue("Unable to save local settings.", error); }
+    await reportAccountStorageFailure(account, "Unable to save local settings.", error);
     throw error;
   }
   notifyChange(account);
@@ -210,8 +210,8 @@ async function refreshShoppingFlags(tx: IDBPTransaction<LocalDBSchema, ("pantry"
   for (const item of recomputeAllFlags(shopping, pantry)) await tx.objectStore("shopping").put(item);
 }
 
-function storageFailure(message: string, error: unknown): never {
-  reportStorageIssue(message, error);
+async function storageFailure(account: LocalAccount, message: string, error: unknown): Promise<never> {
+  await reportAccountStorageFailure(account, message, error);
   throw error;
 }
 
@@ -225,7 +225,7 @@ export async function addPlannedMeal(weekOf: string, dayIndex: number, recipeId:
     const meals = [...(previous ? withPlannedMealIds(previous).meals : []), { id: crypto.randomUUID(), day_index: dayIndex, recipe_id: recipeId, servings: null }];
     await tx.store.put(MealPlanSchema.parse({ week_of: weekOf, meals, updated_at: new Date().toISOString() }));
     await tx.done;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); storageFailure("Unable to update meal plan.", error); }
+  } catch (error) { return storageFailure(account, "Unable to update meal plan.", error); }
   notifyChange(account);
 }
 
@@ -241,7 +241,7 @@ export async function removePlannedMeal(weekOf: string, occurrenceId: string): P
     if (meals.length === previous.meals.length) { await tx.done; return; }
     await tx.store.put(MealPlanSchema.parse({ ...previous, meals, updated_at: new Date().toISOString() }));
     await tx.done;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); storageFailure("Unable to update meal plan.", error); }
+  } catch (error) { return storageFailure(account, "Unable to update meal plan.", error); }
   notifyChange(account);
 }
 
@@ -257,7 +257,7 @@ export async function setPlannedServings(weekOf: string, occurrenceId: string, s
     if (!meals.some((meal) => meal.id === occurrenceId)) { await tx.done; return; }
     await tx.store.put(MealPlanSchema.parse({ ...previous, meals, updated_at: new Date().toISOString() }));
     await tx.done;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); storageFailure("Unable to update meal servings.", error); }
+  } catch (error) { return storageFailure(account, "Unable to update meal servings.", error); }
   notifyChange(account);
 }
 
@@ -281,7 +281,7 @@ export async function generateWeekShopping(weekOf: string): Promise<void> {
       await tx.objectStore("shopping").put(ShoppingListItemSchema.parse({ ...item, checked: old?.checked ?? false, created_at: old?.created_at ?? item.created_at }));
     }
     await tx.done;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); storageFailure("Unable to generate weekly shopping list.", error); }
+  } catch (error) { return storageFailure(account, "Unable to generate weekly shopping list.", error); }
   notifyChange(account);
 }
 
@@ -300,7 +300,7 @@ export async function addShoppingItem(name: string, quantityText = ""): Promise<
     await tx.done;
     notifyChange(account);
     return flagged;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); return storageFailure("Unable to add shopping item.", error); }
+  } catch (error) { return storageFailure(account, "Unable to add shopping item.", error); }
 }
 
 export async function setShoppingChecked(id: string, checked: boolean): Promise<void> {
@@ -312,7 +312,7 @@ export async function setShoppingChecked(id: string, checked: boolean): Promise<
     const item = await tx.store.get(id);
     if (item) await tx.store.put({ ...item, checked });
     await tx.done;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); storageFailure("Unable to update shopping item.", error); }
+  } catch (error) { return storageFailure(account, "Unable to update shopping item.", error); }
   notifyChange(account);
 }
 
@@ -324,7 +324,7 @@ export async function removeShoppingItem(id: string): Promise<void> {
     const tx = db.transaction("shopping", "readwrite");
     await tx.store.delete(id);
     await tx.done;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); storageFailure("Unable to remove shopping item.", error); }
+  } catch (error) { return storageFailure(account, "Unable to remove shopping item.", error); }
   notifyChange(account);
 }
 
@@ -347,7 +347,7 @@ export async function addPantryItem(name: string): Promise<PantryItem> {
     await tx.done;
     notifyChange(account);
     return item;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); return storageFailure("Unable to add pantry item.", error); }
+  } catch (error) { return storageFailure(account, "Unable to add pantry item.", error); }
 }
 
 export async function removePantryItem(id: string): Promise<void> {
@@ -359,7 +359,7 @@ export async function removePantryItem(id: string): Promise<void> {
     await tx.objectStore("pantry").delete(id);
     await refreshShoppingFlags(tx);
     await tx.done;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); storageFailure("Unable to remove pantry item.", error); }
+  } catch (error) { return storageFailure(account, "Unable to remove pantry item.", error); }
   notifyChange(account);
 }
 
@@ -374,7 +374,7 @@ export async function setPantryStatus(id: string, status: PantryStatus): Promise
     await tx.objectStore("pantry").put(PantryItemSchema.parse({ ...item, status, updated_at: new Date().toISOString() }));
     await refreshShoppingFlags(tx);
     await tx.done;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); storageFailure("Unable to update pantry status.", error); }
+  } catch (error) { return storageFailure(account, "Unable to update pantry status.", error); }
   notifyChange(account);
 }
 
@@ -403,7 +403,7 @@ export async function completeShopping(itemIds: string[]): Promise<void> {
     }
     await refreshShoppingFlags(tx);
     await tx.done;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); storageFailure("Unable to complete shopping.", error); }
+  } catch (error) { return storageFailure(account, "Unable to complete shopping.", error); }
   notifyChange(account);
 }
 
@@ -420,6 +420,6 @@ export async function addRecipesToShopping(recipeIds: string[]): Promise<void> {
     for (const item of existing) if (item.source === "recipe") await tx.objectStore("shopping").delete(item.id);
     for (const item of aggregateRecipeIngredients(selected, pantry)) await tx.objectStore("shopping").put(ShoppingListItemSchema.parse(item));
     await tx.done;
-  } catch (error) { if (isCurrentLocalAccount(account)) await closeLocalDB(); storageFailure("Unable to add recipes to shopping.", error); }
+  } catch (error) { return storageFailure(account, "Unable to add recipes to shopping.", error); }
   notifyChange(account);
 }

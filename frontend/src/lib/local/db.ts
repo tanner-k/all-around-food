@@ -122,11 +122,11 @@ export async function getLocalDB(account: LocalAccount = captureLocalAccount()):
           db.createObjectStore("sync_conflicts", { keyPath: "key" });
         }
       },
-      blocked() { reportStorageIssue("Database upgrade is blocked by another tab."); },
+      blocked() { if (isCurrentLocalAccount(account)) reportStorageIssue("Database upgrade is blocked by another tab."); },
       blocking() { connections.get(name)?.close(); connections.delete(name); openings.delete(name); },
       terminated() {
         connections.delete(name); openings.delete(name);
-        reportStorageIssue("Database connection was unexpectedly terminated.");
+        if (isCurrentLocalAccount(account)) reportStorageIssue("Database connection was unexpectedly terminated.");
       },
     }).then((db) => {
       openings.delete(name);
@@ -150,4 +150,12 @@ export async function closeLocalDB(): Promise<void> {
   for (const db of connections.values()) db.close();
   connections.clear();
   openings.clear();
+}
+
+
+/** A failed A operation must never close B's connection or publish an error into B's view. */
+export async function reportAccountStorageFailure(account: LocalAccount, message: string, error: unknown): Promise<void> {
+  if (!isCurrentLocalAccount(account)) return;
+  await closeLocalDB();
+  if (isCurrentLocalAccount(account)) reportStorageIssue(message, error);
 }

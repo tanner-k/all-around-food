@@ -3,7 +3,7 @@ import { MealPlanSchema } from "@/lib/meal-plan-schema";
 import { PantryItemSchema } from "@/lib/pantry-schema";
 import { RecipeSchema } from "@/lib/recipe-schema";
 import { ShoppingListItemSchema } from "@/lib/shopping-schema";
-import { assertCurrentLocalAccount, captureLocalAccount, closeLocalDB, getLocalDB, isCurrentLocalAccount, reportStorageIssue, type LocalAccount } from "./db";
+import { assertCurrentLocalAccount, captureLocalAccount, getLocalDB, reportAccountStorageFailure, type LocalAccount } from "./db";
 import { notifyChange, readSnapshot } from "./repository";
 import { CookProgressSchema, RecipeDraftSchema, SettingSchema, type LibrarySnapshot } from "./schema";
 
@@ -166,10 +166,7 @@ export async function restoreBackup(
       throw error;
     }
   } catch (error) {
-    if (isCurrentLocalAccount(account)) {
-      await closeLocalDB();
-      reportStorageIssue("Unable to restore the local library.", error);
-    }
+    await reportAccountStorageFailure(account, "Unable to restore the local library.", error);
     throw error;
   }
   assertCurrentLocalAccount(account);

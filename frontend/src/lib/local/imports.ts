@@ -2,7 +2,7 @@ import { ackJob, enqueueImageJob, enqueueTextJob, enqueueUrlJob, getJob, retryJo
 import { importDraftFromJob } from "@/lib/import-schema";
 import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
 import { createClient } from "@/lib/supabase/client";
-import { assertCurrentLocalAccount, captureLocalAccount, closeLocalDB, getLocalDB, isCurrentLocalAccount, reportStorageIssue, type LocalAccount } from "./db";
+import { assertCurrentLocalAccount, captureLocalAccount, getLocalDB, isCurrentLocalAccount, reportAccountStorageFailure, type LocalAccount } from "./db";
 import { enqueueSyncGroup } from "./sync-state";
 import { notifyChange } from "./repository";
 import { LocalImportSchema, type LocalImport } from "./schema";
@@ -29,7 +29,7 @@ export async function queueLocalImport(input: LocalImportInput, account = captur
   if ((record.kind === "url" || record.kind === "video") && !record.source_url)
     throw new Error("Enter a recipe URL");
   if (record.kind === "text" && !record.payload_text?.trim()) throw new Error("Enter recipe text");
-  await writeLocal("Unable to queue import locally.", async () => {
+  await writeLocal(account, "Unable to queue import locally.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     await db.put("imports", record);
@@ -47,7 +47,7 @@ export async function listLocalImports(account = captureLocalAccount()): Promise
 /** Persist each review edit; a late edit cannot recreate a draft after Save. */
 export async function updateImportDraft(jobId: string, editedRecipe: Recipe, account = captureLocalAccount()): Promise<void> {
   const recipe = RecipeSchema.parse({ ...editedRecipe, id: jobId });
-  const changed = await writeLocal("Unable to save import review edits locally.", async () => {
+  const changed = await writeLocal(account, "Unable to save import review edits locally.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     const tx = db.transaction(["drafts", "sync_outbox", "sync_shadow"], "readwrite");
@@ -66,7 +66,7 @@ export async function updateImportDraft(jobId: string, editedRecipe: Recipe, acc
 /** Retire the expired screenshot and queue its replacement atomically. */
 export async function reselectScreenshotImport(id: string, upload: Blob, account = captureLocalAccount()): Promise<LocalImport> {
   validateScreenshot(upload);
-  const next = await writeLocal("Unable to queue replacement screenshot locally.", async () => {
+  const next = await writeLocal(account, "Unable to queue replacement screenshot locally.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     const tx = db.transaction("imports", "readwrite");
@@ -110,20 +110,17 @@ async function signedInOwner(account: LocalAccount): Promise<string | null> {
   }
 }
 
-async function writeLocal<T>(message: string, operation: () => Promise<T>): Promise<T> {
+async function writeLocal<T>(account: LocalAccount, message: string, operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
-    if (!(error instanceof Error && error.message.startsWith("Local account changed"))) {
-      await closeLocalDB();
-      reportStorageIssue(message, error);
-    }
+    await reportAccountStorageFailure(account, message, error);
     throw error;
   }
 }
 
 async function replaceImport(record: LocalImport, account: LocalAccount): Promise<void> {
-  await writeLocal("Unable to update local import.", async () => {
+  await writeLocal(account, "Unable to update local import.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     await db.put("imports", LocalImportSchema.parse(record));
@@ -141,7 +138,7 @@ async function acknowledge(record: LocalImport, account: LocalAccount): Promise<
     return; // The draft is durable; next visible flush retries the owner-checked RPC.
   }
   // The RPC is idempotent; if this write fails, the next flush repeats it.
-  await writeLocal("Unable to update local import.", async () => {
+  await writeLocal(account, "Unable to update local import.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     const tx = db.transaction("imports", "readwrite");
@@ -157,7 +154,7 @@ export async function receiveImportDraft(job: ParseJob, account = captureLocalAc
   const draft = importDraftFromJob(job);
   const owner = await signedInOwner(account);
   if (!owner) return;
-  const record = await writeLocal("Unable to save import draft locally.", async () => {
+  const record = await writeLocal(account, "Unable to save import draft locally.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     const tx = db.transaction(["imports", "drafts", "recipes", "sync_outbox", "sync_shadow"], "readwrite");
@@ -292,7 +289,7 @@ export async function retryLocalImport(id: string, account = captureLocalAccount
 }
 
 async function markRetried(id: string, account: LocalAccount): Promise<LocalImport> {
-  const updated = await writeLocal("Unable to update local import.", async () => {
+  const updated = await writeLocal(account, "Unable to update local import.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     const tx = db.transaction("imports", "readwrite");
@@ -309,7 +306,7 @@ async function markRetried(id: string, account: LocalAccount): Promise<LocalImpo
 }
 
 async function replaceExpired(id: string, account: LocalAccount): Promise<LocalImport> {
-  const replacement = await writeLocal("Unable to retry import locally.", async () => {
+  const replacement = await writeLocal(account, "Unable to retry import locally.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     const tx = db.transaction("imports", "readwrite");
@@ -343,7 +340,7 @@ async function replaceExpired(id: string, account: LocalAccount): Promise<LocalI
 /** One IndexedDB transaction makes explicit Save idempotent across taps and tabs. */
 export async function acceptDraft(jobId: string, editedRecipe: Recipe, account = captureLocalAccount()): Promise<Recipe> {
   const recipe = RecipeSchema.parse({ ...editedRecipe, id: jobId });
-  const saved = await writeLocal("Unable to save imported recipe locally.", async () => {
+  const saved = await writeLocal(account, "Unable to save imported recipe locally.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     const tx = db.transaction(["recipes", "drafts", "imports", "sync_outbox", "sync_shadow"], "readwrite");
