@@ -181,3 +181,10 @@ SUPABASE_ANON_KEY=<anon-key>
 Manual check: open **Actions → Supabase keepalive → Run workflow**. A passing run
 confirms the URL/key pair can read through the REST API. Keep the service-role
 key out of this workflow; only the local worker and migration script need it.
+
+## Shared import publication (0007)
+`finish_import_job(text,uuid,jsonb,jsonb)` keeps the worker interface and now publishes a validated library draft plus immutable revision batch in the same transaction as `done`. It locks owner head then job row and rechecks the lease with wall-clock time after waiting. Existing drafts, tombstones, and saved/deleted recipes are never overwritten.
+
+Migration backfill reports published/skipped/invalid completed rows. Service-only `backfill_import_drafts()` can retry still-present results; invalid/unpublished completed sources remain for recovery. Already-cleaned results require a surviving device's reviewed migration. Acknowledgement and cleanup affect only temporary job/source fields, never shared records.
+
+Disposable SQL checks: `supabase/tests/shared_imports.sql` (rollback) and `shared_imports_concurrency.sql` (commits fixture setup; use only `aaf_sync_task1`). Run with the same environment guards as the library protocol fixtures after migrations 0006/0007. No hosted application of these migrations is authorized by these tests.

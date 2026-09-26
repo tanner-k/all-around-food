@@ -42,29 +42,29 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
     try {
       await queueLocalImport(input, account);
       if (!isCurrentLocalAccount(account)) return false;
-      setNotice("Saved locally. Import processing will resume when you are online and signed in.");
+      setNotice("Saved on this device. It will appear on your other devices after it is sent online.");
       refresh();
       return true;
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not queue import");
+      if (isCurrentLocalAccount(account)) setNotice(error instanceof Error ? error.message : "Could not queue import");
       return false;
-    } finally { setBusy(false); }
+    } finally { if (isCurrentLocalAccount(account)) setBusy(false); }
   }
 
   async function retry(id: string) {
     setRetrying(id);
     setNotice(null);
     try { await retryLocalImport(id, account); if (isCurrentLocalAccount(account)) refresh(); }
-    catch (error) { setNotice(error instanceof Error ? error.message : "Could not retry import"); }
-    finally { setRetrying(null); }
+    catch (error) { if (isCurrentLocalAccount(account)) setNotice(error instanceof Error ? error.message : "Could not retry import"); }
+    finally { if (isCurrentLocalAccount(account)) setRetrying(null); }
   }
 
   async function reselect(id: string, file: File) {
     setRetrying(id);
     setNotice(null);
     try { await reselectScreenshotImport(id, file, account); if (isCurrentLocalAccount(account)) refresh(); }
-    catch (error) { setNotice(error instanceof Error ? error.message : "Could not queue screenshot"); }
-    finally { setRetrying(null); }
+    catch (error) { if (isCurrentLocalAccount(account)) setNotice(error instanceof Error ? error.message : "Could not queue screenshot"); }
+    finally { if (isCurrentLocalAccount(account)) setRetrying(null); }
   }
 
   const active = imports.filter((row) => row.state !== "replaced" && row.state !== "saved");
@@ -72,7 +72,7 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
 
   return <>
     <SectionHeader number="05" scene="NEW RECIPE" title={<>Save a <em className="italic text-terra">recipe</em>.</>}
-      description="Import a link, screenshot, or pasted recipe. Review every result before saving it." />
+      description="Import a link, screenshot, or pasted recipe. Submitted imports are available on your signed-in devices; unsent offline requests stay on this device." />
     <div className="mt-8 flex flex-wrap items-center gap-3">
       <a href={localHref("edit")} className="inline-flex min-h-11 items-center rounded-full bg-terra px-5 text-sm font-semibold text-white">Enter a recipe manually</a>
       <span className="text-sm text-ink-mute">Manual entry works offline.</span>
@@ -118,7 +118,7 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
         <ul className="mt-4 space-y-3">{pending.map((row) => <li key={row.id} className="rounded-xl border border-line bg-paper p-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-terra-soft px-2.5 py-1 text-xs font-semibold capitalize text-terra">{row.kind}</span>
-            <span className="text-sm font-medium text-ink">{row.state === "queued" ? "Waiting to send" : row.state === "submitted" ? "Processing" : "Needs attention"}</span>
+            <span className="text-sm font-medium text-ink">{row.state === "queued" ? "Waiting to send" : row.state === "submitted" ? row.remote_status === "done" ? "Finished · waiting for library sync" : "Processing" : "Needs attention"}</span>
           </div>
           <p className="mt-2 break-all text-sm text-ink-soft">{importSource(row)}</p>
           {row.error && <p className="mt-2 text-sm text-terra">{row.error}</p>}

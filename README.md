@@ -67,11 +67,11 @@ Vercel serves production at https://all-around-food.vercel.app/app from `main` (
 ## Recent updates
 
 <!-- BEGIN:RECENT-UPDATES -->
+- Publish durable shared import drafts with owner-wide queue metadata
 - Implement source-grounded Jev recipe parsing in the import worker
 - Archived migrated core Parquet files under `data/archive/` after Supabase row counts matched.
 - Cut over the app from hosted server proxies to Supabase reads/writes plus the local import worker.
 - Removed the deferred user-facing pricing surface while keeping the backend pricing library.
-- Deleted the Python HTTP server, proxy routes, and core Parquet store path after adding Supabase evaluation stats.
 <!-- END:RECENT-UPDATES -->
 
 ## Project map

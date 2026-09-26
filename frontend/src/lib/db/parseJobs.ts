@@ -12,6 +12,7 @@
 // (`pending`), `attempts` (0), and the timestamps all default server-side.
 
 import { createClient } from "@/lib/supabase/client";
+import { z } from "zod";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,15 @@ export interface ParseJob {
   created_at: string;
   updated_at: string;
 }
+
+/** Queue discovery deliberately excludes source bytes, text, results, and leases. */
+export const ImportQueueJobSchema = z.object({
+  id: z.string().uuid(), kind: z.enum(["url", "video", "screenshot", "text"]),
+  source_url: z.string().nullable(), status: z.enum(["pending", "processing", "done", "error"]),
+  attempts: z.number().int().nonnegative(), error: z.string().nullable(), acknowledged_at: z.string().nullable(),
+  expires_at: z.string(), created_at: z.string(), updated_at: z.string(),
+});
+export type ImportQueueJob = z.infer<typeof ImportQueueJobSchema>;
 
 const TABLE = "parse_jobs";
 const BUCKET = "imports";
@@ -204,6 +214,21 @@ export async function listJobs(): Promise<ParseJob[]> {
 
   if (error) throw new Error(`Failed to list parse jobs: ${error.message}`);
   return (data ?? []) as ParseJob[];
+}
+
+/** Owner-wide queue metadata, including imports submitted on another device. */
+export async function listImportJobs(expectedOwner: string, assertAccount: () => void): Promise<ImportQueueJob[]> {
+  assertAccount();
+  const supabase = createClient();
+  await verifyExpectedOwner(supabase, expectedOwner);
+  assertAccount();
+  const { data, error } = await supabase.from(TABLE)
+    .select("id,kind,source_url,status,attempts,error,acknowledged_at,expires_at,created_at,updated_at")
+    .eq("user_id", expectedOwner).in("kind", ["url", "video", "screenshot", "text"])
+    .order("created_at", { ascending: false });
+  assertAccount();
+  if (error) throw new Error(`Failed to read import queue: ${error.message}`);
+  return ImportQueueJobSchema.array().parse(data ?? []);
 }
 
 /** Fetch a submitted job by its durable local ID. A missing row has expired. */

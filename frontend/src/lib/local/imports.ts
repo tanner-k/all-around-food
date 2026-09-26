@@ -1,5 +1,4 @@
-import { ackJob, enqueueImageJob, enqueueTextJob, enqueueUrlJob, getJob, retryJob, type ParseJob } from "@/lib/db/parseJobs";
-import { importDraftFromJob } from "@/lib/import-schema";
+import { ackJob, enqueueImageJob, enqueueTextJob, enqueueUrlJob, getJob, listImportJobs, ImportQueueJobSchema, retryJob, type ImportQueueJob, type ParseJob } from "@/lib/db/parseJobs";
 import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
 import { createClient } from "@/lib/supabase/client";
 import { assertCurrentLocalAccount, captureLocalAccount, getLocalDB, isCurrentLocalAccount, reportAccountStorageFailure, type LocalAccount } from "./db";
@@ -151,36 +150,50 @@ async function acknowledge(record: LocalImport, account: LocalAccount): Promise<
   notifyChange(account);
 }
 
-/** A done result is a draft only. Duplicate delivery never replaces local review edits. */
-export async function receiveImportDraft(job: ParseJob, account = captureLocalAccount()): Promise<void> {
-  const draft = importDraftFromJob(job);
-  const owner = await signedInOwner(account);
-  if (!owner) return;
-  const record = await writeLocal(account, "Unable to save import draft locally.", async () => {
+/** Reconcile queue state only. Draft content and its base revision arrive through library sync. */
+async function receiveQueueMetadata(jobs: ImportQueueJob[], account: LocalAccount): Promise<void> {
+  const records = ImportQueueJobSchema.array().parse(jobs);
+  const ready = await writeLocal(account, "Unable to save import queue locally.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
-    const tx = db.transaction(["imports", "drafts", "recipes", "sync_outbox", "sync_shadow"], "readwrite");
-    const committed = tx.done;
-    void committed.catch(() => undefined);
-    const imports = tx.objectStore("imports");
-    const existing = await imports.get(draft.id);
-    if (!existing || existing.owner_id !== owner) {
-      tx.abort();
-      throw new Error("Import is not owned by this account");
+    const tx = db.transaction(["imports", "drafts", "recipes", "sync_shadow"], "readwrite");
+    const ready: LocalImport[] = [];
+    let changed = false;
+    for (const job of records) {
+      const current = await tx.objectStore("imports").get(job.id);
+      if (current?.state === "replaced") continue;
+      const recipe = await tx.objectStore("recipes").get(job.id);
+      const draft = await tx.objectStore("drafts").get(job.id);
+      const shadow = await tx.objectStore("sync_shadow").get(`draft:${job.id}`);
+      const state = current?.state === "saved" || recipe || shadow?.deleted ? "saved"
+        : draft && shadow ? "draft" : job.status === "error" ? "error" : "submitted";
+      const next = LocalImportSchema.parse({
+        id: job.id, owner_id: account.ownerId, kind: job.kind,
+        source_url: current?.source_url ?? job.source_url, payload_text: current?.payload_text ?? null,
+        upload: null, state, remote_status: job.status, acknowledged: Boolean(job.acknowledged_at) || current?.acknowledged === true,
+        error: state === "error" ? job.error : null, created_at: current?.created_at ?? job.created_at,
+      });
+      if (JSON.stringify(current) !== JSON.stringify(next)) { await tx.objectStore("imports").put(next); changed = true; }
+      if (job.status === "done" && shadow && (state === "draft" || state === "saved")) ready.push(next);
     }
-    // Save wins even if an old job result arrives after an explicit Save.
-    if (existing.state !== "saved" && !(await tx.objectStore("recipes").get(draft.id))) {
-      if (!(await tx.objectStore("drafts").get(draft.id))) {
-        await tx.objectStore("drafts").put(draft);
-        await enqueueSyncGroup(tx, [{ kind: "draft", entity_id: draft.id, payload: draft, deleted: false }]);
-      }
-      await imports.put({ ...existing, state: "draft", error: null });
-    }
-    await committed;
-    return existing.state === "saved" ? existing : { ...existing, state: "draft" as const, error: null };
+    await tx.done;
+    return { ready, changed };
   });
-  notifyChange(account);
-  await acknowledge(record, account);
+  assertCurrentLocalAccount(account);
+  if (ready.changed) notifyChange(account);
+  for (const record of ready.ready) {
+    assertCurrentLocalAccount(account);
+    await acknowledge(record, account);
+  }
+}
+
+/** A late or duplicate parse result cannot create a draft or challenge its server revision. */
+export async function receiveImportDraft(job: ParseJob, account = captureLocalAccount()): Promise<void> {
+  if (job.status !== "done") throw new Error("Import is not done");
+  const owner = await signedInOwner(account);
+  if (!owner) return;
+  assertCurrentLocalAccount(account);
+  await receiveQueueMetadata([ImportQueueJobSchema.parse(job)], account);
 }
 
 const activeFlushes = new Map<string, Promise<void>>();
@@ -199,6 +212,10 @@ export function flushLocalImports(account = captureLocalAccount()): Promise<void
 async function flushPending(account: LocalAccount): Promise<void> {
   const owner = await signedInOwner(account);
   if (!owner || !canSyncLocalImports()) return;
+  const jobs = await listImportJobs(owner, () => assertCurrentLocalAccount(account));
+  assertCurrentLocalAccount(account);
+  if (!canSyncLocalImports()) return;
+  await receiveQueueMetadata(jobs, account);
   for (const record of await listLocalImports(account)) {
     if (!isCurrentLocalAccount(account)) return;
     if (!canSyncLocalImports()) return;
@@ -211,7 +228,7 @@ async function flushPending(account: LocalAccount): Promise<void> {
       await acknowledge(record, account);
       continue;
     }
-    if (record.state === "error" || record.state === "replaced") continue; // User must explicitly retry errors; replaced IDs are retired.
+    if (record.state === "error" || record.state === "replaced" || record.remote_status === "done") continue; // User must explicitly retry errors; replaced IDs are retired.
     let current = record;
     if (current.state === "queued") {
       try {
@@ -359,15 +376,18 @@ export async function acceptDraft(jobId: string, editedRecipe: Recipe, account =
     void committed.catch(() => undefined);
     const recipes = tx.objectStore("recipes");
     const existing = await recipes.get(jobId);
-    if (existing) {
-      await committed;
-      return existing;
-    }
     const draft = await tx.objectStore("drafts").get(jobId);
     const imported = await tx.objectStore("imports").get(jobId);
     if (!draft) {
+      if (existing) { await committed; return existing; } // Repeated Save preserves later recipe edits.
       tx.abort();
       throw new Error("Import draft is unavailable");
+    }
+    if (account.ownerId && !(await tx.objectStore("sync_shadow").get(`draft:${jobId}`))) {
+      const pending = await tx.objectStore("sync_outbox").getAll();
+      if (!pending.some(group => group.changes.some(change => change.kind === "draft" && change.entity_id === jobId))) {
+        await enqueueSyncGroup(tx, [{ kind: "draft", entity_id: jobId, payload: draft, deleted: false }]);
+      }
     }
     await recipes.put(recipe);
     await tx.objectStore("drafts").delete(jobId);
