@@ -153,7 +153,8 @@ begin
       or (p->>'day_index')::numeric not between 0 and 6
       or coalesce(jsonb_typeof(p->'recipe_id'),'') <> 'string'
       or not app_private.library_integer(p->'position')
-      or (p->>'position')::numeric < 0
+      -- Match the client safe-integer bound before retaining an immutable batch.
+      or (p->>'position')::numeric not between 0 and 9007199254740991
       or not (p ? 'servings')
       or coalesce(jsonb_typeof(p->'servings'),'') not in ('number','null')
       or (coalesce(jsonb_typeof(p->'servings'),'')='number' and (p->>'servings')::numeric <= 0)

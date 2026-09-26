@@ -186,6 +186,31 @@ do $$ declare recipe jsonb; r jsonb; bad jsonb; item jsonb; begin
   if r->>'status' <> 'accepted' or jsonb_array_length(r->'records') <> 2
     then raise exception 'valid defaults/nutrition group: %',r; end if;
 end $$;
+-- Planned positions must be exactly representable by the JavaScript decoder.
+do $$ declare before_pull jsonb; r jsonb; begin
+  before_pull := public.pull_library_changes(0,50);
+  begin
+    perform public.push_library_changes(jsonb_build_object('protocol_version',1,'mutation_id','unsafe-position',
+      'changes',jsonb_build_array(
+        jsonb_build_object('kind','shopping','entity_id','position-sibling','base_revision',null,
+          'payload',jsonb_build_object('id','position-sibling','name','Must roll back','created_at','2026-09-25T00:00:00Z'),'deleted',false),
+        jsonb_build_object('kind','planned_meal','entity_id','unsafe-position','base_revision',null,
+          'payload',jsonb_build_object('id','unsafe-position','week_of','2026-09-21','day_index',0,
+            'recipe_id','missing','servings',null,'position',9007199254740992),'deleted',false))));
+    raise exception 'unsafe planned position accepted';
+  exception when others then
+    if sqlstate <> '22023' or sqlerrm <> 'invalid library change' then raise; end if;
+  end;
+  if exists(select 1 from public.library_records where entity_id in ('position-sibling','unsafe-position'))
+    or public.pull_library_changes(0,50) <> before_pull
+  then raise exception 'unsafe position group changed projection or journal'; end if;
+  r := public.push_library_changes(jsonb_build_object('protocol_version',1,'mutation_id','safe-position-boundary',
+    'changes',jsonb_build_array(jsonb_build_object('kind','planned_meal','entity_id','safe-position-boundary','base_revision',null,
+      'payload',jsonb_build_object('id','safe-position-boundary','week_of','2026-09-21','day_index',0,
+        'recipe_id','missing','servings',null,'position',9007199254740991),'deleted',false))));
+  if r->>'status' <> 'accepted' or (r#>>'{records,0,payload,position}')::numeric <> 9007199254740991
+  then raise exception 'safe planned position boundary rejected or changed: %',r; end if;
+end $$;
 reset role;
 
 -- Current projection is owner gated, even when IDs collide.
