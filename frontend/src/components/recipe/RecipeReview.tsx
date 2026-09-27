@@ -6,8 +6,8 @@ import { InlineAmountText } from "./InlineAmountText";
 
 interface RecipeReviewProps {
   recipe: Recipe;
-  onSave: (recipe: Recipe) => void | Promise<void>;
-  onChange?: (recipe: Recipe) => Promise<void>;
+  onSave: (recipe: Recipe, expected: Recipe) => void | Promise<void>;
+  onChange?: (recipe: Recipe, expected: Recipe) => Promise<void>;
   warnings?: string[];
   saveLabel?: string;
 }
@@ -22,6 +22,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
   const [editStatus, setEditStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [editError, setEditError] = useState<string | null>(null);
   const latestRecipe = useRef(initialRecipe);
+  const baseline = useRef(initialRecipe);
   const pendingWrite = useRef<Promise<void>>(Promise.resolve());
   const revision = useRef(0);
   const unsafeToLeave = useRef(false);
@@ -44,7 +45,10 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
     setEditStatus("saving");
     setEditError(null);
     setError(null);
-    const write = pendingWrite.current.catch(() => undefined).then(() => onChange(next));
+    const write = pendingWrite.current.catch(() => undefined).then(async () => {
+      await onChange(next, baseline.current);
+      baseline.current = next;
+    });
     pendingWrite.current = write;
     void write.then(() => {
       if (currentRevision === revision.current) {
@@ -77,7 +81,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
     setError(null);
     try {
       await pendingWrite.current;
-      await onSave(latestRecipe.current);
+      await onSave(latestRecipe.current, baseline.current);
       savingNow.current = false;
       setSaving(false);
     }

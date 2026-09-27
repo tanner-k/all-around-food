@@ -40,12 +40,12 @@ it("shows warnings, persists review edits, and saves only on explicit Save", asy
   expect(acceptDraft).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Edit" }));
   fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "My toast" } });
-  await waitFor(() => expect(updateImportDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" }), expect.objectContaining({ ownerId: "owner" })));
+  await waitFor(() => expect(updateImportDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" }), expect.objectContaining({ ownerId: "owner" }), expect.objectContaining({ id: "job-1" })));
   fireEvent.change(screen.getByLabelText("Servings"), { target: { value: "4" } });
-  await waitFor(() => expect(updateImportDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ servings: 4 }), expect.objectContaining({ ownerId: "owner" })));
+  await waitFor(() => expect(updateImportDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ servings: 4 }), expect.objectContaining({ ownerId: "owner" }), expect.objectContaining({ id: "job-1" })));
   expect(acceptDraft).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Save to cookbook" }));
-  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" }), expect.objectContaining({ ownerId: "owner" })));
+  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" }), expect.objectContaining({ ownerId: "owner" }), expect.objectContaining({ id: "job-1" })));
 });
 
 it("requires a new screenshot for an expired uploaded request", async () => {
@@ -115,7 +115,7 @@ it("waits for the review edit commit before explicit Save", async () => {
   expect(acceptDraft).not.toHaveBeenCalled();
   await waitFor(() => expect(updateImportDraft).toHaveBeenCalledTimes(1));
   await act(async () => { finish(); });
-  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" }), expect.objectContaining({ ownerId: "owner" })));
+  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "My toast" }), expect.objectContaining({ ownerId: "owner" }), expect.objectContaining({ id: "job-1" })));
 });
 
 it("reports a failed draft write and retries it", async () => {
@@ -142,7 +142,7 @@ it("freezes review fields while explicit Save is pending", async () => {
   fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "First title" } });
   await screen.findByText("All changes saved locally");
   fireEvent.click(screen.getByRole("button", { name: "Save to cookbook" }));
-  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "First title" }), expect.objectContaining({ ownerId: "owner" })));
+  await waitFor(() => expect(acceptDraft).toHaveBeenCalledWith("job-1", expect.objectContaining({ title: "First title" }), expect.objectContaining({ ownerId: "owner" }), expect.objectContaining({ id: "job-1" })));
   expect(screen.getByLabelText("Recipe title")).toBeDisabled();
   fireEvent.change(screen.getByLabelText("Recipe title"), { target: { value: "Later title" } });
   expect(screen.getByLabelText("Recipe title")).toHaveValue("First title");

@@ -22,6 +22,13 @@ function importSource(row: LocalImport): string {
 
 export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
   const [account] = useState(captureLocalAccount);
+  const [previousDrafts, setPreviousDrafts] = useState(drafts);
+  const [reviewDrafts, setReviewDrafts] = useState(drafts);
+  // Preserve open reviews (including deleted rows); only append newly discovered IDs.
+  if (drafts !== previousDrafts) {
+    setPreviousDrafts(drafts);
+    setReviewDrafts(current => [...current, ...drafts.filter(draft => !current.some(open => open.id === draft.id))]);
+  }
   const [imports, setImports] = useState<LocalImport[]>([]);
   const [text, setText] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
@@ -99,13 +106,13 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
     </div>
     {notice && <p role="status" className="mt-5 max-w-3xl rounded-xl border border-line bg-paper-2 p-4 text-sm text-ink">{notice}</p>}
 
-    {drafts.length > 0 && <section className="mt-12 max-w-3xl" aria-label="Recipes ready for review">
+    {reviewDrafts.length > 0 && <section className="mt-12 max-w-3xl" aria-label="Recipes ready for review">
       <h2 className="font-serif text-2xl text-ink">Ready to review</h2>
-      <div className="mt-5 space-y-8">{drafts.map((draft) => <div key={draft.id} className="rounded-2xl border border-line bg-paper p-5">
+      <div className="mt-5 space-y-8">{reviewDrafts.map((draft) => <div key={draft.id} className="rounded-2xl border border-line bg-paper p-5">
         <RecipeReview recipe={draft.recipe} warnings={draft.warnings} saveLabel="Save to cookbook"
-          onChange={(recipe) => updateImportDraft(draft.id, recipe, account)}
-          onSave={async (recipe) => {
-            const saved = await acceptDraft(draft.id, recipe, account);
+          onChange={(recipe, expected) => updateImportDraft(draft.id, recipe, account, expected)}
+          onSave={async (recipe, expected) => {
+            const saved = await acceptDraft(draft.id, recipe, account, expected);
             if (!isCurrentLocalAccount(account)) return;
             window.location.hash = localHref("recipe", saved.id).split("#")[1];
           }} />

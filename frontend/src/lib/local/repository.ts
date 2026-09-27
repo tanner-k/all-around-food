@@ -91,17 +91,31 @@ export async function readSnapshot(account = captureLocalAccount()): Promise<Lib
   }
 }
 
-export async function putRecipe(input: Recipe): Promise<void> {
+/** Expected content comes from the mounted editor, never a refreshed snapshot. */
+export class RecipeEditConflict extends Error {}
+export function assertRecipeUnchanged(current: Recipe | undefined, expected: Recipe | null | undefined): void {
+  if (expected === undefined) return;
+  if (!current && expected) throw new RecipeEditConflict("This recipe was deleted. Your edits are still here; copy them before leaving.");
+  if (JSON.stringify(current ? RecipeSchema.parse(current) : null) !== JSON.stringify(expected ? RecipeSchema.parse(expected) : null))
+    throw new RecipeEditConflict("This recipe changed on another device or tab. Your edits are still here; copy them before reopening the latest version.");
+}
+
+export async function putRecipe(input: Recipe, expected?: Recipe | null): Promise<void> {
   const account = captureLocalAccount();
   const recipe = RecipeSchema.parse(input);
   try {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     const tx = db.transaction(["recipes", "sync_outbox", "sync_shadow"], "readwrite");
-    await tx.objectStore("recipes").put(recipe);
-    if (account.ownerId) await enqueueSyncGroup(tx, [{ kind: "recipe", entity_id: recipe.id, payload: recipe, deleted: false }]);
-    await tx.done;
+    void tx.done.catch(() => undefined);
+    try {
+      assertRecipeUnchanged(await tx.objectStore("recipes").get(recipe.id), expected);
+      await tx.objectStore("recipes").put(recipe);
+      if (account.ownerId) await enqueueSyncGroup(tx, [{ kind: "recipe", entity_id: recipe.id, payload: recipe, deleted: false }]);
+      await tx.done;
+    } catch (error) { try { tx.abort(); } catch { /* already finished */ } await tx.done.catch(() => undefined); throw error; }
   } catch (error) {
+    if (error instanceof RecipeEditConflict) throw error;
     await reportAccountStorageFailure(account, "Unable to save recipe locally.", error);
     throw error;
   }

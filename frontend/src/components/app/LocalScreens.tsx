@@ -47,6 +47,12 @@ function NewRecipeEditor({ onSave }: { onSave: (recipe: Recipe) => Promise<void>
   return <RecipeEditForm key={draft.id} recipe={draft} isNew onSave={onSave} />;
 }
 
+/** Keep a mounted editor and its baseline even if a pull removes the row. */
+function ExistingRecipeEditor({ recipe, onSave }: { recipe?: Recipe; onSave: (recipe: Recipe, expected?: Recipe | null) => Promise<void> }) {
+  const [displayed] = useState(recipe);
+  return displayed ? <RecipeEditForm recipe={displayed} onSave={onSave} /> : <MissingRecipe />;
+}
+
 function MissingRecipe() {
   return <div className="mx-auto max-w-xl rounded-2xl border border-line bg-paper p-8 text-center">
     <h1 className="font-serif text-3xl text-ink">Recipe unavailable</h1>
@@ -101,14 +107,13 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
   }
 
   if (route.view === "edit") {
-    if (route.recipeId && !recipe) return <MissingRecipe />;
-    const save = async (saved: Recipe) => {
-      await bound(account, putRecipe)(saved);
+    const save = async (saved: Recipe, expected?: Recipe | null) => {
+      await bound(account, putRecipe)(saved, expected);
       assertCurrentLocalAccount(account);
       window.location.hash = localHref("recipe", saved.id).split("#")[1];
     };
-    return recipe
-      ? <RecipeEditForm key={recipe.id} recipe={recipe} isNew={false} onSave={save} />
+    return route.recipeId
+      ? <ExistingRecipeEditor key={route.recipeId} recipe={recipe} onSave={save} />
       : <NewRecipeEditor onSave={save} />;
   }
 

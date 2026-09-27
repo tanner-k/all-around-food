@@ -3,7 +3,7 @@ import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
 import { createClient } from "@/lib/supabase/client";
 import { assertCurrentLocalAccount, captureLocalAccount, getLocalDB, isCurrentLocalAccount, reportAccountStorageFailure, type LocalAccount } from "./db";
 import { enqueueSyncGroup } from "./sync-state";
-import { notifyChange } from "./repository";
+import { assertRecipeUnchanged, RecipeEditConflict, notifyChange } from "./repository";
 import { LocalImportSchema, type LocalImport } from "./schema";
 
 export type LocalImportInput = Pick<LocalImport, "kind"> & Partial<Pick<LocalImport,
@@ -46,20 +46,25 @@ export async function listLocalImports(account = captureLocalAccount()): Promise
 }
 
 /** Persist each review edit; a late edit cannot recreate a draft after Save. */
-export async function updateImportDraft(jobId: string, editedRecipe: Recipe, account = captureLocalAccount()): Promise<void> {
+export async function updateImportDraft(jobId: string, editedRecipe: Recipe, account = captureLocalAccount(), expected?: Recipe): Promise<void> {
   const recipe = RecipeSchema.parse({ ...editedRecipe, id: jobId });
+  if (!recipe.title.trim()) throw new Error("Draft edits are unsaved. Add a recipe title to save them locally.");
   const changed = await writeLocal(account, "Unable to save import review edits locally.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
     const tx = db.transaction(["drafts", "sync_outbox", "sync_shadow"], "readwrite");
-    const draft = await tx.objectStore("drafts").get(jobId);
-    if (draft) {
-      const next = { ...draft, recipe };
-      await tx.objectStore("drafts").put(next);
-      if (account.ownerId) await enqueueSyncGroup(tx, [{ kind: "draft", entity_id: jobId, payload: next, deleted: false }]);
-    }
-    await tx.done;
-    return Boolean(draft);
+    void tx.done.catch(() => undefined);
+    try {
+      const draft = await tx.objectStore("drafts").get(jobId);
+      assertRecipeUnchanged(draft?.recipe, expected);
+      if (draft) {
+        const next = { ...draft, recipe };
+        await tx.objectStore("drafts").put(next);
+        if (account.ownerId) await enqueueSyncGroup(tx, [{ kind: "draft", entity_id: jobId, payload: next, deleted: false }]);
+      }
+      await tx.done;
+      return Boolean(draft);
+    } catch (error) { try { tx.abort(); } catch { /* already finished */ } await tx.done.catch(() => undefined); throw error; }
   });
   if (changed) notifyChange(account);
 }
@@ -117,7 +122,7 @@ async function writeLocal<T>(account: LocalAccount, message: string, operation: 
   try {
     return await operation();
   } catch (error) {
-    if (error instanceof ImportSourceUnavailable) {
+    if (error instanceof ImportSourceUnavailable || error instanceof RecipeEditConflict) {
       assertCurrentLocalAccount(account);
       throw error;
     }
@@ -391,8 +396,9 @@ async function replaceExpired(id: string, account: LocalAccount): Promise<LocalI
 }
 
 /** One IndexedDB transaction makes explicit Save idempotent across taps and tabs. */
-export async function acceptDraft(jobId: string, editedRecipe: Recipe, account = captureLocalAccount()): Promise<Recipe> {
+export async function acceptDraft(jobId: string, editedRecipe: Recipe, account = captureLocalAccount(), expected?: Recipe): Promise<Recipe> {
   const recipe = RecipeSchema.parse({ ...editedRecipe, id: jobId });
+  if (!recipe.title.trim()) throw new Error("Add a recipe title before saving.");
   const saved = await writeLocal(account, "Unable to save imported recipe locally.", async () => {
     const db = await getLocalDB(account);
     assertCurrentLocalAccount(account);
@@ -403,6 +409,8 @@ export async function acceptDraft(jobId: string, editedRecipe: Recipe, account =
     const existing = await recipes.get(jobId);
     const draft = await tx.objectStore("drafts").get(jobId);
     const imported = await tx.objectStore("imports").get(jobId);
+    try { assertRecipeUnchanged(draft?.recipe, expected); }
+    catch (error) { tx.abort(); await committed.catch(() => undefined); throw error; }
     if (!draft) {
       if (existing) { await committed; return existing; } // Repeated Save preserves later recipe edits.
       tx.abort();
