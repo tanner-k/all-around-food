@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getLocalDB } from "@/lib/local/db";
+import { assertCurrentLocalAccount, captureLocalAccount, getLocalDB, isCurrentLocalAccount, subscribeToLocalAccountChange, type LocalAccount } from "@/lib/local/db";
 import { readSnapshot, saveSetting, subscribeToLocalChanges } from "@/lib/local/repository";
 
 type InstallPrompt = Event & {
@@ -23,13 +23,15 @@ function checkReady(worker: ServiceWorker): Promise<{ ready: boolean; buildId?: 
   });
 }
 
-async function waitForCommittedWrites() {
-  const db = await getLocalDB();
+async function waitForCommittedWrites(account: LocalAccount) {
+  const db = await getLocalDB(account);
+  assertCurrentLocalAccount(account);
   const tx = db.transaction(
     ["recipes", "meal_plans", "shopping", "pantry", "cook_progress", "drafts", "imports", "settings"],
     "readwrite",
   );
   await tx.done;
+  assertCurrentLocalAccount(account);
 }
 
 export default function ServiceWorkerRegister() {
@@ -41,7 +43,7 @@ export default function ServiceWorkerRegister() {
   const [updating, setUpdating] = useState(false);
   const requestedUpdate = useRef(false);
   const pageBuildId = useRef<string | null>(null);
-  const persistenceRequest = useRef(false);
+  const persistenceRequest = useRef<LocalAccount | null>(null);
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
@@ -88,20 +90,23 @@ export default function ServiceWorkerRegister() {
       });
     };
     const maybeRequestPersistence = async () => {
-      if (persistenceRequest.current || !navigator.storage?.persist) return;
-      persistenceRequest.current = true;
+      const account = captureLocalAccount();
+      if (!account.dbName || persistenceRequest.current === account || !navigator.storage?.persist) return;
+      persistenceRequest.current = account;
       try {
-        const snapshot = await readSnapshot();
+        const snapshot = await readSnapshot(account);
+        assertCurrentLocalAccount(account);
         const hasSavedData = [snapshot.recipes, snapshot.meal_plans, snapshot.shopping,
           snapshot.pantry, snapshot.cook_progress, snapshot.drafts].some((items) => items.length > 0);
         if (hasSavedData && !snapshot.settings.some((item) => item.key === "storage_persistence_requested")) {
           await navigator.storage.persist();
-          await saveSetting({ key: "storage_persistence_requested", value: new Date().toISOString() });
+          assertCurrentLocalAccount(account);
+          await saveSetting({ key: "storage_persistence_requested", value: new Date().toISOString() }, account);
         }
       } catch {
         // A storage error is already reported by the local repository.
       } finally {
-        persistenceRequest.current = false;
+        if (persistenceRequest.current === account) persistenceRequest.current = null;
       }
     };
 
@@ -109,7 +114,14 @@ export default function ServiceWorkerRegister() {
     window.addEventListener("appinstalled", onInstalled);
     navigator.serviceWorker.addEventListener("controllerchange", onControllerChange);
     navigator.serviceWorker.addEventListener("message", onWorkerMessage);
-    const unsubscribe = subscribeToLocalChanges(() => { void maybeRequestPersistence(); });
+    let unsubscribe = subscribeToLocalChanges(() => { void maybeRequestPersistence(); });
+    const unsubscribeAccount = subscribeToLocalAccountChange(() => {
+      unsubscribe();
+      unsubscribe = subscribeToLocalChanges(() => { void maybeRequestPersistence(); });
+      setUpdating(false);
+      requestedUpdate.current = false;
+      void maybeRequestPersistence();
+    });
     void maybeRequestPersistence();
 
     const register = async () => {
@@ -138,18 +150,22 @@ export default function ServiceWorkerRegister() {
       navigator.serviceWorker.removeEventListener("message", onWorkerMessage);
       registration?.removeEventListener("updatefound", onUpdateFound);
       unsubscribe();
+      unsubscribeAccount();
     };
   }, []);
 
   async function applyUpdate() {
     if (!waiting) return;
+    const account = captureLocalAccount();
     setUpdating(true);
     setError(null);
     try {
-      await waitForCommittedWrites();
+      await waitForCommittedWrites(account);
+      assertCurrentLocalAccount(account);
       requestedUpdate.current = true;
       waiting.postMessage({ type: "ACTIVATE_UPDATE" });
     } catch {
+      if (!isCurrentLocalAccount(account)) return;
       setUpdating(false);
       setError("Could not finish local saves. Try the update again.");
     }

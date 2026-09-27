@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { parseBackup, type BackupEnvelope } from "@/lib/local/backup";
+import { RecipeSchema } from "@/lib/recipe-schema";
 import type { LibrarySnapshot } from "@/lib/local/schema";
 
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store" };
 const PAGE_SIZE = 500;
 
-export async function GET() {
+export async function GET(request?: Request) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -18,6 +19,12 @@ export async function GET() {
     const { data: ownerId, error: ownerError } = await supabase.rpc("import_owner_uid");
     if (ownerError || !ownerId || ownerId !== user.id) {
       return NextResponse.json({ error: "Only the configured library owner may export." }, { status: 403, headers });
+    }
+
+    const params = request ? new URL(request.url).searchParams : null;
+    const recipeCopy = params?.get("scope") === "recipes";
+    if (recipeCopy && params?.get("expected_owner") !== user.id) {
+      return NextResponse.json({ error: "Cloud export owner does not match this account. Sign in again." }, { status: 409, headers });
     }
 
     async function allRows(table: string) {
@@ -34,6 +41,15 @@ export async function GET() {
       allRows("recipes"), allRows("meal_plans"), allRows("planned_meals"),
       allRows("pantry_items"), allRows("shopping_list_items"),
     ]);
+    if (recipeCopy) {
+      const parsedRecipes = RecipeSchema.array().parse(recipes);
+      if (new Set(parsedRecipes.map(recipe => recipe.id)).size !== parsedRecipes.length) throw new Error("Duplicate recipe IDs.");
+      return NextResponse.json({
+        format: "all-around-food", version: 1, owner_id: user.id, exported_at: new Date().toISOString(),
+        library: { recipes, meal_plans: [], shopping: [], pantry: [], cook_progress: [], drafts: [], settings: [] },
+        legacy_tables: { meal_plans: headersRows, planned_meals: mealRows, pantry_items: pantry, shopping_list_items: shopping },
+      }, { headers });
+    }
     const planById = new Map(headersRows.map((row) => [row.id, row]));
     const recipeIds = new Set(recipes.map((row) => row.id));
     const errors: string[] = [];

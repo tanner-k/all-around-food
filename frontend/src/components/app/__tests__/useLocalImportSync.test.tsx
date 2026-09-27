@@ -1,6 +1,7 @@
-import { act, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { useLocalImportSync } from "../useLocalImportSync";
+import { selectVerifiedAccount, signOutLocalAccount } from "@/lib/local/db";
 
 const { listLocalImports, flushLocalImports, createClient } = vi.hoisted(() => ({
   listLocalImports: vi.fn(), flushLocalImports: vi.fn(), createClient: vi.fn(),
@@ -13,6 +14,7 @@ const queued = { id: "one", state: "queued", acknowledged: false };
 
 beforeEach(() => {
   vi.resetAllMocks();
+  selectVerifiedAccount("owner");
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "public-key";
   Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
@@ -24,13 +26,11 @@ beforeEach(() => {
     onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
   } });
 });
-afterEach(() => { delete process.env.NEXT_PUBLIC_SUPABASE_URL; delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; vi.useRealTimers(); });
+afterEach(() => { cleanup(); signOutLocalAccount(); delete process.env.NEXT_PUBLIC_SUPABASE_URL; delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY; vi.useRealTimers(); });
 
-it("never initializes auth when there is no import work", async () => {
+it("discovers owner queue metadata even when this device has no local import work", async () => {
   render(<Harness />);
-  await waitFor(() => expect(listLocalImports).toHaveBeenCalled());
-  expect(createClient).not.toHaveBeenCalled();
-  expect(flushLocalImports).not.toHaveBeenCalled();
+  await waitFor(() => expect(flushLocalImports).toHaveBeenCalled());
 });
 
 it("syncs outstanding work on mount, focus, and online; pauses while hidden", async () => {

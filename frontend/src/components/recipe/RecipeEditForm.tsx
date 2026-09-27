@@ -6,7 +6,7 @@ import { localHref } from "@/lib/local/navigation";
 
 interface RecipeEditFormProps {
   recipe: Recipe;
-  onSave: (recipe: Recipe) => Promise<void>;
+  onSave: (recipe: Recipe, expected?: Recipe | null) => Promise<void>;
   isNew?: boolean;
 }
 
@@ -40,6 +40,7 @@ function blankStep(order: number): Step {
 
 export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }: RecipeEditFormProps) {
   const [recipe, setRecipe] = useState(initialRecipe);
+  const [baseline] = useState(() => isNew ? null : initialRecipe);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,7 +104,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
     setSaving(true);
     setError(null);
     try {
-      await onSave({ ...recipe, ingredients: recipe.ingredients.filter((item) => item.name.trim()), steps: recipe.steps.filter((step) => step.instruction.trim()).map((step, index) => ({...step, order: index + 1})) });
+      await onSave({ ...recipe, ingredients: recipe.ingredients.filter((item) => item.name.trim()), steps: recipe.steps.filter((step) => step.instruction.trim()).map((step, index) => ({...step, order: index + 1})) }, baseline);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setSaving(false);

@@ -190,9 +190,11 @@ def test_stalled_dns_respects_total_fetch_deadline(monkeypatch: pytest.MonkeyPat
     import time
 
     release = threading.Event()
+    threads: list[threading.Thread] = []
     monkeypatch.setattr(recipe_parser, "FETCH_TIMEOUT_S", 0.05)
 
     def stalled_dns(*args: Any) -> list[tuple[Any, ...]]:
+        threads.append(threading.current_thread())
         release.wait(1)
         return [(None, None, None, None, ("93.184.216.34", 443))]
 
@@ -219,6 +221,40 @@ def test_stalled_dns_respects_total_fetch_deadline(monkeypatch: pytest.MonkeyPat
         assert time.monotonic() - start < 0.3
     finally:
         release.set()
+        for thread in threads:
+            thread.join(timeout=1)
+            assert not thread.is_alive()
+
+
+def test_timed_out_dns_releases_its_original_semaphore(monkeypatch: pytest.MonkeyPatch) -> None:
+    import threading
+
+    release = threading.Event()
+    threads: list[threading.Thread] = []
+    original_slots = threading.BoundedSemaphore(1)
+    replacement_slots = threading.BoundedSemaphore(1)
+    assert replacement_slots.acquire(blocking=False)
+
+    def stalled_dns(*args: Any) -> list[tuple[Any, ...]]:
+        threads.append(threading.current_thread())
+        release.wait(1)
+        return [(None, None, None, None, ("93.184.216.34", 443))]
+
+    monkeypatch.setattr(recipe_parser.socket, "getaddrinfo", stalled_dns)
+    monkeypatch.setattr(recipe_parser, "_DNS_SLOTS", original_slots)
+    monkeypatch.setattr(recipe_parser, "FETCH_TIMEOUT_S", 0.05)
+    try:
+        with pytest.raises(ValueError, match="too long"):
+            recipe_parser._check_public_url("https://recipes.example")
+        monkeypatch.setattr(recipe_parser, "_DNS_SLOTS", replacement_slots)
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(timeout=1)
+            assert not thread.is_alive()
+
+    assert original_slots.acquire(blocking=False)
+    assert not replacement_slots.acquire(blocking=False)
 
 
 def test_stalled_dns_lookups_do_not_spawn_unbounded_threads(
@@ -227,10 +263,12 @@ def test_stalled_dns_lookups_do_not_spawn_unbounded_threads(
     import threading
 
     release = threading.Event()
+    threads: list[threading.Thread] = []
     started = 0
 
     def stalled_dns(*args: Any) -> list[tuple[Any, ...]]:
         nonlocal started
+        threads.append(threading.current_thread())
         started += 1
         release.wait(1)
         return [(None, None, None, None, ("93.184.216.34", 443))]
@@ -245,6 +283,9 @@ def test_stalled_dns_lookups_do_not_spawn_unbounded_threads(
         assert started <= 4
     finally:
         release.set()
+        for thread in threads:
+            thread.join(timeout=1)
+            assert not thread.is_alive()
 
 
 def test_redirect_to_loopback_is_blocked_before_second_request(

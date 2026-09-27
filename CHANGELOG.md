@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-09-25
+- Publish durable shared import drafts with owner-wide queue metadata
 - Implement source-grounded Jev recipe parsing in the import worker
 
 ## 2026-07-04

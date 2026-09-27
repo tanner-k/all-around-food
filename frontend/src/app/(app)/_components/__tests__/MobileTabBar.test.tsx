@@ -14,7 +14,7 @@ describe("MobileTabBar", () => {
     window.location.hash = "#/cookbook";
   });
 
-  it("renders five local tabs in the app shell", () => {
+  it("renders local tabs with visible Settings access in the app shell", () => {
     mockUsePathname.mockReturnValue("/app");
     render(<MobileTabBar />);
     expect(screen.getByText("Cookbook")).toBeInTheDocument();
@@ -22,6 +22,7 @@ describe("MobileTabBar", () => {
     expect(screen.getByText("Plan")).toBeInTheDocument();
     expect(screen.getByText("Shop")).toBeInTheDocument();
     expect(screen.getByText("Import")).toBeInTheDocument();
+    expect(screen.getByRole("link", {name:"Settings"})).toHaveAttribute("href", "/app#/settings");
     expect(screen.getByRole("link", { name: /cookbook/i })).toHaveAttribute("href", "/app#/cookbook");
   });
 

@@ -1,8 +1,10 @@
-# Supabase import coordination and legacy schema
+# Supabase import coordination and account library
 
 Supabase retains the legacy cloud library, owner-only export, evaluation stats,
-and the temporary recipe-import queue. The personal `/app` library now lives in
-IndexedDB; existing cloud and Parquet records are preserved during migration (see
+and the temporary recipe-import queue. Migration `0006` adds an owner-scoped
+revision journal and current library projection for account sync; each device
+continues working from IndexedDB. The personal `/app` library originally lived in
+IndexedDB alone; existing cloud and Parquet records are preserved during migration (see
 [`docs/plans/personal-supabase-pivot.md`](../docs/plans/personal-supabase-pivot.md)
 and [ADR 0007](../docs/decisions/0007-personal-supabase-rearchitecture.md)).
 
@@ -16,7 +18,8 @@ supabase/
     ├── 0002_storage.sql       ← private `imports` bucket + storage RLS policies
     ├── 0003_claim_and_payload.sql ← deployed legacy queue history
     ├── 0004_evaluation_stats.sql ← owner-scoped evaluation view
-    └── 0005_local_recipe_drafts.sql ← token-fenced transient drafts
+    ├── 0005_local_recipe_drafts.sql ← token-fenced transient drafts
+    └── 0006_library_sync.sql ← owner-scoped library, immutable revision batches, push/pull RPCs
 ```
 
 ## Required environment
@@ -30,7 +33,7 @@ supabase/
 
 ## Applying the migrations
 
-Run numbered migrations in order through `0005_local_recipe_drafts.sql`. Check `supabase_migrations.schema_migrations` in each target first: dev uses version `0004` for evaluation stats. If a target already recorded version `0004` for local drafts, reconcile that database explicitly before applying anything. Pick one method:
+Run numbered migrations in order through `0006_library_sync.sql`. Check `supabase_migrations.schema_migrations` in each target first: dev uses version `0004` for evaluation stats. If a target already recorded version `0004` for local drafts, reconcile that database explicitly before applying anything. Pick one method:
 
 ### Supabase CLI (recommended)
 
@@ -47,6 +50,7 @@ psql "$SUPABASE_DB_URL" -f supabase/migrations/0002_storage.sql
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0003_claim_and_payload.sql
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0004_evaluation_stats.sql
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0005_local_recipe_drafts.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0006_library_sync.sql
 ```
 
 `$SUPABASE_DB_URL` is the connection string from
@@ -55,7 +59,7 @@ psql "$SUPABASE_DB_URL" -f supabase/migrations/0005_local_recipe_drafts.sql
 ### Supabase SQL editor
 
 Open **SQL Editor** in the dashboard, paste the contents of `0001_init.sql`,
-run it, then do the same for `0002_storage.sql` through `0005_local_recipe_drafts.sql` in order.
+run it, then do the same for `0002_storage.sql` through `0006_library_sync.sql` in order.
 
 Apply each migration once. Track applied files before using the SQL editor or `psql`.
 
@@ -84,6 +88,25 @@ psql "$AAF_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/local_recipe_
 
 The suite rolls back its rows and temporary owner configuration. The explicit
 guard prevents accidental execution without the disposable-project flag.
+
+For the account library, apply `0006_library_sync.sql` to a dedicated disposable
+PostgreSQL database with the same two auth fixtures, then run
+`supabase/tests/library_sync.sql`. Its transaction rolls back. Run
+`supabase/tests/library_sync_concurrency.sql` separately against that same
+**dedicated disposable** database; it uses `dblink` to hold one connection's
+commit while a second writer waits and it commits test rows. Never run either
+fixture against the hosted project or a database containing real data.
+
+The browser RPCs are `push_library_changes(p_request jsonb)` and
+`pull_library_changes(p_after_revision bigint default 0, p_max_revisions int
+default 10)`. Push accepts protocol version 1, a stable `mutation_id`, and 1–100
+conditional changes within 1 MiB. Exact retries return the original accepted
+response; stale bases return conflict records. Pull returns complete revision
+batches (1–50 per page) from the immutable private journal, with
+`next_revision` and `has_more`. Only the configured signed-in owner can call
+these RPCs or read `public.library_records`; direct browser writes and all
+browser access to private sync state are denied. This migration creates new
+tables and does not modify the legacy library, import queue, or worker.
 
 > The `vector` (pgvector) extension is enabled by `0001_init.sql`. If your
 > project blocks `create extension`, enable **Vector** under
@@ -158,3 +181,10 @@ SUPABASE_ANON_KEY=<anon-key>
 Manual check: open **Actions → Supabase keepalive → Run workflow**. A passing run
 confirms the URL/key pair can read through the REST API. Keep the service-role
 key out of this workflow; only the local worker and migration script need it.
+
+## Shared import publication (0007)
+`finish_import_job(text,uuid,jsonb,jsonb)` keeps the worker interface and now publishes a validated library draft plus immutable revision batch in the same transaction as `done`. It locks owner head then job row and rechecks the lease with wall-clock time after waiting. Existing drafts, tombstones, and saved/deleted recipes are never overwritten.
+
+Migration backfill reports published/skipped/invalid completed rows. Service-only `backfill_import_drafts()` can retry still-present results; invalid/unpublished completed sources remain for recovery. Already-cleaned results require a surviving device's reviewed migration. Acknowledgement and cleanup affect only temporary job/source fields, never shared records.
+
+Disposable SQL checks: `supabase/tests/shared_imports.sql` (rollback) and `shared_imports_concurrency.sql` (commits fixture setup; use only `aaf_sync_task1`). Run with the same environment guards as the library protocol fixtures after migrations 0006/0007. No hosted application of these migrations is authorized by these tests.

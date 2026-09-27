@@ -8,11 +8,13 @@ vi.hoisted(async () => {
   globalThis.File = File as unknown as typeof globalThis.File;
 });
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
+import { syncLibraryOnce } from "../sync";
 import type { ParseJob } from "@/lib/db/parseJobs";
-import { closeLocalDB, getLocalDB, type LocalDBSchema } from "../db";
+import { closeLocalDB, getLocalDB, selectVerifiedAccount, signOutLocalAccount, type LocalDBSchema } from "../db";
 import {
   acceptDraft,
   flushLocalImports,
+  listLocalImports,
   queueLocalImport,
   receiveImportDraft,
   retryLocalImport,
@@ -20,12 +22,13 @@ import {
   reselectScreenshotImport,
 } from "../imports";
 
-const { enqueueUrlJob, enqueueImageJob, enqueueTextJob, getJob, ackJob, retryJob, createClient } = vi.hoisted(() => ({
+const { enqueueUrlJob, enqueueImageJob, enqueueTextJob, getJob, listImportJobs, ackJob, retryJob, createClient } = vi.hoisted(() => ({
   enqueueUrlJob: vi.fn(), enqueueImageJob: vi.fn(), enqueueTextJob: vi.fn(),
-  getJob: vi.fn(), ackJob: vi.fn(), retryJob: vi.fn(), createClient: vi.fn(),
+  getJob: vi.fn(), listImportJobs: vi.fn(), ackJob: vi.fn(), retryJob: vi.fn(), createClient: vi.fn(),
 }));
-vi.mock("@/lib/db/parseJobs", () => ({
-  enqueueUrlJob, enqueueImageJob, enqueueTextJob, getJob, ackJob, retryJob,
+vi.mock("@/lib/db/parseJobs", async (importOriginal) => ({
+  ImportQueueJobSchema: (await importOriginal<typeof import("@/lib/db/parseJobs")>()).ImportQueueJobSchema,
+  enqueueUrlJob, enqueueImageJob, enqueueTextJob, getJob, listImportJobs, ackJob, retryJob,
   classifyUrlKind: () => "url",
 }));
 vi.mock("@/lib/supabase/client", () => ({ createClient }));
@@ -48,6 +51,16 @@ function job(id: string, status: ParseJob["status"] = "pending"): ParseJob {
   };
 }
 
+async function receiveSyncedDraft(remote: ParseJob) {
+  const db = await getLocalDB();
+  if (!(await db.get("sync_shadow", `draft:${remote.id}`))) {
+    const draft = { id: remote.id, recipe: remote.result_recipe_json, warnings: remote.result_warnings, received_at: remote.updated_at };
+    const result = await syncLibraryOnce({ verifiedOwnerId: owner, transport: { push: async () => { throw Error("unexpected"); }, pull: async () => ({ protocol_version: 1, batches: [{ revision: 1, records: [{ kind: "draft", entity_id: remote.id, schema_version: 1, revision: 1, payload: draft, deleted: false, updated_at: remote.updated_at }] }], next_revision: 1, has_more: false }) } });
+    if (result.error) throw Error(result.error.message);
+  }
+  await receiveImportDraft(remote);
+}
+
 async function records(id = jobId) {
   const db = await getLocalDB();
   return {
@@ -60,36 +73,132 @@ async function records(id = jobId) {
 async function deleteLocalDB() {
   await closeLocalDB();
   await new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase("aaf-local");
+    const request = indexedDB.deleteDatabase(`aaf-local:${owner}`);
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
     request.onblocked = () => reject(new Error("database deletion blocked"));
+  });
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase(`aaf-local:${other}`);
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error("other database deletion blocked"));
   });
 }
 
 beforeEach(async () => {
   await deleteLocalDB();
   vi.resetAllMocks();
+  selectVerifiedAccount(owner);
   currentUser = owner;
   createClient.mockReturnValue({ auth: { getUser: async () => ({ data: { user: currentUser ? { id: currentUser } : null }, error: null }) } });
   enqueueUrlJob.mockImplementation(async (_url, id) => job(id));
   enqueueImageJob.mockImplementation(async (_file, _kind, id) => job(id));
   enqueueTextJob.mockImplementation(async (_text, _kind, id) => job(id));
   getJob.mockImplementation(async (id) => job(id));
+  listImportJobs.mockResolvedValue([]);
   retryJob.mockImplementation(async (id) => job(id));
   ackJob.mockImplementation(async (id) => job(id, "done"));
-  const randomUUID = vi.fn().mockReturnValueOnce(jobId).mockReturnValue(replacementId);
+  let nextId = 0;
+  const randomUUID = vi.fn(() => `00000000-0000-4000-8000-${String(++nextId).padStart(12, "0")}`);
   vi.stubGlobal("crypto", { randomUUID });
   vi.stubGlobal("navigator", { onLine: true });
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
 });
 afterEach(async () => {
   await deleteLocalDB();
+  signOutLocalAccount();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe("durable local recipe imports", () => {
+  it("rejects a local import list that finishes after an account switch", async () => {
+    const dbA = await getLocalDB();
+    let started!: () => void;
+    let finish!: () => void;
+    const reading = new Promise<void>((resolve) => { started = resolve; });
+    vi.spyOn(dbA, "getAll").mockImplementationOnce(async () => {
+      started();
+      await new Promise<void>((resolve) => { finish = resolve; });
+      return [];
+    });
+    const pending = listLocalImports();
+    await reading;
+    signOutLocalAccount();
+    selectVerifiedAccount(other);
+    finish();
+    await expect(pending).rejects.toThrow("Local account changed");
+  });
+
+  it("rejects a retry's follow-up import read after an account switch", async () => {
+    const queued = await queueLocalImport({ kind: "url", source_url: "https://example.com/toast" });
+    const dbA = await getLocalDB();
+    await dbA.put("imports", { ...queued, state: "error", error: "Parser unavailable" });
+    let started!: () => void;
+    let finish!: () => void;
+    const reading = new Promise<void>((resolve) => { started = resolve; });
+    retryJob.mockImplementationOnce(async () => {
+      const stale = await dbA.get("imports", jobId);
+      vi.spyOn(dbA, "get").mockImplementationOnce(async () => {
+        started();
+        await new Promise<void>((resolve) => { finish = resolve; });
+        return stale;
+      });
+      return job(jobId, "done");
+    });
+    const pending = retryLocalImport(jobId);
+    await reading;
+    signOutLocalAccount();
+    selectVerifiedAccount(other);
+    finish();
+    await expect(pending).rejects.toThrow("Local account changed");
+  });
+  it("does not close B or emit B storage errors for a late A write failure", async () => {
+    const dbA = await getLocalDB();
+    let fail!: (error: Error) => void;
+    let started!: () => void;
+    const startedWriting = new Promise<void>((resolve) => { started = resolve; });
+    vi.spyOn(dbA, "put").mockImplementationOnce(async () => {
+      started();
+      return new Promise<never>((_resolve, reject) => { fail = reject; });
+    });
+    const storageError = vi.fn();
+    window.addEventListener("aaf-local-storage-error", storageError);
+    try {
+      const writing = queueLocalImport({ kind: "text", payload_text: "Toast" });
+      await startedWriting;
+      signOutLocalAccount();
+      selectVerifiedAccount(other);
+      const dbB = await getLocalDB();
+      fail(new Error("A disk failed"));
+      await expect(writing).rejects.toThrow("A disk failed");
+      expect(storageError).not.toHaveBeenCalled();
+      await expect(dbB.getAll("imports")).resolves.toEqual([]);
+    } finally {
+      window.removeEventListener("aaf-local-storage-error", storageError);
+    }
+  });
+  it("keeps a late A import response out of B after sign-out", async () => {
+    await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
+    let finish!: () => void;
+    let started!: () => void;
+    const sent = new Promise<void>((resolve) => { started = resolve; });
+    enqueueTextJob.mockImplementationOnce(async () => {
+      started();
+      await new Promise<void>((resolve) => { finish = resolve; });
+      return job(jobId);
+    });
+    const flushing = flushLocalImports();
+    await sent;
+    signOutLocalAccount();
+    selectVerifiedAccount(other);
+    finish();
+    await flushing;
+    expect(await (await getLocalDB()).getAll("imports")).toHaveLength(0);
+    selectVerifiedAccount(owner);
+    expect((await records()).import).toMatchObject({ state: "queued", payload_text: "Toast" });
+  });
   it("persists the UUID and request before offline submission, then resumes after reopening", async () => {
     const image = new Blob(["png"], { type: "image/png" });
     vi.stubGlobal("navigator", { onLine: false });
@@ -102,7 +211,7 @@ describe("durable local recipe imports", () => {
     await closeLocalDB();
     vi.stubGlobal("navigator", { onLine: true });
     await flushLocalImports();
-    expect(enqueueImageJob).toHaveBeenCalledWith(expect.any(File), "screenshot", jobId, owner);
+    expect(enqueueImageJob).toHaveBeenCalledWith(expect.any(File), "screenshot", jobId, owner, expect.any(Function));
     expect((await records()).import).toMatchObject({ state: "submitted", upload: null });
   });
 
@@ -112,7 +221,7 @@ describe("durable local recipe imports", () => {
     await flushLocalImports();
     expect((await records()).import).toMatchObject({ state: "queued", upload: expect.any(Blob) });
     await flushLocalImports();
-    expect(enqueueImageJob).toHaveBeenNthCalledWith(2, expect.any(File), "screenshot", jobId, owner);
+    expect(enqueueImageJob).toHaveBeenNthCalledWith(2, expect.any(File), "screenshot", jobId, owner, expect.any(Function));
     expect((await records()).import?.upload).toBeNull();
   });
 
@@ -132,7 +241,7 @@ describe("durable local recipe imports", () => {
     expect((await records()).import).toMatchObject({ state: "queued", payload_text: "Toast bread" });
     currentUser = owner;
     await flushLocalImports();
-    expect(enqueueTextJob).toHaveBeenCalledWith("Toast bread", "text", jobId, owner);
+    expect(enqueueTextJob).toHaveBeenCalledWith("Toast bread", "text", jobId, owner, expect.any(Function));
   });
 
   it("does not fetch jobs when hidden and records expired results for retry", async () => {
@@ -250,7 +359,7 @@ describe("durable local recipe imports", () => {
     expect((await retryLocalImport(jobId)).id).toBe(replacementId);
     await flushLocalImports();
     expect(enqueueUrlJob).toHaveBeenCalledTimes(2);
-    expect(enqueueUrlJob).toHaveBeenNthCalledWith(2, "https://example.com/toast", replacementId, owner);
+    expect(enqueueUrlJob).toHaveBeenNthCalledWith(2, "https://example.com/toast", replacementId, owner, expect.any(Function));
   });
 
   it("asks for media reselection if an expired screenshot has already uploaded", async () => {
@@ -264,29 +373,29 @@ describe("durable local recipe imports", () => {
 
   it("commits a validated draft before acknowledgement without saving a recipe", async () => {
     await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
-    await receiveImportDraft(job(jobId, "done"));
+    await receiveSyncedDraft(job(jobId, "done"));
     expect((await records()).draft).toMatchObject({ id: jobId, warnings: ["Check servings"] });
     expect((await records()).recipe).toBeUndefined();
     expect(ackJob).toHaveBeenCalledWith(jobId);
     expect((await records()).import).toMatchObject({ state: "draft", acknowledged: true });
   });
 
-  it("rejects malformed remote output before writing or acknowledging", async () => {
+  it("ignores raw parser output until validated library sync arrives", async () => {
     await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
     const malformed = { ...job(jobId, "done"), result_recipe_json: { ...recipeFixture(), id: "wrong" } };
-    await expect(receiveImportDraft(malformed)).rejects.toThrow();
+    await receiveImportDraft(malformed);
     expect((await records()).draft).toBeUndefined();
     expect(ackJob).not.toHaveBeenCalled();
   });
 
-  it("does not acknowledge when a write inside the draft transaction aborts", async () => {
+  it("does not acknowledge when the queue metadata transaction aborts", async () => {
     await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
     const db = await getLocalDB();
     const transaction = db.transaction.bind(db);
     vi.spyOn(db, "transaction").mockImplementation((storeNames, mode, options) => {
       const tx = transaction(storeNames, mode, options);
-      const store = tx.objectStore("drafts") as IDBPObjectStore<
-        LocalDBSchema, ["imports", "drafts", "recipes"], "drafts", "readwrite"
+      const store = tx.objectStore("imports") as IDBPObjectStore<
+        LocalDBSchema, ["imports", "drafts", "recipes", "sync_shadow"], "imports", "readwrite"
       >;
       const put = store.put.bind(store);
       vi.spyOn(store, "put").mockImplementation(async (...args) => {
@@ -307,22 +416,22 @@ describe("durable local recipe imports", () => {
   it("preserves an edited draft on duplicate delivery and retries failed acknowledgement", async () => {
     await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
     ackJob.mockRejectedValueOnce(new Error("network lost"));
-    await receiveImportDraft(job(jobId, "done"));
+    await receiveSyncedDraft(job(jobId, "done"));
     expect((await records()).import?.acknowledged).toBe(false);
     const db = await getLocalDB();
     const draft = (await records()).draft!;
     await db.put("drafts", { ...draft, recipe: { ...draft.recipe, title: "My toast" } });
-    await receiveImportDraft(job(jobId, "done"));
+    await receiveSyncedDraft(job(jobId, "done"));
     expect((await records()).draft?.recipe.title).toBe("My toast");
     expect((await records()).import?.acknowledged).toBe(true);
   });
 
   it("persists review edits and duplicate delivery keeps them", async () => {
     await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
-    await receiveImportDraft(job(jobId, "done"));
+    await receiveSyncedDraft(job(jobId, "done"));
     await updateImportDraft(jobId, { ...recipeFixture(), title: "My toast" });
     await closeLocalDB();
-    await receiveImportDraft(job(jobId, "done"));
+    await receiveSyncedDraft(job(jobId, "done"));
     expect((await records()).draft?.recipe.title).toBe("My toast");
     expect((await records()).recipe).toBeUndefined();
   });
@@ -338,7 +447,7 @@ describe("durable local recipe imports", () => {
     await closeLocalDB();
     await flushLocalImports();
     expect(enqueueImageJob).toHaveBeenCalledTimes(2);
-    expect(enqueueImageJob).toHaveBeenNthCalledWith(2, expect.any(File), "screenshot", replacementId, owner);
+    expect(enqueueImageJob).toHaveBeenNthCalledWith(2, expect.any(File), "screenshot", replacementId, owner, expect.any(Function));
   });
 
   it("returns the same replacement if screenshot reselection is repeated", async () => {
@@ -363,7 +472,7 @@ describe("durable local recipe imports", () => {
       return job(jobId, "done");
     });
 
-    const delivery = receiveImportDraft(job(jobId, "done"));
+    const delivery = receiveSyncedDraft(job(jobId, "done"));
     await started;
     await acceptDraft(jobId, recipeFixture());
     finishAck();
@@ -375,7 +484,7 @@ describe("durable local recipe imports", () => {
 
   it("saves edited recipe and clears draft atomically; repeated Save preserves later edits", async () => {
     await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
-    await receiveImportDraft(job(jobId, "done"));
+    await receiveSyncedDraft(job(jobId, "done"));
     const saved = await acceptDraft(jobId, { ...recipeFixture(), id: "ignored", title: "Edited toast" });
     expect(saved).toMatchObject({ id: jobId, title: "Edited toast" });
     expect((await records())).toMatchObject({ draft: undefined, recipe: saved, import: { state: "saved" } });
@@ -385,7 +494,7 @@ describe("durable local recipe imports", () => {
 
   it("saves a restored draft whose transient import row was not backed up", async () => {
     await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
-    await receiveImportDraft(job(jobId, "done"));
+    await receiveSyncedDraft(job(jobId, "done"));
     const db = await getLocalDB();
     await db.delete("imports", jobId); // backups keep drafts, never pending imports
     enqueueTextJob.mockClear();
@@ -403,7 +512,7 @@ describe("durable local recipe imports", () => {
 
   it("rolls back a failed Save without losing the draft", async () => {
     await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
-    await receiveImportDraft(job(jobId, "done"));
+    await receiveSyncedDraft(job(jobId, "done"));
     const db = await getLocalDB();
     const transaction = db.transaction.bind(db);
     vi.spyOn(db, "transaction").mockImplementation((storeNames, mode, options) => {
@@ -430,10 +539,55 @@ describe("durable local recipe imports", () => {
   it("acknowledges a saved recipe on later flush after earlier acknowledgement failed", async () => {
     await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
     ackJob.mockRejectedValueOnce(new Error("network lost"));
-    await receiveImportDraft(job(jobId, "done"));
+    await receiveSyncedDraft(job(jobId, "done"));
     await acceptDraft(jobId, recipeFixture());
     await flushLocalImports();
     expect((await records()).import).toMatchObject({ state: "saved", acknowledged: true });
     expect(ackJob).toHaveBeenCalledTimes(2);
   });
+});
+
+it.each([1, 2])("rejects replaced-import switch during read %s", async (switchRead) => {
+  await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
+  const db = await getLocalDB(); const original = (await db.get("imports", jobId))!;
+  await db.put("imports", { ...original, state: "replaced", replacement_id: replacementId });
+  await db.put("imports", { ...original, id: replacementId });
+  const get = db.get.bind(db); let count = 0;
+  const spy = vi.spyOn(db, "get").mockImplementation(async (...args) => {
+    const row = await get(...args);
+    if (++count === switchRead) { signOutLocalAccount(); selectVerifiedAccount(other); }
+    return row;
+  });
+  await expect(retryLocalImport(jobId)).rejects.toThrow("Local account changed");
+  expect(spy).toHaveBeenCalledTimes(switchRead);
+});
+it("does not recover a retry rejected after switching account", async () => {
+  await queueLocalImport({ kind: "url", source_url: "https://example.com/toast", owner_id: owner });
+  const db = await getLocalDB(); const row = (await db.get("imports", jobId))!;
+  await db.put("imports", { ...row, state: "error", error: "failed" });
+  retryJob.mockImplementationOnce(async () => { signOutLocalAccount(); selectVerifiedAccount(other); throw new Error("network lost"); });
+  await expect(retryLocalImport(jobId)).rejects.toThrow("Local account changed");
+  expect(getJob).not.toHaveBeenCalled();
+});
+it("queues review edits and atomic recipe/draft Save without a receipt echo", async () => {
+  await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
+  await receiveSyncedDraft(job(jobId, "done"));
+  const db = await getLocalDB();
+  expect(await db.getAll("sync_outbox")).toEqual([]);
+  const draft = (await db.get("drafts", jobId))!;
+  await updateImportDraft(jobId, { ...draft.recipe, title: "Edited toast" });
+  expect((await db.getAll("sync_outbox"))[0].changes).toMatchObject([{ kind: "draft", payload: { recipe: { title: "Edited toast" } } }]);
+  await acceptDraft(jobId, draft.recipe);
+  expect((await db.getAll("sync_outbox"))[1].changes).toMatchObject([{ kind: "recipe", deleted: false }, { kind: "draft", deleted: true, payload: null }]);
+});
+it("preserves the draft when Save outbox preparation fails", async () => {
+  await queueLocalImport({ kind: "text", payload_text: "Toast", owner_id: owner });
+  await receiveSyncedDraft(job(jobId, "done"));
+  const db = await getLocalDB(); const draft = await db.get("drafts", jobId);
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
+  await expect(acceptDraft(jobId, { ...recipeFixture(), notes: "x".repeat(1024 * 1024) })).rejects.toThrow("1 MiB");
+  const reopened = await getLocalDB();
+  expect(await reopened.get("drafts", jobId)).toEqual(draft);
+  expect(await reopened.get("recipes", jobId)).toBeUndefined();
+  expect(await reopened.getAll("sync_outbox")).toHaveLength(0);
 });

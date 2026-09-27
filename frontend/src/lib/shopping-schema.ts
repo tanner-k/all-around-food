@@ -19,6 +19,9 @@ export const ShoppingListItemSchema = z.object({
   created_at: z.string(),
 });
 
+/** Coverage is derived from this device's pantry and never participates in CAS. */
+export const CanonicalShoppingItemSchema = ShoppingListItemSchema.omit({ pantry_covered: true, pantry_low: true });
+
 export const AisleGroupSchema = z.object({
   aisle: AisleSchema,
   items: z.array(ShoppingListItemSchema),

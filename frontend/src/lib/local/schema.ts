@@ -34,6 +34,7 @@ export const LocalImportSchema = z.object({
   upload: z.instanceof(Blob).nullable(),
   state: z.enum(["queued", "submitted", "draft", "saved", "error", "replaced"]),
   acknowledged: z.boolean(),
+  remote_status: z.enum(["pending", "processing", "done", "error"]).optional(),
   error: z.string().nullable(),
   replacement_id: z.string().nullable().optional(),
   created_at: z.string(),

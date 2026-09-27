@@ -56,3 +56,9 @@ Completed historical phase notes live in `CHANGELOG.md`.
   - [ ] Verify the Mac Mini worker, live website and accessible Instagram imports, and blocked-source fallback
   - [ ] Verify an installed iPhone/iPad and desktop through offline cold launch, edits, cooking, plans, shopping, backup restore, and app update
   - [ ] Confirm the stable production origin, deployment, branch checks, and recovery/rollback procedure before promoting this item to `CHANGELOG.md`
+
+## Account sync — narrowed recipe release and deferred expansion
+- [ ] Verify and release recipe/import account sync with real offline/online proof — [reduced release plan](docs/superpowers/plans/2026-09-26-recipe-sync-release.md)
+- [ ] Finish cooking history/session/count sync after recipe sync is proved — [preserved work and follow-ups](docs/plans/account-sync-followups.md)
+- [ ] Verify planning/shopping/pantry integration before enabling all-stage — [follow-ups](docs/plans/account-sync-followups.md)
+- [ ] Add advanced account backup/history/conflict restoration and source-draft enrollment — [follow-ups](docs/plans/account-sync-followups.md)

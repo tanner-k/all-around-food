@@ -1,16 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ackJob, classifyUrlKind, enqueueImageJob, enqueueTextJob, enqueueUrlJob, getJob, retryJob } from "../parseJobs";
+import { ackJob, classifyUrlKind, enqueueImageJob, enqueueTextJob, enqueueUrlJob, getJob, listImportJobs, retryJob } from "../parseJobs";
 
-const { createClient, insert, select, single, rpc, upload, getUser } = vi.hoisted(() => ({
+const { createClient, insert, select, single, rpc, upload, getUser, order, inKinds } = vi.hoisted(() => ({
   createClient: vi.fn(), insert: vi.fn(), select: vi.fn(), single: vi.fn(), rpc: vi.fn(),
-  upload: vi.fn(), getUser: vi.fn(),
+  upload: vi.fn(), getUser: vi.fn(), order: vi.fn(), inKinds: vi.fn(),
 }));
 vi.mock("@/lib/supabase/client", () => ({ createClient }));
 const job = { id: "00000000-0000-4000-8000-000000000001", status: "pending" };
 beforeEach(() => {
   vi.clearAllMocks();
   single.mockResolvedValue({ data: job, error: null });
-  select.mockReturnValue({ single, eq: vi.fn().mockReturnValue({ single }) });
+  order.mockResolvedValue({ data: [], error: null });
+  inKinds.mockReturnValue({ order });
+  select.mockReturnValue({ single, eq: vi.fn().mockReturnValue({ single, in: inKinds }) });
   insert.mockReturnValue({ select });
   rpc.mockResolvedValue({ data: job, error: null });
   upload.mockResolvedValue({ error: null });
@@ -126,4 +128,50 @@ it("reuses the stable image path after an ambiguous insert without overwriting t
   expect(upload).toHaveBeenNthCalledWith(2, `owner-a/${job.id}.png`, file,
     expect.objectContaining({ upsert: false }));
   expect(insert).toHaveBeenCalledTimes(2);
+});
+
+function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>((done) => { resolve = done; }); return { promise, resolve }; }
+const submitters = [
+  (guard: () => void) => enqueueUrlJob("https://example.com", job.id, "owner-a", guard),
+  (guard: () => void) => enqueueTextJob("toast", "text", job.id, "owner-a", guard),
+  (guard: () => void) => enqueueImageJob(new File(["png"], "a.png", { type: "image/png" }), "screenshot", job.id, "owner-a", guard),
+];
+it.each(submitters)("stops enqueue after stale Auth verification", async (submit) => {
+  const auth = deferred<{ data: { user: { id: string } }; error: null }>();
+  getUser.mockReturnValueOnce(auth.promise);
+  let active = true;
+  const pending = submit(() => { if (!active) throw new Error("stale"); });
+  active = false; auth.resolve({ data: { user: { id: "owner-a" } }, error: null });
+  await expect(pending).rejects.toThrow("stale");
+  expect(insert).not.toHaveBeenCalled(); expect(upload).not.toHaveBeenCalled();
+});
+it.each(submitters)("stops duplicate recovery after stale insert", async (submit) => {
+  const inserted = deferred<{ data: null; error: { code: string } }>();
+  single.mockReturnValueOnce(inserted.promise);
+  let active = true;
+  const pending = submit(() => { if (!active) throw new Error("stale"); });
+  await vi.waitFor(() => expect(insert).toHaveBeenCalled());
+  active = false; inserted.resolve({ data: null, error: { code: "23505" } });
+  await expect(pending).rejects.toThrow("stale");
+  expect(single).toHaveBeenCalledTimes(1);
+});
+it("stops image insert after stale upload", async () => {
+  const uploaded = deferred<{ error: null }>(); upload.mockReturnValueOnce(uploaded.promise);
+  let active = true;
+  const pending = submitters[2](() => { if (!active) throw new Error("stale"); });
+  await vi.waitFor(() => expect(upload).toHaveBeenCalled());
+  active = false; uploaded.resolve({ error: null });
+  await expect(pending).rejects.toThrow("stale"); expect(insert).not.toHaveBeenCalled();
+});
+
+it("discovers only the verified owner's recipe queue metadata", async () => {
+  const metadata = { ...job, kind: "screenshot", source_url: null, attempts: 1, error: "Source blocked",
+    acknowledged_at: null, expires_at: "2026-09-26T00:00:00Z", created_at: "2026-09-25T00:00:00Z", updated_at: "2026-09-25T00:00:00Z" };
+  order.mockResolvedValue({ data: [{ ...metadata, storage_path: "private", payload_text: "secret", result_recipe_json: {} }], error: null });
+  const check = vi.fn();
+  expect(await listImportJobs("owner-a", check)).toEqual([metadata]);
+  expect(select).toHaveBeenCalledWith("id,kind,source_url,status,attempts,error,acknowledged_at,expires_at,created_at,updated_at");
+  expect(select.mock.results[0].value.eq).toHaveBeenCalledWith("user_id", "owner-a");
+  expect(inKinds).toHaveBeenCalledWith("kind", ["url", "video", "screenshot", "text"]);
+  expect(check).toHaveBeenCalledTimes(3);
 });

@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  env: {
+    NEXT_PUBLIC_ACCOUNT_SYNC_STAGE: process.env.NEXT_PUBLIC_ACCOUNT_SYNC_STAGE ?? (process.env.VERCEL === "1" ? "recipes" : "off"),
+  },
 };
 
 export default nextConfig;
