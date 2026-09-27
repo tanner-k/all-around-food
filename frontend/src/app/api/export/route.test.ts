@@ -98,3 +98,16 @@ describe("GET /api/export", () => {
     expect(body).not.toHaveProperty("library");
   });
 });
+
+it("rejects a cookie owner mismatch before reading legacy tables", async () => {
+  const { client } = mockClient();
+  const response = await GET(new Request("https://example.test/api/export?scope=recipes&expected_owner=different"));
+  expect(response.status).toBe(409); expect(client.from).not.toHaveBeenCalled();
+});
+it("exports recipes independently of dangling excluded collection references with verified owner", async () => {
+  mockClient({ recipes: [recipeFixture()], planned_meals: [{ id: "orphan", recipe_id: "missing", meal_plan_id: "missing" }] });
+  const response = await GET(new Request("https://example.test/api/export?scope=recipes&expected_owner=owner-1"));
+  expect(response.status).toBe(200); const body = await response.json();
+  expect(body.owner_id).toBe("owner-1"); expect(body.library.recipes).toEqual([recipeFixture()]);
+  expect(body.library.meal_plans).toEqual([]);
+});

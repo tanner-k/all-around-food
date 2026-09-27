@@ -139,7 +139,8 @@ def _check_public_url(url: str, deadline: float | None = None) -> str:
         addresses = [ipaddress.ip_address(parsed.hostname)]
     except ValueError:
         dns_deadline = deadline if deadline is not None else time.monotonic() + FETCH_TIMEOUT_S
-        if not _DNS_SLOTS.acquire(timeout=max(0, dns_deadline - time.monotonic())):
+        dns_slots = _DNS_SLOTS
+        if not dns_slots.acquire(timeout=max(0, dns_deadline - time.monotonic())):
             raise ValueError(
                 "Recipe website took too long; paste its text or a screenshot"
             ) from None
@@ -157,7 +158,7 @@ def _check_public_url(url: str, deadline: float | None = None) -> str:
             except OSError as exc:
                 errors.append(exc)
             finally:
-                _DNS_SLOTS.release()
+                dns_slots.release()
                 finished.set()
 
         Thread(target=resolve, daemon=True).start()

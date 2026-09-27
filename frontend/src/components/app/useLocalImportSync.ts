@@ -1,66 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { flushLocalImports, listLocalImports } from "@/lib/local/imports";
+import { flushLocalImports } from "@/lib/local/imports";
 import { subscribeToLocalChanges } from "@/lib/local/repository";
 import { createClient } from "@/lib/supabase/client";
+import { captureLocalAccount, isCurrentLocalAccount, subscribeToLocalAccountChange } from "@/lib/local/db";
 
-function hasPublicConfig(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-}
-
-/** Remote work runs only while this app is foregrounded and has an import to finish. */
+/** Discover owner-wide queue metadata even on a device with no submitted jobs. */
 export function useLocalImportSync(): void {
-  const [outstanding, setOutstanding] = useState(false);
-  const [signedIn, setSignedIn] = useState(false);
-  const [foreground, setForeground] = useState(false);
-
+  const [account, setAccount] = useState(captureLocalAccount);
+  useEffect(() => subscribeToLocalAccountChange(() => setAccount(captureLocalAccount())), []);
   useEffect(() => {
+    if (!account.ownerId || !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) return;
     let active = true;
-    const refresh = () => {
-      void listLocalImports().then((rows) => {
-        if (active) setOutstanding(rows.some((row) => row.state === "queued" || row.state === "submitted" ||
-          ((row.state === "draft" || row.state === "saved") && !row.acknowledged)));
-      }).catch(() => undefined); // The shell's storage-error listener reports the failure.
-    };
-    refresh();
-    const unsubscribe = subscribeToLocalChanges(refresh);
-    return () => { active = false; unsubscribe(); };
-  }, []);
-
-  useEffect(() => {
-    if (!outstanding || !hasPublicConfig()) return;
-    let active = true;
+    let authTimer: ReturnType<typeof setTimeout> | undefined;
     const client = createClient();
-    const canRun = () => navigator.onLine && document.visibilityState === "visible";
     const run = () => {
-      const ready = canRun();
-      setForeground(ready);
-      if (!ready) return;
-      void client.auth.getUser().then(async ({ data, error }) => {
-        if (!active) return;
-        const valid = !error && Boolean(data.user);
-        setSignedIn(valid);
-        if (valid) await flushLocalImports();
-      }).catch(() => { if (active) setSignedIn(false); });
+      if (!active || !isCurrentLocalAccount(account) || !navigator.onLine || document.visibilityState !== "visible") return;
+      // flush verifies fresh Auth and guards each network/local boundary itself.
+      void flushLocalImports(account).catch(() => undefined); // Storage failures are account-scoped; network errors retry on the next poll.
     };
     run();
+    const unsubscribeChanges = subscribeToLocalChanges(run, account);
     window.addEventListener("online", run);
-    window.addEventListener("focus", run);
     document.addEventListener("visibilitychange", run);
-    const { data: { subscription } } = client.auth.onAuthStateChange(() => run());
+    const { data: { subscription } } = client.auth.onAuthStateChange(() => {
+      clearTimeout(authTimer); authTimer = setTimeout(run, 0);
+    });
+    const timer = window.setInterval(run, 5000);
     return () => {
-      active = false;
-      window.removeEventListener("online", run);
-      window.removeEventListener("focus", run);
-      document.removeEventListener("visibilitychange", run);
-      subscription.unsubscribe();
+      active = false; clearTimeout(authTimer); window.clearInterval(timer); unsubscribeChanges(); subscription.unsubscribe();
+      window.removeEventListener("online", run); document.removeEventListener("visibilitychange", run);
     };
-  }, [outstanding]);
-
-  useEffect(() => {
-    if (!outstanding || !signedIn || !foreground || !hasPublicConfig()) return;
-    const timer = window.setInterval(() => { void flushLocalImports(); }, 5000);
-    return () => window.clearInterval(timer);
-  }, [outstanding, signedIn, foreground]);
+  }, [account]);
 }

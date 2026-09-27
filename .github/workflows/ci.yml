@@ -52,6 +52,8 @@ jobs:
         run: cd frontend && pnpm exec vitest run
 
       - name: Build
+        env:
+          NEXT_PUBLIC_ACCOUNT_SYNC_STAGE: recipes
         if: hashFiles('frontend/package.json') != ''
         run: cd frontend && pnpm build
 

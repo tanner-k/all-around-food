@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { plannedMealId, type MealPlan } from "@/lib/meal-plan-schema";
 import { formatMonthDay, parseISODate, weekDays } from "@/lib/week";
+import { assertCurrentLocalAccount, captureLocalAccount } from "@/lib/local/db";
 import { localHref } from "@/lib/local/navigation";
 import { DayColumn } from "./DayColumn";
 import { RecipePickerModal } from "./RecipePickerModal";
@@ -25,6 +26,7 @@ function adjacentWeek(weekOf: string, offset: number): string {
 }
 
 export function PlanView({ weekOf, initialPlan, recipes, onAdd, onRemove, onServingsChange, onGenerate }: PlanViewProps) {
+  const [account] = useState(captureLocalAccount);
   const [picker, setPicker] = useState<{ dayIndex: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
@@ -61,7 +63,9 @@ export function PlanView({ weekOf, initialPlan, recipes, onAdd, onRemove, onServ
     try {
       await pendingWrite.current;
       if (failedWrite.current) throw failedWrite.current;
+      assertCurrentLocalAccount(account);
       await onGenerate(weekOf);
+      assertCurrentLocalAccount(account);
       window.location.hash = localHref("shop").split("#")[1];
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not build shopping list."); }
     finally { setReviewing(false); }
