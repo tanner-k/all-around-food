@@ -30,6 +30,11 @@ test("an offline request resumes through mocked Supabase, survives review reload
   let submittedId: string | null = null;
   let acknowledged = false;
   let revision = 0;
+  let holdNextPull = false;
+  let notifyPullStarted!: () => void;
+  let releasePull!: () => void;
+  const pullStarted = new Promise<void>(resolve => { notifyPullStarted = resolve; });
+  const pullReleased = new Promise<void>(resolve => { releasePull = resolve; });
   const records = new Map<string, RemoteRecord>();
   const journal: { revision: number; records: RemoteRecord[] }[] = [];
   const receipts = new Map<string, { status: "accepted"; revision: number; records: RemoteRecord[] }>();
@@ -70,6 +75,11 @@ test("an offline request resumes through mocked Supabase, survives review reload
     }
     if (url.pathname === "/rest/v1/rpc/pull_library_changes") {
       const after = request.postDataJSON().p_after_revision;
+      if (holdNextPull) {
+        holdNextPull = false;
+        notifyPullStarted();
+        await pullReleased;
+      }
       const batches = journal.filter(batch => batch.revision > after);
       await reply({ protocol_version: 1, batches, next_revision: batches.at(-1)?.revision ?? after, has_more: false }); return;
     }
@@ -114,14 +124,21 @@ test("an offline request resumes through mocked Supabase, survives review reload
   await page.getByRole("button", { name: "Edit" }).click();
   await page.getByLabel("Recipe title").fill("My Toast");
   await expect(page.getByText("All changes saved locally")).toBeVisible();
+  // Save after this pass took its outbox snapshot, while its pull is still in flight.
+  holdNextPull = true;
   await page.reload();
+  await pullStarted;
   await expect(page.getByRole("heading", { name: "My Toast" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Syncing…" })).toBeDisabled();
   await page.getByRole("button", { name: "Save to cookbook" }).click();
   await expect(page).toHaveURL(/#\/cookbook\/[^/]+$/);
   await expect(page.getByRole("heading", { name: "My Toast" })).toBeVisible();
+  expect(records.get(`recipe:${submittedId}`)).toBeUndefined();
+  releasePull();
   await page.goto("/app#/cookbook");
   await expect(page.getByRole("link", { name: /My Toast/ })).toBeVisible();
-  await expect.poll(() => records.get(`recipe:${submittedId}`)?.payload).toMatchObject({ title: "My Toast" });
+  // A save during a busy pass is sent by the next 30s foreground poll.
+  await expect.poll(() => records.get(`recipe:${submittedId}`)?.payload, { timeout: 45_000 }).toMatchObject({ title: "My Toast" });
   await expect.poll(() => records.get(`draft:${submittedId}`)?.deleted).toBe(true);
   expect(pushes.some(input => input.changes.length === 2 && input.changes.some(change => change.kind === "recipe" && !change.deleted) && input.changes.some(change => change.kind === "draft" && change.deleted && change.base_revision !== null))).toBe(true);
 });
