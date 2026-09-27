@@ -9,6 +9,7 @@ import { localHref } from "@/lib/local/navigation";
 interface RecipeDetailProps {
   recipe: Recipe;
   onMarkCooked: () => Promise<void>;
+  onDelete: () => Promise<void>;
   onStartCook: () => Promise<void>;
 }
 
@@ -38,7 +39,7 @@ function IngredientRow({ ing }: { ing: Ingredient }) {
   );
 }
 
-export function RecipeDetail({ recipe, onMarkCooked, onStartCook }: RecipeDetailProps) {
+export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: RecipeDetailProps) {
   const [busy, setBusy] = useState(false);
   const [logged, setLogged] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +82,14 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook }: RecipeDetail
     try { await onMarkCooked(); setLogged(true); } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save cooking session.");
     } finally { setBusy(false); }
+  }
+
+  async function handleDelete() {
+    if (!window.confirm(`Delete “${recipe.title}” from your cookbook? If this recipe is connected to your account, its deletion will sync when online. Plans and other references are kept.`)) return;
+    setBusy(true); setError(null);
+    try { await onDelete(); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to delete recipe."); }
+    finally { setBusy(false); }
   }
 
   return (
@@ -186,6 +195,7 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook }: RecipeDetail
         >
           Edit
         </a>
+        <button type="button" onClick={() => void handleDelete()} disabled={busy} className="min-h-11 rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-warn disabled:opacity-50">Delete recipe</button>
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         <button
           type="button"

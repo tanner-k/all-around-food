@@ -13,7 +13,7 @@ import { PantryView } from "@/components/pantry/PantryView";
 import { currentMonday } from "@/lib/week";
 import { RecipeSchema, type Recipe } from "@/lib/recipe-schema";
 import { localHref, type LocalRoute } from "@/lib/local/navigation";
-import { addPantryItem, addPlannedMeal, addRecipesToShopping, addShoppingItem, beginCookSession, completeCookSession, completeShopping, generateWeekShopping, putRecipe, removePantryItem, removePlannedMeal, removeShoppingItem, saveCookProgress, setPantryStatus, setPlannedServings, setShoppingChecked } from "@/lib/local/repository";
+import { addPantryItem, addPlannedMeal, addRecipesToShopping, addShoppingItem, beginCookSession, completeCookSession, completeShopping, generateWeekShopping, putRecipe, removeRecipe, removePantryItem, removePlannedMeal, removeShoppingItem, saveCookProgress, setPantryStatus, setPlannedServings, setShoppingChecked } from "@/lib/local/repository";
 import { assertCurrentLocalAccount, captureLocalAccount, type LocalAccount } from "@/lib/local/db";
 import type { LibrarySnapshot } from "@/lib/local/schema";
 
@@ -89,6 +89,10 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
     return <RecipeDetail recipe={recipe} onMarkCooked={async () => {
       const session = await bound(account, beginCookSession)(recipe.id);
       await bound(account, completeCookSession)(recipe.id, session.session_id!);
+    }} onDelete={async () => {
+      await bound(account, removeRecipe)(recipe.id);
+      assertCurrentLocalAccount(account);
+      window.location.hash = localHref("cookbook").split("#")[1];
     }} onStartCook={async () => {
       await bound(account, beginCookSession)(recipe.id, true);
       assertCurrentLocalAccount(account);

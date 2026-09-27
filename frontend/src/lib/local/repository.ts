@@ -108,6 +108,34 @@ export async function putRecipe(input: Recipe): Promise<void> {
   notifyChange(account);
 }
 
+/** Delete locally; only known cloud records or queued predecessors need a tombstone. */
+export async function removeRecipe(id: string): Promise<void> {
+  const account = captureLocalAccount();
+  try {
+    const db = await getLocalDB(account);
+    assertCurrentLocalAccount(account);
+    const tx = db.transaction(["recipes", "sync_outbox", "sync_shadow"], "readwrite");
+    void tx.done.catch(() => undefined);
+    try {
+      const recipe = await tx.objectStore("recipes").get(id);
+      assertCurrentLocalAccount(account);
+      if (recipe) {
+        const shadow = await tx.objectStore("sync_shadow").get(`recipe:${id}`);
+        const pending = (await tx.objectStore("sync_outbox").getAll()).some(group => group.changes.some(change => change.kind === "recipe" && change.entity_id === id && !change.deleted));
+        assertCurrentLocalAccount(account);
+        await tx.objectStore("recipes").delete(id);
+        if (account.ownerId && ((shadow && !shadow.deleted) || pending))
+          await enqueueSyncGroup(tx, [{ kind: "recipe", entity_id: id, payload: null, deleted: true }]);
+      }
+      await tx.done;
+    } catch (error) { try { tx.abort(); } catch { /* already finished */ } await tx.done.catch(() => undefined); throw error; }
+  } catch (error) {
+    await reportAccountStorageFailure(account, "Unable to delete recipe locally.", error);
+    throw error;
+  }
+  notifyChange(account);
+}
+
 type CollectionTx = IDBPTransaction<LocalDBSchema, ("meal_plans" | "recipes" | "shopping" | "pantry" | "sync_outbox" | "sync_shadow")[], "readwrite">;
 async function queueCollectionChanges(tx: CollectionTx, account: LocalAccount, changes: LocalSyncChange[]): Promise<void> {
   if (account.ownerId && changes.length) await enqueueSyncGroup(tx, changes);

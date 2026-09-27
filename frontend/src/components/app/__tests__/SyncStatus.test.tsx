@@ -69,3 +69,9 @@ it.each([
     expect(screen.getByText(field)).toBeTruthy();
     expect(screen.getByText('Not saved in the cloud')).toBeTruthy();
 });
+it("keeps recipe sync up to date when only deferred device collections remain", () => {
+  render(<SyncStatus sync={{ ...base, status: { ...base.status, deferred: 3 } }} />);
+  expect(screen.getByText("Up to date")).toBeTruthy();
+  expect(screen.getByText(/0 recipe changes waiting/)).toBeTruthy();
+  expect(screen.getByText(/3 device-only change groups/)).toBeTruthy();
+});

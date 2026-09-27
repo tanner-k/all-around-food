@@ -23,3 +23,7 @@ The initial schema supports recipes, drafts, individual planned meals, shopping 
 - The journal, receipts, and tombstones are retained until a separately designed device-expiry and full-resync protocol exists.
 - The import worker may later publish shared drafts through the same account revision lock; its current queue remains unchanged by this migration.
 - This decision does not claim hosted deployment, existing-library enrollment, or physical-device validation. Those are separate release gates.
+
+## Approved initial release scope (2026-09-26)
+
+The first release enables recipes and shared import drafts only. Existing recipes enter through explicit reviewed copy with source/account backups and duplicate choices; other collections and source drafts remain in their original stores/backups. The [reduced release plan](../superpowers/plans/2026-09-26-recipe-sync-release.md) supersedes the original Task6/7/8 breadth. Cooking history migration0008/protocol2 and advanced recovery are deferred, with unfinished work preserved in the [follow-up record](../plans/account-sync-followups.md).

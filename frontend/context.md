@@ -41,7 +41,7 @@ pnpm dev
 
 ### API Routes
 - `POST /api/import/parse` and `POST /api/pantry/receipt` — retired direct frontend parsers; both return 410
-- `GET /api/export` — authenticated owner-only one-time cloud library export
+- `GET /api/export` — authenticated owner-only legacy library export; recipe-copy requests use `scope=recipes&expected_owner=<destination>` and return freshly verified owner identity, recipe records, and retained raw excluded source tables
 - `/api/pricing/*` — legacy FastAPI pricing proxies, kept for the separate opt-in pricing suite; the personal app does not call them
 
 The evaluation dashboard uses the owner-scoped Supabase `evaluation_stats` view. Old recipe, meal-plan, pantry, shopping-list, and evaluation proxy routes have been removed; the personal `/app` reads and writes IndexedDB directly.
@@ -56,9 +56,9 @@ The evaluation dashboard uses the owner-scoped Supabase `evaluation_stats` view.
 - Before adding a new dependency, check whether it duplicates something already in `package.json`
 
 ## Account library sync
-- `LocalApp` owns `useLibrarySync` and `SyncStatus`: freshly verified identities select isolated local libraries, foreground passes use cancellable sync, and conflict review retains both versions with recoverable exports. Auth callbacks schedule checks outside Supabase’s lock. Explicit sign-out stays closed until a successful confirmation return is freshly verified.
-- `NEXT_PUBLIC_ACCOUNT_SYNC_STAGE=off|recipes|all` defaults to `off`. Off preserves account databases and queues while pausing cloud activity; recipes uploads recipes/drafts and labels other collections as device-only. Enable all only after the remaining collection codecs and mutations pass integration checks.
-- Account restore/copy remains guarded until reviewed account migration is implemented. Cached app readiness and cloud library status remain separate.
+- `LocalApp` owns `useLibrarySync` and `SyncStatus`: freshly verified identities select isolated local libraries, foreground passes use cancellable sync, and conflict review retains both versions with recovery-reference exports. Auth callbacks schedule checks outside Supabase’s lock. Explicit sign-out stays closed until a successful confirmation return is freshly verified.
+- `NEXT_PUBLIC_ACCOUNT_SYNC_STAGE=off|recipes|all` defaults to `off`. Next config defaults Vercel builds to recipes and other builds to off; an explicit environment value overrides it. Off preserves account databases and queues while pausing cloud activity; recipes uploads recipes/drafts and labels other collections as device-only. Enable all only after the remaining collection codecs and mutations pass integration checks.
+- Settings provides explicit recipe-only copy from the fixed original guest library, a v1 backup, or owner-bound legacy cloud export. Each recipe write and create/update outbox intent commits atomically; unchanged recipes enroll only without a shadow/predecessor. Same-ID differences default to keeping the account version; pending matching drafts require Imports review. Source and account backup downloads plus confirmation are required, and stale account/library previews abort. Source drafts/other collections stay in originals/backups; full account restore/Replace remains disabled. Cached app readiness and cloud library status remain separate.
 
 ## Shared import drafts
 - Foreground import polling discovers the verified owner's submitted queue even on devices without local jobs. Only queue metadata is copied; unsent screenshots and pasted source text remain on the submitting device. Unsubmitted offline requests appear elsewhere only after upload.
@@ -68,3 +68,6 @@ The evaluation dashboard uses the owner-scoped Supabase `evaluation_stats` view.
 - Each planned occurrence has a persisted ID and position; `meal_plans` remains a weekly local projection. Independent offline additions sort by position then ID. Missing recipe references remain visible/recoverable.
 - Full-stage planning, shopping, and pantry actions commit one bounded outbox group with their entity writes. Shopping generation uses explicit removed-row tombstones and preserves checked state for unchanged demand. Completion groups pantry stock with purchased-row removal.
 - Shopping coverage flags are derived locally from pantry records after sync and never uploaded. Pantry records retain independent IDs even when names match. Cooking sync/codecs remain a separate integration gate before enabling full rollout.
+
+## Recipe deletion
+- Recipe detail provides a native-confirmed Delete action through the captured account boundary. Removal and a valid recipe tombstone intent commit together. Synced rows use their shadow base; unsent creates supply a dependency. Guest or unknown unenrolled local recipes are removed locally without an invalid never-existing cloud tombstone. Referenced plans, shopping, and cook progress remain recoverable. Missing recipes are a no-op.
