@@ -1,6 +1,6 @@
 # 0010 — Offline-first account library synchronization
 
-**Status:** Accepted for implementation; hosted rollout unverified
+**Status:** Accepted; recipes/import drafts deployed, live multi-context proof pending
 **Date:** 2026-09-25
 **Extends:** ADR 0008's device-first library. ADR 0008 remains the historical record of the earlier PWA milestone.
 
@@ -26,4 +26,4 @@ The initial schema supports recipes, drafts, individual planned meals, shopping 
 
 ## Approved initial release scope (2026-09-26)
 
-The first release enables recipes and shared import drafts only. Existing recipes enter through explicit reviewed copy with source/account backups and duplicate choices; other collections and source drafts remain in their original stores/backups. The [reduced release plan](../superpowers/plans/2026-09-26-recipe-sync-release.md) supersedes the original Task6/7/8 breadth. Cooking history migration0008/protocol2 and advanced recovery are deferred, with unfinished work preserved in the [follow-up record](../plans/account-sync-followups.md).
+The first release enables recipes and shared import drafts only. Existing recipes enter through explicit reviewed copy with source/account backups and duplicate choices; other collections and source drafts remain in their original stores/backups. Migrations 0006/0007 are applied and the Vercel release is live; two-context proof and physical-device checks remain pending. The [reduced release plan](../superpowers/plans/2026-09-26-recipe-sync-release.md) supersedes the original Task6/7/8 breadth. Cooking history migration0008/protocol2 and advanced recovery are deferred, with unfinished work preserved in the [follow-up record](../plans/account-sync-followups.md).
