@@ -91,3 +91,87 @@ No `frontend/src/components/ui/` exists yet (plan 03 creates it) — this plan's
 - [ ] `tabular-nums`, `text-balance`/`text-pretty`, `hyphens-auto`, `active:` states, and `::selection` are applied at the cited sites.
 - [ ] Section eyebrow styling is defined once and used everywhere it previously had a bespoke className.
 - [ ] `pnpm lint`, typecheck, `pnpm test`, `pnpm build`, `pnpm test:pwa` all pass; no protected selector text changed.
+
+## Implementation notes
+
+Branch `claude/premium-ui-10-detail-polish`, cut from `ba270d8` (wave 1 merged). The work was split into three PR groups, each done by a subagent with its own set of files, and then reviewed here. Plan 10 items that fall in files other wave 2 plans own were left to those plans (see Handoffs).
+
+### Shipped
+
+- `d5065b4` **Shared CSS.** `globals.css` has a delimited `Plan 10: detail polish` block with `::selection` (terra-soft on ink) and a Tailwind `@utility eyebrow`: xs size and line-height, weight 600, uppercase, 0.08em tracking, and no color. `lib/typography.ts` exports `eyebrow = "eyebrow text-ink-mute"` for the default muted label. Call sites add `text-terra` for scene labels.
+- `a210e92` **Forms and inputs (PR 1).**
+  - **`components/CheckboxButton.tsx` (new, with 6 tests).** This is ShoppingRow's `<button role="checkbox" aria-checked>` pattern pulled into one component, the owner-decided checkbox language. It takes `checked` and `onChange(next)`, plus `aria-label` or `aria-labelledby`. Size `md` draws a 44px box and `sm` a 20px box; both keep a 44px hit area. It has a focus-visible outline in `--color-focus`, `active:scale-95` and a disabled style. `className` is for layout only.
+  - **`RecipeEditForm.tsx`.**
+    - `inputClass` changes `text-sm` to `text-base` (16px, so iOS doesn't zoom on focus). Its `focus:outline-none focus:border-terra` becomes `focus-visible:outline-2 outline-offset-2 outline-focus`, so there is no `:focus` styling.
+    - The Difficulty select gets `appearance-none` and a lucide `ChevronDown`.
+    - The Optional flag is a `CheckboxButton` named `Optional: <ingredient>`, with the visible "Optional" text kept.
+    - The ingredient and step `×` buttons are now `IconButton`s with a lucide `X`. Their labels are unchanged.
+    - The labels and section headings use the eyebrow.
+  - **`RecipeCopySettings.tsx`.** The version select is styled the same way. The confirm checkbox is a `CheckboxButton` named by its sentence through `aria-labelledby`, with the same disabled condition. The button class gains the focus ring.
+  - **`AddFromRecipesModal.tsx`.** Each row is a `<label>` holding a `CheckboxButton` and the title. Clicking the text toggles the checkbox once.
+  - **`ShoppingRow.tsx`** (wave 1 handoff). The checkbox is now `CheckboxButton` and the `×` is `IconButton` + lucide `X`. The quantity gets `tabular-nums`.
+- `2b85585` **Glyphs and typography (PR 2).**
+  - **`ImportFlow.tsx`.** `⏳` becomes lucide `Hourglass` (`motion-safe:animate-pulse`) and `✓` becomes lucide `Check`, both `aria-hidden`. The "Adding to the queue…" box gets `role="status"`. "Add another" is a `Button`.
+  - **`SyncStatus.tsx`** (wave 1 handoff). The "Sync needs attention" dot is `bg-danger`, and the actionable error text is `text-danger`. "Review changes" stays `bg-warn`.
+  - **Eyebrow migration** in `SectionHeader.tsx` (the terra scene label, which goes from 0.1em to 0.08em), `DataSettings.tsx` ("Your data", previously `tracking-widest`), `RecipeReview.tsx` (the Ingredients and Steps labels only, not the hero), and the legacy `PriceCompareTable.tsx`, `EvalTable.tsx` and `evaluations/page.tsx`.
+  - **Text wrapping.** `text-balance` goes on the SectionHeader h1, the DataSettings headings and the DropZone headline. `text-pretty` goes on the SectionHeader description, the long DataSettings paragraphs and the ImportFlow helper.
+  - **`tabular-nums`** goes on the prices table rank and date cells and the evaluations stat value.
+  - **DropZone.** The decorative `⬇` is `aria-hidden`.
+- `0020410` **Loading and empty states (PR 3).**
+  - **Skeletons.** New `CookbookSkeleton.tsx` and `RecipeDetailSkeleton.tsx` sit next to `LocalScreens.tsx`. Each is a `role="status"` with an aria-label and sr-only "Opening your local cookbook…", and its decorative body is `aria-hidden` with `motion-safe:animate-pulse`.
+  - **`LocalApp.tsx`.** Only the final fallback changed: it picks a skeleton by `route.view` (`cookbook` or `recipe`) and keeps the generic text on other routes. The snapshot, account (`dbName`) and error conditions, the hooks and the sync UI are unchanged, so account switching behaves as before.
+  - **Empty states.** Pantry, shopping, the import queue and LocalImports each get an `aria-hidden` lucide icon (`Archive`, `ShoppingBasket`, `Inbox`) in `text-line-strong`, and their text gets `text-pretty`. Every string is unchanged.
+  - **Small extras.** "Loading queue…" gets `role="status"`. `tabular-nums` goes on the shopping count, the pantry aisle counts and "Attempt N".
+  - **Tests.** New `Skeletons.test.tsx` and `LocalApp.loading.test.tsx` use a never-resolving `readSnapshot` to check that `#/cookbook`, `#/cookbook/<id>` and `#/plan` each show the right placeholder, and that a hashchange swaps it. `LocalApp.test.tsx` gains one `getByTestId("cookbook-skeleton")` assertion.
+
+### Deviations
+
+- **Eyebrow location.** The eyebrow is a CSS `@utility` in `globals.css` rather than only a string in `typography.ts`, as the implementation rules ask. `typography.ts` re-exports it with the default color. It leaves color out so that `eyebrow text-terra` never depends on utility sort order.
+- **Checkbox component.** The plan said "interim call-site patches, not new primitives". One small `components/CheckboxButton.tsx` (outside `components/ui/`) replaces four copies of the same SVG button, and it is the concrete form of "one checkbox visual language".
+- **Remove buttons.** The `×` remove buttons in ShoppingRow and RecipeEditForm are now `IconButton` + lucide `X`. The plan's glyph design kept `×` as text, but the wave 1 handoff asked for `IconButton`. Their hover goes from terra or danger to IconButton's ghost style.
+- **Recipe detail skeleton.** It is a single column, because `RecipeDetail.tsx` stacks ingredients and steps at every width today. The plan said "two columns". Plan 05 should update the skeleton if it adds columns.
+- **Empty-state icons in the import lists.** ImportQueue and LocalImports have left-aligned, unboxed empty lines, so their icon is left-aligned rather than centered.
+- **DropZone emoji pills.** The `📷 Screenshot`, `🔗 URL` and other emoji labels were not wrapped in `aria-hidden`. `LocalImports.test.tsx` finds the button by the name "🔗 URL", and changing the accessible name is out of this plan's scope.
+- **Not done here:** `hyphens-auto` on long recipe titles (they are in `LocalScreens` and `RecipeDetail`), the glyphs in cook and plan files, and the global tap-highlight rule. See Handoffs.
+- No test assertions were changed or loosened, and no visible copy or roles changed. The two native checkboxes became `role="checkbox"` buttons, and the existing `getByRole("checkbox")` and Playwright `.check()` calls pass unchanged.
+
+### Checks
+
+Run from `frontend/` after `pnpm install --frozen-lockfile`:
+- `pnpm lint`: pass.
+- `pnpm exec tsc --noEmit`: pass.
+- `pnpm exec vitest run`: 54 files and 432 tests pass (baseline 421, plus 11 new).
+- `pnpm build`: pass, with CI's public env.
+- `pnpm test:pwa`: 7/7 pass, using the headless-shell shim from `IMPLEMENTING.md`.
+- **Screenshots.** Taken at 393×852 and 1280×860 against `next start`, of:
+  - the edit form, with a keyboard-focused title field showing the ring;
+  - Settings with a recipe-copy preview (select and confirm checkbox);
+  - shop, empty and populated;
+  - the Add from recipes sheet;
+  - pantry and import;
+  - loading on the cookbook, recipe and plan routes, forced by stalling `indexedDB.open`.
+
+  Inputs render at 16px, the selects show the chevron, the checkboxes share one look, and the skeletons match the page shapes. Nothing overflows horizontally.
+
+### Handoffs
+
+- **Plan 02** (cookbook grid in `LocalScreens.tsx`): add `hyphens-auto break-words` and `text-balance` to the card titles and a small `aria-hidden` icon to the "Your cookbook is empty" block. If the card shape changes (the generated cover), update `CookbookSkeleton.tsx` to match.
+- **Plan 05** (`RecipeDetail.tsx`):
+  - Swap `⏱` for lucide `Timer`.
+  - Wrap `✓` and `→` in `aria-hidden` spans.
+  - Add `tabular-nums` to the meta pills, and `text-balance hyphens-auto break-words` to the title.
+  - Use `eyebrow` from `lib/typography` for the section labels.
+  - If the layout changes, update `RecipeDetailSkeleton.tsx`.
+- **Plan 04** (`cook/**`):
+  - Swap `⏱` for lucide `Timer` in `CookScrollView`.
+  - Replace or `aria-hide` `🌡`, `⏲`, `‹`/`›`, `✓` and `→`.
+  - Add `tabular-nums` on the timers (`CookMode`, `CookTimer`, `TimerSheet`), and use `eyebrow` in `CookIngredientPanel`.
+- **Plan 08** (`plan/**`): wrap the `×` in `PlannedRecipeCard` (or use `IconButton`), use `eyebrow` in `DayColumn`, and add an `aria-hidden` icon to the `RecipePickerModal` empty state.
+- **Plan 07:** `-webkit-tap-highlight-color` and the touch rules. Plan 10's `globals.css` block only holds `::selection` and `eyebrow`.
+
+### Needs a device
+
+- Confirm on iPhone Safari (installed PWA) that focusing any RecipeEditForm input or select no longer zooms the page.
+- Check that the lucide `Hourglass`/`Check` icons replace colour-emoji rendering on iOS, and whether the DropZone's `⬇` and emoji pills still fall back to Apple Color Emoji.
+- Check VoiceOver on the `role="checkbox"` buttons: each is read as a checkbox with its name and state, including the Settings confirmation named through `aria-labelledby`.
+- Check that tapping a checkbox's label text in the Add from recipes sheet toggles it once on iOS.
