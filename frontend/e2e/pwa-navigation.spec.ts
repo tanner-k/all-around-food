@@ -11,7 +11,7 @@ test("mobile tab bar shows exactly the four sections", async ({ page }) => {
 
 test("header Settings link reaches settings in one tap on mobile", async ({ page }) => {
   await page.goto("/app#/plan");
-  await expect(page.getByRole("link", { name: "Previous week" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plan your week." })).toBeVisible();
   await page.locator("header").getByRole("link", { name: "Settings" }).click();
   await expect(page).toHaveURL(/\/app#\/settings$/);
   await expect(page.getByRole("heading", { name: "Back up your kitchen" })).toBeVisible();
