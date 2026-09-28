@@ -7,6 +7,7 @@ import { RecipeEditForm } from "@/components/recipe/RecipeEditForm";
 import { CookMode } from "@/components/cook/CookMode";
 import { DataSettings } from "@/components/settings/DataSettings";
 import { LocalImports } from "./LocalImports";
+import { CookbookCard } from "./CookbookCard";
 import { PlanView } from "@/components/plan/PlanView";
 import { ShoppingListView } from "@/components/shopping/ShoppingListView";
 import { PantryView } from "@/components/pantry/PantryView";
@@ -84,10 +85,8 @@ export function LocalScreens({ route, snapshot, sync }: { route: LocalRoute; sna
         <a href={localHref("import")} className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink">Import recipe</a>
       </div>
       {recipes.length === 0 ? <div className="mt-12 rounded-2xl border border-line bg-paper p-12 text-center text-ink-mute">Your cookbook is empty. Add a recipe to get started.</div>
-        : <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">{recipes.map((item, index) =>
-          <a key={item.id} href={localHref("recipe", item.id)} className={`block overflow-hidden rounded-xl bg-paper transition-shadow hover:shadow-md ${index === 0 ? "border-2 border-terra" : "border border-line"}`}>
-            <div className="aspect-video bg-paper-2" /><div className="flex flex-col gap-1 p-4"><p className="font-serif text-xl text-ink">{item.title}</p><p className="text-sm text-ink-mute">{item.times_made ? `${item.times_made}× cooked` : "just added"}</p></div>
-          </a>)}</div>}
+        : <ul className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">{recipes.map((item, index) =>
+          <CookbookCard key={item.id} recipe={item} featured={index === 0} />)}</ul>}
     </>;
   }
 

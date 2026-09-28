@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { withEditedAmount, type Recipe } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
+import { RecipeCover } from "./RecipeCover";
 import { Button } from "@/components/ui/Button";
 
 interface RecipeReviewProps {
@@ -107,8 +108,8 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
         <p className="font-semibold">Check these details before saving</p>
         <ul className="mt-2 list-disc pl-5">{warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
       </div>}
-      {/* Hero placeholder */}
-      <div className="aspect-video w-full rounded-2xl bg-paper-2" />
+      {/* Hero cover */}
+      <RecipeCover recipe={recipe} className="aspect-video w-full rounded-card" />
 
       {/* Title + meta row */}
       <div className="flex items-start justify-between gap-4">
