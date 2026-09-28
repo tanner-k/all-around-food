@@ -181,3 +181,54 @@ Steps 1–3 and 5 don't need plan 03 and can ship first if sequencing slips.
       sticky ingredients column.
 - [ ] `recipe-delete.test.tsx`, `LocalApp.test.tsx`, and
       `pwa-recipe-copy.spec.ts` are updated and passing.
+
+## Implementation notes
+
+Session scope: the whole plan, plus plan 10's items inside `RecipeDetail.tsx`. Branch `claude/premium-ui-05-recipe-detail`, cut from `ba270d8`. The hero block (the `bg-paper-2` 16:10 placeholder) is untouched for plan 02; the title stays a single `<h1>` for plan 06.
+
+### Shipped
+
+- `7819430` **Amount formatter.** New `lib/format-quantity.ts`: `formatIngredientAmount(quantity)` renders `value` + `unit` (common fractions such as `1½`, `¼`; simple unit plurals such as `2 slices`, `4 cloves`; abbreviations such as `tbsp`/`oz` unchanged) and falls back to `as_written` when `value` is null, which covers `withEditedAmount`'s freeform path. Nothing reusable existed: `cook/` has no formatter, and `shopping-logic.ts`'s `formatNumber`/`displayUnit` are private and canonicalize units for aggregation. Tests in `lib/__tests__/format-quantity.test.ts`.
+- `adf4de4` **Recipe detail.**
+  - **Actions.** One action row after the description: secondary `Button size="lg"` "Mark cooked" (then "Cooked ✓", with the ✓ `aria-hidden`), a `Menu label="Recipe options"` with **Edit** (navigates to the same `localHref("edit", id)`) and **Delete** (danger item), and the primary `Button size="lg" href=…` "Start cooking". On phones the row wrapper is `display: contents`, so "Start cooking" becomes the last item in the page column (`order-last`) and is `sticky` at `bottom: calc(var(--tabbar-height, calc(3.5rem + env(safe-area-inset-bottom))) + 0.75rem)`, full width with `shadow-raised`. From `md:` it is `static` and sits at the end of the row (`md:ml-auto`). The `onStartCook` promise/error contract is unchanged.
+  - **Delete.** `Dialog variant="danger"` titled "Delete recipe?" with the old confirm copy as its description, "Delete" and "Cancel". `handleDelete` only lost its `window.confirm` gate; its try/catch/error state is the same and it closes the dialog in `finally`. The `Menu` closes (and refocuses its trigger) before the `Dialog` opens, so two overlays are never open at once; the `Dialog` restores focus to the trigger. The deletion and tombstone path in `LocalScreens`/`repository` is untouched.
+  - **Ingredients.** Two columns: a `w-20 text-right tabular-nums` amount column from `formatIngredientAmount`, then name, `, preparation` (muted) and a muted italic `optional` suffix. Hairline row dividers replace the `·` bullets. Groups keep their heading.
+  - **Steps.** `InlineAmountText` gains `variant?: "chip" | "inline"` (default `"chip"`, so cook mode and `RecipeReview` render exactly as before). Recipe detail passes `"inline"`: plain `text-terra font-medium tabular-nums`, no background, and parsed amounts drop the repeated name ("garlic 4 cloves", not "garlic 4 cloves garlic"). Step numbers get a fixed `w-7` right-aligned column so the text lines up.
+  - **Meta.** The `⏱ {time} min` pill is gone; the uppercase breadcrumb is the only time display. Pills are `tabular-nums`.
+  - **Desktop.** Ingredients and steps sit in `md:grid md:grid-cols-[minmax(260px,320px)_1fr] md:gap-10`; ingredients are `md:sticky md:top-6 md:self-start md:max-h-[calc(100dvh-3rem)] md:overflow-y-auto`. The header in `app/layout.tsx` is not fixed or sticky, so `top-6` needs no header offset. The page widens from `max-w-3xl` to `lg:max-w-4xl` so the steps column isn't cramped.
+  - **Plan 10 items.** `text-balance break-words hyphens-auto` on the title, `text-pretty` on step text, `tabular-nums` on pills, amounts and step numbers, `aria-hidden` ✓ with the shared `text-[1em] leading-none align-[-0.05em]` treatment, → dropped with the rename.
+  - **Tests.** `recipe-delete.test.tsx` opens "Recipe options" → "Delete" and clicks the dialog's Cancel/Delete instead of mocking `window.confirm`; the account-switch test calls `selectVerifiedAccount("other")` after the dialog opens and before Delete. The `sync_outbox`/`recipes` assertions are unchanged. `LocalApp.test.tsx`: `link "Start cook mode →"` → `link "Start cooking"` and `button "Cooked ✓"` → `button "Cooked"`. `e2e/pwa-recipe-copy.spec.ts`: the native `dialog` listener is replaced by Menu → Delete → dialog Delete. New `components/recipe/__tests__/RecipeDetail.test.tsx` (7 tests): quantity column parsed and `as_written` fallback, time shown once with and without a course, Edit/Delete only in the menu, menu closes before the dialog, Cancel focused, cancel keeps the recipe, a failed delete closes the dialog and shows the alert, and inline step amounts carry no chip.
+
+- Notes commit: this section, plus `frontend/context.md` ("Recipe deletion"): "native-confirmed" → overflow menu plus danger `Dialog`.
+
+### Deviations
+
+- **No time fallback pill.** The plan says the breadcrumb vanishes when `course` is null. It doesn't: it filters falsy parts, so a recipe with no course shows "45 MIN" alone. A fallback pill would have shown time twice, so it was not added, and because ⏱ had only that one site, no lucide `Timer` was needed here.
+- **Sticky offset fallback.** The instructions suggested `var(--tabbar-height, 0px)`. With `0px`, "Start cooking" would sit under the 56px tab bar on phones until plan 07 merges, so the fallback is the tab bar's current height, `calc(3.5rem + env(safe-area-inset-bottom))`. Once plan 07 defines the variable (0px from `md:` and on cook routes) the fallback is never used; the button is `md:static` anyway.
+- **Accessible name "Cooked".** Plan 10's `aria-hidden` on ✓ changes the button's name from "Cooked ✓" to "Cooked"; the one test that asserted it is updated.
+- **Inline amounts.** Beyond restyling, the inline variant shows `value` + `unit` instead of `as_written`, because `as_written` repeats the ingredient name right after the matched name in the step text. Unparsed amounts still show `as_written`. Cook mode and review are unaffected (default `"chip"` variant).
+- **Focus order on phones.** "Start cooking" is visually last (sticky) but follows the ⋯ button in DOM/tab order; that is the cost of one element serving both layouts without JavaScript.
+- No subagents were used; the change is one component plus tests.
+
+### Checks
+
+Run from `frontend/` after `pnpm install --frozen-lockfile`, with CI's public env and the Chromium shim from `IMPLEMENTING.md`:
+- `pnpm lint`: pass.
+- `pnpm exec tsc --noEmit`: pass.
+- `pnpm exec vitest run`: 53 files, 431 tests pass (baseline 421; 10 new).
+- `pnpm build`: pass. The arbitrary `bottom-[…]` compiles to `bottom: calc(var(--tabbar-height,calc(3.5rem + env(safe-area-inset-bottom))) + .75rem)`.
+- `pnpm test:pwa`: 7/7 pass, including the updated `pwa-recipe-copy` delete at 375px and 812px.
+- **Screenshots** against the production build, at 393×852 and 1280×860, of recipe detail at the top, scrolled, with the Menu open and with the Dialog open: no horizontal overflow; the sticky CTA clears the tab bar; the Dialog focuses Cancel; the desktop ingredients column stays pinned while the steps scroll.
+
+### Handoffs
+
+- **Plan 07:** the fixed "Offline ready" pill (`ServiceWorkerRegister.tsx`, `bottom-20 right-4`) overlaps the right end of the sticky "Start cooking" button on phones. When you move it onto `--tabbar-height`, lift it clear of sticky actions (roughly `calc(var(--tabbar-height) + 4.5rem)`) or let it dismiss. Plan 08's sticky "Review shopping →" will have the same overlap. Also, "Start cooking" assumes `--tabbar-height` includes the safe-area inset, per the README.
+- **Plan 03 follow-up (components/ui, no wave 2 owner):** `Menu` always opens downward. On a phone with the page scrolled to the top, the "Recipe options" menu opens about 60px above the tab bar; both items stay visible and tappable, but a flip-up when there's no room below would be cleaner.
+- **Plan 06:** the title is still a single `<h1>` (split into text plus `<em>`) for the `view-transition-name` hook.
+- **Plan 02:** the hero block is unchanged. The page can now be `lg:max-w-4xl` wide, so a 16:10 cover grows to about 896×560 on desktop; cap its height in the hero block if that's too tall.
+
+### Needs a device
+
+- Sticky "Start cooking" above the tab bar with the home-indicator inset on an installed iPhone, and that it doesn't jitter during momentum scroll.
+- The desktop sticky ingredients column on iPad in landscape (`md:` layout) with a long ingredient list, which scrolls inside `100dvh - 3rem`.
+- `text-balance` and `hyphens-auto` on long titles in iOS Safari.
