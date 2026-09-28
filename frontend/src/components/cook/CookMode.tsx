@@ -22,9 +22,10 @@ const SWIPE_MIN_PX = 60;
 
 function ScreenOnPill() {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-forest-soft px-2 py-0.5 text-xs font-medium text-forest">
+    <span title="Screen stays on" className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-forest-soft px-2 py-0.5 text-xs font-medium text-forest">
       <MonitorCheck className="size-3.5" aria-hidden="true" />
-      Screen stays on
+      {/* Icon-only on the narrowest phones so the top strip never overflows. */}
+      <span className="max-[389px]:sr-only">Screen stays on</span>
     </span>
   );
 }
