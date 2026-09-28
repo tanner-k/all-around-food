@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { readSnapshot, subscribeToLocalChanges } from "@/lib/local/repository";
 import { captureLocalAccount, isCurrentLocalAccount, subscribeToLocalAccountChange } from "@/lib/local/db";
 import { parseLocalRoute, type LocalRoute } from "@/lib/local/navigation";
-import { transitionRoute } from "@/lib/local/route-transition";
+import { navDirection, sameRoute, transitionRoute } from "@/lib/local/route-transition";
 import type { LibrarySnapshot } from "@/lib/local/schema";
 import { CookbookSkeleton } from "./CookbookSkeleton";
 import { LocalScreens } from "./LocalScreens";
@@ -50,7 +50,12 @@ export function LocalApp() {
       const prev = routeRef.current;
       const next = parseLocalRoute(window.location.hash);
       routeRef.current = next;
-      transitionRoute(prev, next, () => setRoute(next));
+      transitionRoute(prev, next, () => {
+        setRoute(next);
+        // A new screen opens at the top (inside the commit, so the transition's
+        // "after" snapshot is the top). Going back keeps the browser's restored scroll.
+        if (!sameRoute(prev, next) && navDirection(prev, next) !== "pop") window.scrollTo(0, 0);
+      });
     };
     const onStorageError = (event: Event) => {
       const detail = (event as CustomEvent<{ message: string }>).detail;

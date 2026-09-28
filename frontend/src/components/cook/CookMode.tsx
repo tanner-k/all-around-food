@@ -38,6 +38,9 @@ function KitchenToggle({ dark, onToggle }: { dark: boolean; onToggle: () => void
       title={dark ? "Switch to light" : "Switch to dark kitchen mode"}
       icon={dark ? <Sun className="size-5" /> : <Moon className="size-5" />}
       onClick={onToggle}
+      // Nothing to toggle when the whole app is already dark. Not `dark:hidden`:
+      // that variant also matches [data-cook-theme], which would hide it once on.
+      className="[html[data-theme=dark]_&]:hidden"
     />
   );
 }

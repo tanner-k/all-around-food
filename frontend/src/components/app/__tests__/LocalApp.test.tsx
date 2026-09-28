@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { closeLocalDB } from "@/lib/local/db";
 import { putRecipe, readSnapshot } from "@/lib/local/repository";
 import { recipeFixture } from "@/lib/__tests__/fixtures/recipe";
@@ -123,4 +123,25 @@ it("portals the sync chip into the header slot everywhere except cook mode", asy
   } finally {
     slot.remove();
   }
+});
+
+it("opens new screens at the top and leaves scroll alone when going back", async () => {
+  await putRecipe(recipeFixture());
+  const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  render(<LocalApp />);
+  expect(await screen.findByText("Toast")).toBeInTheDocument();
+  scrollTo.mockClear();
+
+  act(() => { window.location.hash = "#/cookbook/recipe-1"; window.dispatchEvent(new Event("hashchange")); });
+  expect(await screen.findByRole("heading", { name: "Toast" })).toBeInTheDocument();
+  expect(scrollTo).toHaveBeenCalledWith(0, 0);
+
+  scrollTo.mockClear();
+  act(() => { window.location.hash = "#/cookbook"; window.dispatchEvent(new Event("hashchange")); });
+  await waitFor(() => expect(screen.getByRole("link", { name: /Toast/ })).toBeInTheDocument());
+  expect(scrollTo).not.toHaveBeenCalled();
+
+  act(() => { window.location.hash = "#/shop"; window.dispatchEvent(new Event("hashchange")); });
+  await waitFor(() => expect(scrollTo).toHaveBeenCalledWith(0, 0));
+  scrollTo.mockRestore();
 });
