@@ -62,3 +62,16 @@ Completed historical phase notes live in `CHANGELOG.md`.
 - [ ] Finish cooking history/session/count sync after recipe sync is proved — [preserved work and follow-ups](docs/plans/account-sync-followups.md)
 - [ ] Verify planning/shopping/pantry integration before enabling all-stage — [follow-ups](docs/plans/account-sync-followups.md)
 - [ ] Add advanced account backup/history/conflict restoration and source-draft enrollment — [follow-ups](docs/plans/account-sync-followups.md)
+
+## Premium UI — plans proposed, not started
+- [ ] Implement the premium UI plan set — [index and order](docs/plans/premium-ui/README.md)
+  - [ ] 01 Sync status out of the content path
+  - [ ] 03 Design tokens and UI primitives
+  - [ ] 02 Recipe imagery (phase 1 typographic cards; phase 2 optional photos)
+  - [ ] 04 Cook mode (wake lock, immersive layout, timers)
+  - [ ] 05 Recipe detail hierarchy and actions
+  - [ ] 07 Navigation and iOS frame
+  - [ ] 08 Week plan layout
+  - [ ] 06 Motion system
+  - [ ] 10 Detail polish
+  - [ ] 09 Dark mode
