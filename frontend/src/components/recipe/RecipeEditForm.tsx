@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { withEditedAmount, type Recipe, type Ingredient, type Step } from "@/lib/recipe-schema";
 import { localHref } from "@/lib/local/navigation";
+import { Button } from "@/components/ui/Button";
 
 interface RecipeEditFormProps {
   recipe: Recipe;
@@ -393,20 +394,15 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
         </p>
       )}
       <div className="flex gap-3 justify-end pt-2 border-t border-line">
-        <a
+        <Button
+          variant="secondary"
           href={isNew ? localHref("cookbook") : localHref("recipe", recipe.id)}
-          className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2"
         >
           Cancel
-        </a>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="rounded-full bg-terra px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terra-strong disabled:opacity-60"
-        >
+        </Button>
+        <Button onClick={handleSave} disabled={saving}>
           {saving ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </div>
     </div>
   );

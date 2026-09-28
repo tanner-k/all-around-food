@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/Button";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -74,18 +75,18 @@ export default function LoginPage() {
           />
 
           {status === "error" && (
-            <p role="alert" className="text-sm text-terra">
+            <p role="alert" className="text-sm text-danger">
               {errorMessage || "Something went wrong. Please try again."}
             </p>
           )}
 
-          <button
+          <Button
             type="submit"
             disabled={status === "sending" || !email.trim()}
-            className="mt-1 rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-terra-strong disabled:opacity-50"
+            className="mt-1"
           >
             {status === "sending" ? "Sending…" : "Send magic link"}
-          </button>
+          </Button>
         </form>
       </div>
     </main>

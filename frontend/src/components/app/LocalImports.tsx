@@ -11,6 +11,7 @@ import { localHref } from "@/lib/local/navigation";
 import { subscribeToLocalChanges } from "@/lib/local/repository";
 import type { LocalImport, RecipeDraft } from "@/lib/local/schema";
 import { captureLocalAccount, isCurrentLocalAccount } from "@/lib/local/db";
+import { Button } from "@/components/ui/Button";
 
 const publicConfig = () => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
@@ -81,7 +82,7 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
     <SectionHeader number="05" scene="NEW RECIPE" title={<>Save a <em className="italic text-terra">recipe</em>.</>}
       description="Import a link, screenshot, or pasted recipe. Submitted imports are available on your signed-in devices; unsent offline requests stay on this device." />
     <div className="mt-8 flex flex-wrap items-center gap-3">
-      <a href={localHref("edit")} className="inline-flex min-h-11 items-center rounded-full bg-terra px-5 text-sm font-semibold text-white">Enter a recipe manually</a>
+      <Button href={localHref("edit")}>Enter a recipe manually</Button>
       <span className="text-sm text-ink-mute">Manual entry works offline.</span>
     </div>
     {!publicConfig() && <p role="status" className="mt-5 rounded-xl border border-line bg-paper-2 p-4 text-sm text-ink-soft">Online import is not configured on this device. You can still queue a source and enter recipes manually.</p>}
@@ -101,7 +102,7 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
         <textarea id="local-import-text" value={text} onChange={(event) => setText(event.target.value)}
           placeholder="Paste ingredients and directions here" rows={5}
           className="mt-2 w-full rounded-xl border border-line bg-paper-2 p-3 text-sm text-ink focus:border-terra focus:outline-none" />
-        <button type="submit" disabled={busy || !text.trim()} className="mt-3 min-h-11 rounded-full bg-terra px-5 text-sm font-semibold text-white disabled:opacity-50">Import pasted text</button>
+        <Button type="submit" disabled={busy || !text.trim()} className="mt-3">Import pasted text</Button>
       </form>
     </div>
     {notice && <p role="status" className="mt-5 max-w-3xl rounded-xl border border-line bg-paper-2 p-4 text-sm text-ink">{notice}</p>}
@@ -130,14 +131,12 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
           <p className="mt-2 break-all text-sm text-ink-soft">{importSource(row)}</p>
           {row.error && <p className="mt-2 text-sm text-terra">{row.error}</p>}
           {row.state === "error" && <div className="mt-3 flex flex-wrap items-center gap-3">
-            {row.error !== "Import expired; submit again" && <button type="button" onClick={() => void retry(row.id)} disabled={retrying === row.id}
-              className="min-h-11 rounded-full border border-line px-4 text-sm font-semibold text-ink disabled:opacity-50">Retry</button>}
+            {row.error !== "Import expired; submit again" && <Button variant="secondary" onClick={() => void retry(row.id)} disabled={retrying === row.id}>Retry</Button>}
             {row.kind === "screenshot" && !row.upload && <label className={`inline-flex min-h-11 items-center rounded-full border border-line px-4 text-sm font-semibold text-ink ${retrying === row.id ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>
               Reselect screenshot<input aria-label="Reselect screenshot" type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={retrying === row.id}
                 onChange={(event) => { const file = event.target.files?.[0]; if (file) void reselect(row.id, file); event.target.value = ""; }} />
             </label>}
-            {row.error === "Import expired; submit again" && row.kind !== "screenshot" && <button type="button" onClick={() => void retry(row.id)} disabled={retrying === row.id}
-              className="min-h-11 rounded-full border border-line px-4 text-sm font-semibold text-ink disabled:opacity-50">Retry</button>}
+            {row.error === "Import expired; submit again" && row.kind !== "screenshot" && <Button variant="secondary" onClick={() => void retry(row.id)} disabled={retrying === row.id}>Retry</Button>}
           </div>}
         </li>)}</ul>}
     </section>

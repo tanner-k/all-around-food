@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { withEditedAmount, type Recipe } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
+import { Button } from "@/components/ui/Button";
 
 interface RecipeReviewProps {
   recipe: Recipe;
@@ -233,22 +234,19 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
       </div>}
       {error && <p role="alert" className="rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">{error}</p>}
       <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={() => setEditing((v) => !v)}
           disabled={saving}
-          className="rounded-full border border-line bg-paper px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10"
         >
           {editing ? "Done" : "Edit"}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           onClick={() => void save()}
           disabled={saving || editStatus === "error"}
-          className="rounded-full bg-terra px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-terra-strong min-h-11"
         >
           {saving ? "Saving…" : saveLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );

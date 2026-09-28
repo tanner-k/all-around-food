@@ -1,6 +1,7 @@
 "use client";
 
 import type { PantryItem, PantryStatus } from "@/lib/pantry-schema";
+import { IconButton } from "@/components/ui/IconButton";
 
 const STATUS_OPTIONS: { value: PantryStatus; label: string; active: string }[] =
   [
@@ -42,14 +43,11 @@ export function PantryRow({ item, onStatusChange, onDelete }: PantryRowProps) {
         })}
       </div>
 
-      <button
-        type="button"
+      <IconButton
         onClick={() => onDelete(item.id)}
         aria-label={`Remove ${item.name}`}
-        className="min-h-11 min-w-11 text-lg leading-none text-ink-mute transition-colors hover:text-terra"
-      >
-        ×
-      </button>
+        icon={<span className="text-lg leading-none">×</span>}
+      />
     </div>
   );
 }

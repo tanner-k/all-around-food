@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 
 interface ShoppingAddFormProps {
   onAdd: (name: string, quantityText: string) => Promise<boolean>;
@@ -43,13 +44,9 @@ export function ShoppingAddForm({ onAdd }: ShoppingAddFormProps) {
         aria-label="Quantity"
         className="w-20 rounded-xl border border-line bg-paper px-3 py-2 text-sm text-ink placeholder:text-ink-mute focus:border-terra focus:outline-none"
       />
-      <button
-        type="submit"
-        disabled={busy || !name.trim()}
-        className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-terra-strong disabled:opacity-50"
-      >
+      <Button type="submit" disabled={busy || !name.trim()}>
         Add
-      </button>
+      </Button>
     </form>
   );
 }
