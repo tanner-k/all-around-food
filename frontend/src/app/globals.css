@@ -82,3 +82,54 @@ body {
 [role="menu"] {
   overscroll-behavior: contain;
 }
+
+/* ── Cook mode (plan 04) ─────────────────────────────────────────────
+   Owned by plan 04. Session-only dark "kitchen" presentation: CookMode sets
+   data-cook-theme="dark" on its root and on <body> (so portaled sheets and
+   the page background match). It only redefines the plan 03 tokens, so plan
+   09 can later point this block at its [data-theme="dark"] values. */
+[data-cook-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #14110F;
+  --color-paper: #1D1916;
+  --color-paper-2: #26211D;
+  --color-ink: #F3EDE4;
+  --color-ink-soft: #CFC5B8;
+  --color-ink-mute: #9C9285;
+  --color-line: #38312B;
+  --color-line-strong: #534941;
+  --color-terra-soft: #3B2419;
+  --color-forest: #9CC5A2;
+  --color-forest-soft: #203023;
+  --color-warn: #E3AA45;
+  --color-warn-soft: #3A2C12;
+  --color-danger: #F2B8B5;
+  --color-danger-soft: #3B1714;
+  --color-focus: #E0906C;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-raised: 0 6px 16px rgb(0 0 0 / 0.45), 0 2px 4px rgb(0 0 0 / 0.3);
+  --shadow-overlay: 0 24px 48px rgb(0 0 0 / 0.6), 0 8px 16px rgb(0 0 0 / 0.4);
+}
+
+/* The shared backdrop is bg-ink/40, which turns light once ink is cream. */
+[data-cook-theme="dark"] [data-overlay-backdrop] {
+  background-color: rgb(0 0 0 / 0.6);
+}
+
+@keyframes cook-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.cook-rise {
+  animation: cook-rise var(--duration-base) var(--ease-out-soft) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cook-rise {
+    animation: none;
+  }
+}
+/* ── End cook mode (plan 04) ──────────────────────────────────────── */

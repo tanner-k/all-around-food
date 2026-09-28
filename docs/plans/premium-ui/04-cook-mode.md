@@ -78,3 +78,76 @@ Out of scope: voice mode, `CookProgress`/IndexedDB schema changes, unifying the 
 - [ ] `CookDoneView` uses plan 03 primitives and a subtle entrance transition.
 - [ ] Optional dark "kitchen" toggle exists, session-scoped, doesn't touch `CookProgress`/IndexedDB.
 - [ ] All tests above pass; no visible copy/role changes beyond what's listed.
+
+## Implementation notes
+
+Session scope: every step of this plan except step 1 (the `AppHeader` extraction, hiding the header on cook routes, and route-aware `main` padding), which plan 07 owns. Plan 10's items inside `components/cook/**` are included. Branch `claude/premium-ui-04-cook-mode`.
+
+### Shipped
+
+- `3c7bfd0` **Wake Lock hook.** New `lib/wake-lock.ts` exports `useScreenWakeLock(active): { active, retry }`.
+  - It feature-detects `navigator.wakeLock`, requests `"screen"` while `active`, and releases on deactivate or unmount.
+  - It tracks the sentinel's `release` event and re-requests on `visibilitychange` to visible.
+  - Rejections are swallowed. A generation counter releases a sentinel that resolves after deactivation.
+  - `retry()` is stable and re-requests once after a failed automatic request. A failed retry does not re-arm it, so repeated taps can't loop.
+  - The doc comment records the Safari 16.4 / iOS 18.4 Home Screen split. 7 tests in `lib/__tests__/wake-lock.test.ts`.
+- `2344e61` **Sheets on `Sheet`.** `TimerSheet` and `IngredientsSheet` now render inside `Sheet`, with an `IconButton` close as `initialFocusRef`. Their own focus capture/restore, body scroll lock, Escape listener, backdrop and `trapTabKey` code is deleted.
+  - `TimerSheet` changed from full screen to a bottom sheet (a centered panel from `md:`). Its Pause/Resume and Reset are `Button size="lg"`.
+  - Quantity chips gain `tabular-nums` and `rounded-control`.
+  - Props, exports, dialog names and button names are unchanged.
+- `357a192` **`CookTimerPill`.** One component with `variant="mobile" | "desktop"` replaces the mobile bottom-bar timer chip and `CookTimer.tsx` (deleted in `25a5661`).
+  - Mobile is one 44px button named "Open timer" that opens `TimerSheet`. Desktop is a `role="group"` pill plus ghost `IconButton`s "Pause timer"/"Resume timer" and "Reset timer".
+  - It uses the lucide `Timer` icon and `tabular-nums`. It has no interval of its own: `CookMode` already ticks. 6 tests.
+- `3626a94` **Typography, glyphs and CTAs.**
+  - `CookStepView`: the active step number is `text-3xl md:text-4xl` and the instruction `text-lg md:text-xl`, with more padding and gap, `shadow-raised`, `rounded-card` and `aria-current="step"`.
+  - `tabular-nums` is set on the instruction paragraph, which covers the inline amount chips by inheritance without touching plan 05's `InlineAmountText`. It is also on the step number, timer chip and temperature line.
+  - The timer chip is now 44px tall. The desktop Back/Next buttons are `Button size="lg"`.
+  - `CookScrollView`: larger step text, and duration/temperature on one tabular row.
+  - Glyph swaps: ⏲/⏱ → lucide `Timer`, 🌡 → `Thermometer`, ✓ → `Check`. The →/‹/← arrows stay typographic inside `aria-hidden` spans.
+  - `CookIngredientPanel` gets tabular chips, `rounded-card`, and a sidebar `top-20` so it clears the sticky top bar.
+  - `CookDoneView`: `Button size="lg"` primary "Mark as cooked" (`loading`) and secondary "Back to recipe" (`href`), a step-count eyebrow, a larger heading, and the `cook-rise` entrance (`--duration-base`/`--ease-out-soft`, off under `prefers-reduced-motion`). The error is now `role="alert"`.
+  - `MarkOutOfStep`'s 56px CTAs move to `Button size="lg"` with the same entrance.
+- `25a5661` **`CookMode` wiring.**
+  - **Screen-on pill:** "Screen stays on" (lucide `MonitorCheck`, forest tint) shows beside the step counter in both top strips only while the hook reports a held lock. The hook gets `!done`, so the completion screen releases it. `onPointerDown={wakeLock.retry}` on the cook root is the retry-on-next-tap.
+  - **Timer pill:** `CookTimerPill` sits in both sticky top strips. The desktop top bar is now sticky too.
+  - **Mobile bottom bar:** Prev and Next only, as `Button size="lg"`.
+  - **Arrow keys:** a `keydown` listener on `window`, skipped while a sheet is open, on the completion screen, in scroll layout, with modifier keys, or when focus is in an input.
+  - **Swipe:** handlers on the mobile step container need at least 60px of horizontal travel that is 1.5× the vertical travel.
+  - **Kitchen toggle:** an `IconButton` "Dark kitchen mode" (`aria-pressed`, Moon/Sun) in both top strips. It sets `data-cook-theme="dark"` on the cook root and mirrors it onto `<body>` while on. The state is local React state only, so nothing is written to `CookProgress`, IndexedDB or `localStorage`.
+  - **CSS:** a delimited `/* ── Cook mode (plan 04) ── */ … /* ── End cook mode (plan 04) ── */` block at the end of `globals.css` redefines the plan 03 `--color-*`/`--shadow-*` tokens under `[data-cook-theme="dark"]` (warm near-black, same terra). It darkens the shared overlay backdrop there and defines the `cook-rise` keyframes.
+  - **Tests:** new `CookMode.interactions.test.tsx` (7 tests) covers arrow keys, what the keys skip, horizontal and vertical swipes, the wake-lock pill lifecycle and release on completion, retry on the next tap, the kitchen toggle (root and body attributes, cleanup, no save), and the timer pill in both layouts.
+- `29435f3` The screen-on pill drops its label to an icon (the label stays `sr-only`) below 390px, so the mobile top strip fits at 360px.
+
+### Deviations
+
+- **Step 1 not done here.** Plan 07 owns it. Until it merges, cook mode still renders under the global header and inside `main`'s `max-w-[1400px] px-4 py-16` padding, so it is not full-bleed yet. The desktop wrapper keeps `min-h-[calc(100dvh-80px)]`.
+- **Kitchen theme mirrored to `<body>`.** `Sheet` portals to `document.body`, so an attribute on the cook root alone would leave the timer and ingredient sheets light. `CookMode` sets `body[data-cook-theme]` in an effect while the toggle is on and removes it on toggle-off or unmount. Until plan 07 lands, this also darkens the global header on the cook route.
+- **Terra unchanged in the kitchen theme.** White-on-terra stays at today's contrast. Only surfaces, ink, lines, forest/warn/danger and focus change.
+- **Gestures never finish the recipe.** ArrowRight and a left swipe stop at the last step rather than calling `handleNext` into the completion screen. Accidentally finishing loses the step view for the session, so only the Next/Finish button finishes. Arrow keys are also off in scroll layout, where they scroll the page natively.
+- **Mobile timer button removed from the bottom bar.** The bottom bar's disabled "Timer (not set)" placeholder is gone. When no timer is set there is nothing to show, and a running timer now lives in the top strip.
+- **Button names.** "Next →", "Finish →", "← Prev" and "‹ Back" now have `aria-hidden` arrows, so their accessible names are "Next", "Finish", "Prev" and "Back". Existing tests use `/Next/` regexes and still pass. No test asserted the old full strings.
+- **Test changes.** The three `CookMode.test.tsx` tests are unmodified. `IngredientsSheet.test.tsx`'s backdrop test changed its selector from `[aria-hidden="true"]` to `[data-overlay-backdrop]`, because `Sheet`'s drag handle is also `aria-hidden`. Its assertion is unchanged. Each sheet test file gained a focus-on-open test.
+- **No `cook-mode.spec.ts` e2e.** It was optional in the plan. Wake Lock was instead checked in real headless Chromium during screenshots: it is denied by default (`NotAllowedError`, so no pill, no throw) and held once the `screen-wake-lock` permission is granted over CDP (pill shows).
+
+### Checks
+
+Run from `frontend/` after `pnpm install --frozen-lockfile`, on `29435f3`:
+- `pnpm lint`: pass.
+- `pnpm exec tsc --noEmit`: pass.
+- `pnpm exec vitest run`: 54 files, 443 tests pass (baseline 421; 22 new: wake-lock 7, CookTimerPill 6, CookMode interactions 7, sheet focus 2).
+- `pnpm build`: pass (with CI's public env).
+- `pnpm test:pwa`: 7/7 pass, using the `IMPLEMENTING.md` shim for Chromium 1223.
+- **Screenshots:** taken against the production build at 393×852, 1280×860 and 360×780. They cover step layout, desktop scroll layout, a running timer pill, the timer and ingredient sheets, the kitchen dark theme (step, scroll and timer sheet), the dark completion screen, and the "Screen stays on" pill with the permission granted.
+
+### Handoffs
+
+- **Plan 07:** step 1 of this plan. Hide the header on `/cookbook/:id/cook`. Give `main` `p-0 max-w-none` there. Hide the "Offline ready" pill on cook routes: it currently overlaps the mobile bottom action bar area on the cook screen. Once `main` padding is gone, cook mode's mobile tree already carries `pt-[env(safe-area-inset-top)]` on its sticky top strip, and the desktop wrapper's `min-h-[calc(100dvh-80px)]` can become `min-h-dvh`.
+- **Plan 09:** the cook block in `globals.css` redefines the same tokens as your `[data-theme="dark"]` block. Point it at your values, or replace the toggle with the app theme, and delete the `body[data-cook-theme]` mirroring in `CookMode.tsx` if your theme lives on `<html>`. The shared overlay backdrop is `bg-ink/40`, which goes light when `ink` is cream. The cook block overrides it locally, but app-wide dark mode needs the same fix in `Overlay.tsx`.
+- **Plan 06:** `cook-rise` is a small local entrance in the cook block. Fold it into the motion system if you add a shared one.
+
+### Needs a device
+
+- Wake Lock on an installed iPhone/iPad on iOS 18.4+: the pill appears, the lock re-acquires after backgrounding and returning, and the screen actually stays on. Also that older iOS shows no pill and no error, and that retry on the next tap recovers after a first request is rejected in Low Power Mode.
+- Swipe navigation against iOS Safari's edge-swipe back gesture, and vertical scrolling inside a long step.
+- Safe-area top padding on the mobile top strip with the `black-translucent` status bar (after plan 07).
+- The kitchen dark theme's legibility in a real kitchen, and `color-scheme: dark` on native controls inside the cook sheets.
