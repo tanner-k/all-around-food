@@ -36,7 +36,7 @@ export function Card({
         "rounded-card border border-line bg-paper shadow-card",
         paddings[padding],
         interactive &&
-          "transition-shadow hover:shadow-raised focus-within:shadow-raised",
+          "transition-[box-shadow,scale] duration-(--duration-fast) ease-(--ease-out-soft) hover:shadow-raised focus-within:shadow-raised active:scale-[0.99]",
         className,
       ]
         .filter(Boolean)
