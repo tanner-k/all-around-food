@@ -25,7 +25,7 @@ Stay inside the files your plan owns. If a change you need falls in a file anoth
 | 02 (phase 1 only) | new `components/recipe/RecipeCover.tsx`; the cookbook grid in `LocalScreens.tsx`; the hero block in `RecipeReview.tsx`; the hero block only (around line 111) in `RecipeDetail.tsx` |
 | 04 | `components/cook/**`, new `lib/wake-lock.ts`, a delimited cook-theme block in `globals.css`. Not `layout.tsx`: hiding the header on cook routes is plan 07's. |
 | 05 | `components/recipe/RecipeDetail.tsx` (everything except the hero block), inline-amount rendering it uses |
-| 07 | `app/layout.tsx` (header), new `app/(app)/_components/AppHeader.tsx` (including hiding it on cook routes and route-aware `main` padding, from plan 04 step 1), `MobileTabBar.tsx`, touch rules and `--tabbar-height` in `globals.css`, viewport/manifest metadata |
+| 07 | `app/layout.tsx` (header), `ServiceWorkerRegister.tsx` (pill placement only), new `app/(app)/_components/AppHeader.tsx` (including hiding it on cook routes and route-aware `main` padding, from plan 04 step 1), `MobileTabBar.tsx`, touch rules and `--tabbar-height` in `globals.css`, viewport/manifest metadata |
 | 08 | `components/plan/**` (including `RecipePickerModal.tsx` onto `Sheet`, and the `×` in `PlannedRecipeCard.tsx`), the plan heading area in `LocalScreens.tsx` |
 | 10 | everything else in plan 10: forms, selects, checkboxes, focus rings, `ShoppingRow.tsx`, `ImportFlow.tsx`, the loading skeletons in `LocalApp.tsx`, `::selection`/eyebrow rules in `globals.css`. Plan 10 items inside files owned by 02, 04, 05, 07 or 08 are done by that plan. |
 | 06 (wave 3) | `lib/local/route-transition.ts`, the `hashchange` listener in `LocalApp.tsx`, motion CSS in `globals.css`, `data-recipe-title`/`view-transition-name` hooks, `@starting-style` on `Sheet`/`Dialog`, press feedback on `Button`/`Card` |
@@ -44,6 +44,16 @@ Use each plan's stated default unless listed otherwise:
 - 07: drop the Import tab (4 tabs); Import moves to the header quick-add. No splash artwork.
 - 08: before any meals exist, show "Review shopping →" as an outline button.
 - 10: replace native checkboxes with the `ShoppingRow` button-checkbox pattern.
+
+## Wave 1 results and handoffs
+
+Plans 01 and 03 are merged. Read the Implementation notes at the end of `01-sync-status.md` and `03-design-tokens-and-primitives.md`; the 03 notes list the exact props of every primitive.
+
+- **Primitives:** `@/components/ui/{Button,IconButton,Card,Sheet,Dialog,Menu}`. `className` on a primitive is for layout only. `Sheet` has no built-in header or close button; add an `IconButton` inside it. `Menu` renders its own trigger. `Dialog` focuses Cancel when it opens.
+- **02, 04, 05, 08:** adopt the primitives in your files. That means `Sheet` for `RecipePickerModal` (08), `IngredientsSheet` and `TimerSheet` (04, deleting their own focus, scroll-lock and Escape code), `Dialog variant="danger"` for recipe delete (05), and `Button size="lg"` for cook mode's 56px buttons (04).
+- **07:** keep the `#app-header-status` slot next to the brand mark when you move the header into `AppHeader.tsx`. Its `-ml-5` offsets the nav's `gap-8`. The chip is about 30px tall, so size it for the header's touch targets. Keep `themeColor` reading `TERRA_HEX` from `lib/theme.ts` when you add the light/dark array. Also move the floating "Offline ready" pill (`ServiceWorkerRegister.tsx`): hide it on cook routes and keep it above the tab bar with `--tabbar-height`. You own that file for this change.
+- **10:** also switch the sync chip's dot colors in `SyncStatus.tsx` to the new tokens (`danger` for "Sync needs attention"), and adopt `Button`/`IconButton` in `ShoppingRow.tsx` and `ImportFlow.tsx`.
+- The hex guard in `eslint.config.mjs` rejects `#rrggbb` literals in `.ts`/`.tsx` outside `lib/theme.ts`. Use tokens.
 
 ## Hard rules
 
@@ -66,7 +76,19 @@ pnpm build
 pnpm test:pwa   # Chromium is preinstalled; do not run `playwright install`
 ```
 
-Baseline on 2026-09-28: lint, typecheck and 362 unit tests pass. If `pnpm test:pwa` can't run in your environment, say exactly why in your notes.
+Baseline after wave 1 (`b216471`): lint, typecheck, 421 unit tests, build, and 7/7 PWA tests pass.
+
+**Making `pnpm test:pwa` run in a cloud container.** CI installs its own Chromium. Here, the preinstalled build is 1194, but Playwright 1.60 wants `chromium_headless_shell-1223` at a different path. Don't run `playwright install`. Build with CI's public env and point Playwright at a shim:
+
+```sh
+export NEXT_PUBLIC_SUPABASE_URL=https://aaf-mock.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=public-test-key NEXT_PUBLIC_ACCOUNT_SYNC_STAGE=recipes
+PW=$(mktemp -d)/pw && mkdir -p $PW/chromium_headless_shell-1223/chrome-headless-shell-linux64
+ln -s /opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell $PW/chromium_headless_shell-1223/chrome-headless-shell-linux64/chrome-headless-shell
+touch $PW/chromium_headless_shell-1223/INSTALLATION_COMPLETE
+pnpm build && PLAYWRIGHT_BROWSERS_PATH=$PW pnpm test:pwa
+```
+
+**Hooks.** The Husky pre-commit hook isn't installed in cloud checkouts (`core.hooksPath` is unset), so lint-staged won't run on your commits. Run `pnpm lint` yourself before each commit. Keep the frontend's existing double-quote style.
 
 Also run the app (`pnpm dev`) and screenshot the screens you changed at 393×852 (phone) and 1280×860 (desktop), to catch what tests don't. Note anything that needs a real iPhone (status bar, wake lock, safe areas) under "Needs a device".
 
