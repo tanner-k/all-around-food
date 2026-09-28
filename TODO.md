@@ -63,15 +63,19 @@ Completed historical phase notes live in `CHANGELOG.md`.
 - [ ] Verify planning/shopping/pantry integration before enabling all-stage — [follow-ups](docs/plans/account-sync-followups.md)
 - [ ] Add advanced account backup/history/conflict restoration and source-draft enrollment — [follow-ups](docs/plans/account-sync-followups.md)
 
-## Premium UI — plans proposed, not started
-- [ ] Implement the premium UI plan set — [index and order](docs/plans/premium-ui/README.md)
-  - [ ] 01 Sync status out of the content path
-  - [ ] 03 Design tokens and UI primitives
-  - [ ] 02 Recipe imagery (phase 1 typographic cards; phase 2 optional photos)
-  - [ ] 04 Cook mode (wake lock, immersive layout, timers)
-  - [ ] 05 Recipe detail hierarchy and actions
-  - [ ] 07 Navigation and iOS frame
-  - [ ] 08 Week plan layout
-  - [ ] 06 Motion system
-  - [ ] 10 Detail polish
-  - [ ] 09 Dark mode
+## Premium UI — implemented on `claude/premium-ui-feel-05we0e`, not yet merged
+- [ ] Merge the premium UI branch into `dev`. Plans 01–10 are implemented and merged on the branch, and local lint, typecheck, 645 unit tests, build and 14 PWA tests pass — [index and notes](docs/plans/premium-ui/README.md)
+- [ ] Verify on an installed iPhone/iPad:
+  - status bar and safe areas;
+  - Screen Wake Lock (iOS 18.4+);
+  - sticky actions above the tab bar;
+  - VoiceOver on the sync chip and checkboxes;
+  - no input zoom;
+  - light/dark `theme-color`.
+
+  Each plan's "Needs a device" list has the details.
+- [ ] Plan 02 phase 2: optional recipe photos (device-only first; ADR before any cloud sync)
+- [ ] Small follow-ups from implementation notes:
+  - `Menu` should flip up when there is no room below.
+  - DropZone emoji pills.
+  - Optionally strengthen the secondary `Button` border.
