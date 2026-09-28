@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { Inbox } from "lucide-react";
 import {
   listJobs,
   retryJob,
@@ -163,11 +164,19 @@ export function ImportQueue() {
       </h2>
 
       {loading ? (
-        <p className="text-sm text-ink-mute">Loading queue…</p>
+        <p role="status" className="text-sm text-ink-mute">Loading queue…</p>
       ) : jobs.length === 0 ? (
-        <p className="text-sm text-ink-mute">
-          Nothing queued yet. Add a link or a screenshot above.
-        </p>
+        <div>
+          <Inbox
+            aria-hidden="true"
+            size={26}
+            strokeWidth={1.5}
+            className="mb-2 text-line-strong"
+          />
+          <p className="text-sm text-ink-mute text-pretty">
+            Nothing queued yet. Add a link or a screenshot above.
+          </p>
+        </div>
       ) : (
         <ul className="flex flex-col gap-3">
           {jobs.map((job) => (
@@ -181,7 +190,7 @@ export function ImportQueue() {
                   {KIND_LABEL[job.kind]}
                 </span>
                 {job.attempts > 0 && (
-                  <span className="text-xs font-medium text-ink-mute">
+                  <span className="text-xs font-medium text-ink-mute tabular-nums">
                     Attempt {job.attempts}
                   </span>
                 )}

@@ -7,6 +7,7 @@ import { AisleSection } from "./AisleSection";
 import { ShoppingAddForm } from "./ShoppingAddForm";
 import { AddFromRecipesModal, type RecipeOption } from "./AddFromRecipesModal";
 import { Button } from "@/components/ui/Button";
+import { ShoppingBasket } from "lucide-react";
 
 interface ShoppingListViewProps {
   items: ShoppingListItem[];
@@ -34,12 +35,12 @@ export function ShoppingListView({ items, recipeOptions, onAdd, onAddRecipes, on
   }
 
   return <div className="flex flex-col gap-6">
-    <p className="text-sm text-ink-mute">{data.total_visible} {data.total_visible === 1 ? "item" : "items"} · grouped by aisle</p>
+    <p className="text-sm tabular-nums text-ink-mute">{data.total_visible} {data.total_visible === 1 ? "item" : "items"} · grouped by aisle</p>
     <div className="flex flex-wrap items-start gap-3"><ShoppingAddForm onAdd={(name, quantity) => run(() => onAdd(name, quantity))} />
       <Button variant="secondary" onClick={() => setModalOpen(true)}>+ Add from recipes</Button></div>
     {error && <p role="alert" className="rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">{error}</p>}
     {notice && <p role="status" className="rounded-lg bg-forest-soft px-4 py-2 text-sm text-forest">{notice}</p>}
-    {data.groups.length === 0 ? <div className="rounded-2xl border border-line bg-paper p-12 text-center text-ink-mute">Nothing to buy. Add an item or pull from your recipes.</div> :
+    {data.groups.length === 0 ? <div className="rounded-2xl border border-line bg-paper p-12 text-center text-ink-mute"><ShoppingBasket aria-hidden="true" size={26} strokeWidth={1.5} className="mx-auto mb-3 text-line-strong" /><p className="text-pretty">Nothing to buy. Add an item or pull from your recipes.</p></div> :
       <div className="flex flex-col gap-8">{data.groups.map((group) => <AisleSection key={group.aisle} aisle={group.aisle} items={group.items}
         onCheck={(id, checkedValue) => void run(() => onCheck(id, checkedValue))}
         onDelete={(id) => void run(() => onDelete(id))} />)}</div>}

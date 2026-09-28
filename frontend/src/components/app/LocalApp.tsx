@@ -6,7 +6,9 @@ import { readSnapshot, subscribeToLocalChanges } from "@/lib/local/repository";
 import { captureLocalAccount, isCurrentLocalAccount, subscribeToLocalAccountChange } from "@/lib/local/db";
 import { parseLocalRoute, type LocalRoute } from "@/lib/local/navigation";
 import type { LibrarySnapshot } from "@/lib/local/schema";
+import { CookbookSkeleton } from "./CookbookSkeleton";
 import { LocalScreens } from "./LocalScreens";
+import { RecipeDetailSkeleton } from "./RecipeDetailSkeleton";
 import { SyncAttentionBanner, SyncStatusChip, syncNeedsAttention } from "./SyncStatus";
 import { useLibrarySync } from "./useLibrarySync";
 import { useLocalImportSync } from "./useLocalImportSync";
@@ -61,7 +63,9 @@ export function LocalApp() {
         {error} <button type="button" onClick={refresh} className="underline">Retry</button>
       </div>}
       {snapshot && isCurrentLocalAccount(account) ? <LocalScreens key={account.generation} route={route} snapshot={snapshot} sync={sync} />
-        : !account.dbName ? <p role="status" className="text-ink-mute">Sign in to open your cookbook.</p> : error ? null : <p role="status" className="text-ink-mute">Opening your local cookbook…</p>}
+        : !account.dbName ? <p role="status" className="text-ink-mute">Sign in to open your cookbook.</p> : error ? null
+          : route.view === "cookbook" ? <CookbookSkeleton /> : route.view === "recipe" ? <RecipeDetailSkeleton />
+            : <p role="status" className="text-ink-mute">Opening your local cookbook…</p>}
     </>
   );
 }
