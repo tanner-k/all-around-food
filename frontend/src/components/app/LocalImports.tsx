@@ -12,6 +12,7 @@ import { subscribeToLocalChanges } from "@/lib/local/repository";
 import type { LocalImport, RecipeDraft } from "@/lib/local/schema";
 import { captureLocalAccount, isCurrentLocalAccount } from "@/lib/local/db";
 import { Button } from "@/components/ui/Button";
+import { Inbox } from "lucide-react";
 
 const publicConfig = () => Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
@@ -122,7 +123,7 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
 
     <section className="mt-12 max-w-3xl" aria-label="Import queue">
       <h2 className="font-serif text-2xl text-ink">Import queue</h2>
-      {pending.length === 0 ? <p className="mt-3 text-sm text-ink-mute">Nothing waiting right now.</p> :
+      {pending.length === 0 ? <div className="mt-3"><Inbox aria-hidden="true" size={26} strokeWidth={1.5} className="mb-2 text-line-strong" /><p className="text-pretty text-sm text-ink-mute">Nothing waiting right now.</p></div> :
         <ul className="mt-4 space-y-3">{pending.map((row) => <li key={row.id} className="rounded-xl border border-line bg-paper p-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-terra-soft px-2.5 py-1 text-xs font-semibold capitalize text-terra">{row.kind}</span>

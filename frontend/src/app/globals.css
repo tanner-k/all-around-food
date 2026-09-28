@@ -133,3 +133,21 @@ body {
   }
 }
 /* ── End cook mode (plan 04) ──────────────────────────────────────── */
+
+/* ── Plan 10: detail polish ──────────────────────────────────────
+   Owned by plan 10. Other plans add their own delimited blocks. */
+::selection {
+  background: var(--color-terra-soft);
+  color: var(--color-ink);
+}
+
+/* Section eyebrow: small uppercase label above a group. Color is left to
+   the call site (text-ink-mute by default, text-terra for scene labels). */
+@utility eyebrow {
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+/* ── End plan 10 ─────────────────────────────────────────────── */

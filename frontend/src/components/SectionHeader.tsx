@@ -22,15 +22,15 @@ export function SectionHeader({
 
       {/* Right column — scene + title + description */}
       <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-terra mb-2.5">
+        <p className="eyebrow text-terra mb-2.5">
           {scene}
         </p>
         <h1
-          className="font-serif text-ink leading-[1.05] tracking-tight mb-3.5 text-3xl md:text-[44px]"
+          className="font-serif text-ink leading-[1.05] tracking-tight mb-3.5 text-3xl md:text-[44px] text-balance"
         >
           {title}
         </h1>
-        <p className="text-ink-soft text-base max-w-[580px]">{description}</p>
+        <p className="text-ink-soft text-base max-w-[580px] text-pretty">{description}</p>
       </div>
     </div>
   );

@@ -92,18 +92,18 @@ function EvalCard({ ev, isOpen, onToggle }: EvalCardProps) {
 
         {/* Overall grade — prominent */}
         <div className="flex items-center gap-2">
-          <span className="text-xs text-ink-mute font-semibold uppercase tracking-wide">Overall</span>
+          <span className="eyebrow text-ink-mute">Overall</span>
           <GradeChip grade={ev.overall_grade} />
         </div>
 
         {/* Sub-scores grid */}
         <div className="grid grid-cols-2 gap-2">
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-ink-mute font-semibold uppercase tracking-wide">Accuracy</span>
+            <span className="eyebrow text-ink-mute">Accuracy</span>
             <GradeChip grade={ev.accuracy_grade} />
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs text-ink-mute font-semibold uppercase tracking-wide">Complete</span>
+            <span className="eyebrow text-ink-mute">Complete</span>
             <GradeChip grade={ev.completeness_grade} />
           </div>
         </div>
@@ -130,7 +130,7 @@ function EvalExpandedDetail({ ev }: { ev: Evaluation }) {
       {/* Strengths */}
       {ev.strengths.length > 0 && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-forest mb-1.5">
+          <p className="eyebrow text-forest mb-1.5">
             Strengths
           </p>
           <ul className="flex flex-col gap-1">
@@ -147,7 +147,7 @@ function EvalExpandedDetail({ ev }: { ev: Evaluation }) {
       {/* Weaknesses */}
       {ev.weaknesses.length > 0 && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-terra mb-1.5">
+          <p className="eyebrow text-terra mb-1.5">
             Weaknesses
           </p>
           <ul className="flex flex-col gap-1">
@@ -164,7 +164,7 @@ function EvalExpandedDetail({ ev }: { ev: Evaluation }) {
       {/* Reasoning */}
       {ev.reasoning && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-mute mb-1.5">
+          <p className="eyebrow text-ink-mute mb-1.5">
             Reasoning
           </p>
           <p className="text-ink-soft leading-relaxed">{ev.reasoning}</p>
@@ -174,7 +174,7 @@ function EvalExpandedDetail({ ev }: { ev: Evaluation }) {
       {/* Field checks */}
       {ev.field_checks.length > 0 && (
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-mute mb-2">
+          <p className="eyebrow text-ink-mute mb-2">
             Field checks
           </p>
           <div className="rounded-lg overflow-hidden border border-line">
@@ -224,7 +224,7 @@ function EvalExpandedDetail({ ev }: { ev: Evaluation }) {
       {/* Suggested prompt improvements */}
       {ev.suggested_prompt_improvements && (
         <div className="bg-warn-soft border border-warn rounded-lg p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-warn mb-1">
+          <p className="eyebrow text-warn mb-1">
             Suggested prompt improvement
           </p>
           <p className="text-ink italic text-sm leading-relaxed">
@@ -258,7 +258,7 @@ export function EvalTable({ evaluations }: EvalTableProps) {
       {/* Desktop grid — hidden below md */}
       <div className="hidden md:block rounded-xl border border-line bg-paper overflow-hidden">
         {/* Header */}
-        <div className="grid grid-cols-[1fr_60px_160px_80px_80px_80px] gap-3 px-4 py-3 bg-paper-2 text-xs font-semibold uppercase tracking-wide text-ink-mute border-b border-line">
+        <div className="grid grid-cols-[1fr_60px_160px_80px_80px_80px] gap-3 px-4 py-3 bg-paper-2 eyebrow text-ink-mute border-b border-line">
           <span>Source</span>
           <span>Kind</span>
           <span>Date</span>

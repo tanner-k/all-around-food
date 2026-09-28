@@ -5,6 +5,7 @@ import { withEditedAmount, type Recipe } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
 import { RecipeCover } from "./RecipeCover";
 import { Button } from "@/components/ui/Button";
+import { eyebrow } from "@/lib/typography";
 
 interface RecipeReviewProps {
   recipe: Recipe;
@@ -157,7 +158,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
 
       {/* Ingredients */}
       <div className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute">
+        <p className={eyebrow}>
           Ingredients · tap to edit
         </p>
         <ul className="flex flex-col gap-1.5 text-sm leading-relaxed">
@@ -191,7 +192,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
 
       {/* Steps */}
       <div className="flex flex-col gap-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute">
+        <p className={eyebrow}>
           Steps
         </p>
         <ol className="flex flex-col gap-4">

@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { withEditedAmount, type Recipe, type Ingredient, type Step } from "@/lib/recipe-schema";
 import { localHref } from "@/lib/local/navigation";
+import { ChevronDown, X } from "lucide-react";
+import { eyebrow } from "@/lib/typography";
+import { CheckboxButton } from "@/components/CheckboxButton";
 import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
 
 interface RecipeEditFormProps {
   recipe: Recipe;
@@ -12,10 +16,13 @@ interface RecipeEditFormProps {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink placeholder-ink-mute focus:outline-none focus:border-terra transition-colors";
+  "w-full rounded-lg border border-line bg-paper px-3 py-2 text-base text-ink placeholder-ink-mute focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus transition-colors";
 
-const labelClass =
-  "block text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute mb-1";
+const selectClass = `${inputClass} appearance-none pr-10`;
+
+const labelClass = `${eyebrow} block mb-1`;
+
+const sectionHeadingClass = `${eyebrow} border-b border-line pb-2`;
 
 function blankIngredient(): Ingredient {
   return {
@@ -128,7 +135,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
 
       {/* Basic info */}
       <section className="flex flex-col gap-4">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute border-b border-line pb-2">
+        <h2 className={sectionHeadingClass}>
           Basic info
         </h2>
 
@@ -214,28 +221,35 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
           </div>
           <div>
             <label className={labelClass}>Difficulty</label>
-            <select
-              className={inputClass}
-              value={recipe.difficulty ?? ""}
-              onChange={(e) =>
-                updateField(
-                  "difficulty",
-                  (e.target.value as Recipe["difficulty"]) || null
-                )
-              }
-            >
-              <option value="">— none —</option>
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
+            <div className="relative">
+              <select
+                className={selectClass}
+                value={recipe.difficulty ?? ""}
+                onChange={(e) =>
+                  updateField(
+                    "difficulty",
+                    (e.target.value as Recipe["difficulty"]) || null
+                  )
+                }
+              >
+                <option value="">— none —</option>
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+              <ChevronDown
+                aria-hidden="true"
+                size={18}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-mute"
+              />
+            </div>
           </div>
         </div>
       </section>
 
       {/* Ingredients */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute border-b border-line pb-2">
+        <h2 className={sectionHeadingClass}>
           Ingredients
         </h2>
         {recipe.ingredients.map((ing, i) => (
@@ -279,25 +293,21 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
               />
             </div>
             <div className="flex items-end gap-2">
-              <label className="flex items-center gap-1.5 text-xs text-ink-soft cursor-pointer pb-2">
-                <input
-                  type="checkbox"
+              <label className="flex items-center text-xs text-ink-soft cursor-pointer">
+                <CheckboxButton
+                  size="sm"
+                  aria-label={`Optional: ${ing.name.trim() || `ingredient ${i + 1}`}`}
                   checked={ing.optional}
-                  onChange={(e) =>
-                    updateIngredient(i, { optional: e.target.checked })
-                  }
+                  onChange={(next) => updateIngredient(i, { optional: next })}
                 />
-                Optional
+                <span>Optional</span>
               </label>
-              <button
-                type="button"
+              <IconButton
+                aria-label="Remove ingredient"
+                icon={<X size={18} />}
                 onClick={() => removeIngredient(i)}
                 disabled={recipe.ingredients.length <= 1}
-                className="pb-2 text-ink-mute hover:text-danger transition-colors disabled:opacity-30"
-                aria-label="Remove ingredient"
-              >
-                ×
-              </button>
+              />
             </div>
           </div>
         ))}
@@ -312,7 +322,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
 
       {/* Steps */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute border-b border-line pb-2">
+        <h2 className={sectionHeadingClass}>
           Steps
         </h2>
         {recipe.steps.map((step, i) => (
@@ -367,15 +377,13 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
                 </div>
               </div>
             </div>
-            <button
-              type="button"
+            <IconButton
+              aria-label="Remove step"
+              icon={<X size={18} />}
               onClick={() => removeStep(i)}
               disabled={recipe.steps.length <= 1}
-              className="text-ink-mute hover:text-danger transition-colors self-start mt-1 disabled:opacity-30"
-              aria-label="Remove step"
-            >
-              ×
-            </button>
+              className="self-start"
+            />
           </div>
         ))}
         <button

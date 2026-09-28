@@ -135,8 +135,8 @@ export function DropZone({
             : "border-line-strong",
         ].join(" ")}
       >
-        <span className="text-4xl leading-none select-none">⬇</span>
-        <p className="font-serif italic text-2xl text-ink">
+        <span aria-hidden="true" className="text-4xl leading-none select-none">⬇</span>
+        <p className="font-serif italic text-2xl text-ink text-balance">
           {isReceipt
             ? "Drop receipt photo or paste image"
             : "Drop screenshot or paste link"}

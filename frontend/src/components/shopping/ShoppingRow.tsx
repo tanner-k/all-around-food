@@ -1,6 +1,9 @@
 "use client";
 
+import { X } from "lucide-react";
 import type { ShoppingListItem } from "@/lib/shopping-schema";
+import { CheckboxButton } from "@/components/CheckboxButton";
+import { IconButton } from "@/components/ui/IconButton";
 
 interface ShoppingRowProps {
   item: ShoppingListItem;
@@ -11,33 +14,11 @@ interface ShoppingRowProps {
 export function ShoppingRow({ item, onCheck, onDelete }: ShoppingRowProps) {
   return (
     <div className="flex items-center gap-3 border-b border-dashed border-line py-2 last:border-b-0">
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={item.checked}
+      <CheckboxButton
+        checked={item.checked}
         aria-label={item.name}
-        onClick={() => onCheck(item.id, !item.checked)}
-        className={[
-          "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border-[1.5px] transition-colors",
-          item.checked
-            ? "border-terra bg-terra text-white"
-            : "border-line-strong bg-paper",
-        ].join(" ")}
-      >
-        {item.checked && (
-          <svg
-            viewBox="0 0 10 10"
-            className="h-2.5 w-2.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M2 5.5l2 2 4-4" />
-          </svg>
-        )}
-      </button>
+        onChange={(next) => onCheck(item.id, next)}
+      />
 
       <span
         className={[
@@ -65,17 +46,14 @@ export function ShoppingRow({ item, onCheck, onDelete }: ShoppingRowProps) {
       )}
 
       {item.quantity_text && (
-        <span className="text-sm text-ink-mute">{item.quantity_text}</span>
+        <span className="text-sm tabular-nums text-ink-mute">{item.quantity_text}</span>
       )}
 
-      <button
-        type="button"
-        onClick={() => onDelete(item.id)}
+      <IconButton
         aria-label={`Remove ${item.name}`}
-        className="min-h-11 min-w-11 text-lg leading-none text-ink-mute transition-colors hover:text-terra"
-      >
-        ×
-      </button>
+        icon={<X size={18} />}
+        onClick={() => onDelete(item.id)}
+      />
     </div>
   );
 }

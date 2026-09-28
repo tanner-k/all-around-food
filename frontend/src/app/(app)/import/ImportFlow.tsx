@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Hourglass } from "lucide-react";
 import { DropZone } from "@/components/recipe/DropZone";
+import { Button } from "@/components/ui/Button";
 import {
   enqueueUrlJob,
   enqueueImageJob,
@@ -57,8 +59,15 @@ export function ImportFlow() {
 
   if (state.kind === "enqueuing") {
     return (
-      <div className="rounded-2xl bg-paper border border-line p-8 max-w-md flex items-center gap-4">
-        <span className="text-terra animate-pulse text-2xl">⏳</span>
+      <div
+        role="status"
+        className="rounded-2xl bg-paper border border-line p-8 max-w-md flex items-center gap-4"
+      >
+        <Hourglass
+          aria-hidden="true"
+          size={24}
+          className="shrink-0 text-terra motion-safe:animate-pulse"
+        />
         <p className="text-ink-soft font-medium">Adding to the queue…</p>
       </div>
     );
@@ -68,21 +77,26 @@ export function ImportFlow() {
     return (
       <div className="rounded-2xl bg-paper border border-line p-8 max-w-md flex flex-col gap-4">
         <div className="flex items-center gap-3">
-          <span className="text-terra text-2xl leading-none">✓</span>
+          <Check
+            aria-hidden="true"
+            size={24}
+            strokeWidth={2.5}
+            className="shrink-0 text-terra"
+          />
           <p className="font-serif italic text-xl text-ink">
             Added to the <em className="text-terra">queue</em>
           </p>
         </div>
-        <p className="text-sm text-ink-mute">
+        <p className="text-sm text-ink-mute text-pretty">
           Your recipe will appear shortly — track it in the queue below.
         </p>
-        <button
-          type="button"
+        <Button
+          size="sm"
           onClick={() => setState({ kind: "idle" })}
-          className="self-start rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-terra-strong"
+          className="self-start"
         >
           Add another
-        </button>
+        </Button>
       </div>
     );
   }
