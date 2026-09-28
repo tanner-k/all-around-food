@@ -54,7 +54,7 @@ export function CookDoneView({
   }
 
   return (
-    <div className="cook-rise flex flex-col items-center justify-center gap-10 py-16 md:py-24 px-4 text-center max-w-md mx-auto min-h-[70dvh]">
+    <div className="animate-rise flex flex-col items-center justify-center gap-10 py-16 md:py-24 px-4 text-center max-w-md mx-auto min-h-[70dvh]">
       {/* Heading */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute tabular-nums">
