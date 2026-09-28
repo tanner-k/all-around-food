@@ -1,8 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/IconButton";
 import { plannedMealId, type MealPlan } from "@/lib/meal-plan-schema";
-import { formatMonthDay, parseISODate, weekDays } from "@/lib/week";
+import { currentMonday, formatMonthDay, parseISODate, weekDays } from "@/lib/week";
 import { assertCurrentLocalAccount, captureLocalAccount } from "@/lib/local/db";
 import { localHref } from "@/lib/local/navigation";
 import { DayColumn } from "./DayColumn";
@@ -34,6 +37,8 @@ export function PlanView({ weekOf, initialPlan, recipes, onAdd, onRemove, onServ
   const failedWrite = useRef<unknown>(null);
   const recipesById = new Map(recipes.map((recipe) => [recipe.id, recipe]));
   const meals = initialPlan.meals;
+  const days = weekDays(weekOf);
+  const hintId = useId();
 
   function run(action: () => Promise<void>): void {
     const failureAtSchedule = failedWrite.current;
@@ -71,26 +76,48 @@ export function PlanView({ weekOf, initialPlan, recipes, onAdd, onRemove, onServ
     finally { setReviewing(false); }
   }
 
+  function goToWeek(week: string) {
+    window.location.hash = localHref("plan", week).split("#")[1];
+  }
+
+  const pickerDay = picker ? days[picker.dayIndex] : null;
+  const plannedDays = new Set(meals.map((meal) => meal.day_index)).size;
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-ink-mute">
-        <p>Week of {formatMonthDay(weekOf)} · {meals.length} {meals.length === 1 ? "recipe" : "recipes"} planned</p>
-        <div className="flex gap-2"><a href={localHref("plan", adjacentWeek(weekOf, -1))} className="rounded-lg border border-line px-3 py-2 text-ink">Previous week</a><a href={localHref("plan", adjacentWeek(weekOf, 1))} className="rounded-lg border border-line px-3 py-2 text-ink">Next week</a></div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="font-serif text-2xl leading-tight text-ink md:text-3xl">Week of {formatMonthDay(weekOf)}</h2>
+          <p className="mt-0.5 text-sm tabular-nums text-ink-mute">{meals.length === 0 ? "Nothing planned yet" : `${meals.length} ${meals.length === 1 ? "recipe" : "recipes"} across ${plannedDays} ${plannedDays === 1 ? "day" : "days"}`}</p>
+        </div>
+        <div className="flex shrink-0 items-center">
+          {weekOf !== currentMonday() && <Button variant="ghost" size="sm" href={localHref("plan", currentMonday())} className="mr-1">This week</Button>}
+          <IconButton aria-label="Previous week" onClick={() => goToWeek(adjacentWeek(weekOf, -1))} icon={<ChevronLeft className="size-5" />} />
+          <IconButton aria-label="Next week" onClick={() => goToWeek(adjacentWeek(weekOf, 1))} icon={<ChevronRight className="size-5" />} />
+        </div>
       </div>
       {error && <p role="alert" className="rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">{error}</p>}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
-        {weekDays(weekOf).map((day) => <DayColumn key={day.index} day={day}
+      <ol aria-label={`Week of ${formatMonthDay(weekOf)}`} className="-mx-3 flex flex-col gap-1">
+        {days.map((day) => <DayColumn key={day.index} day={day}
           meals={meals.flatMap((meal, index) => meal.day_index === day.index ? [{ id: plannedMealId(initialPlan, index), title: recipesById.get(meal.recipe_id)?.title ?? "Unknown recipe", servings: meal.servings, baseServings: recipesById.get(meal.recipe_id)?.servings ?? null }] : [])}
           onAdd={(dayIndex) => setPicker({ dayIndex })}
           onRemove={(id) => run(() => onRemove(weekOf, id))}
           onServingsChange={(id, servings) => run(() => onServingsChange(weekOf, id, servings))} />)}
-      </div>
-      <div className="flex flex-col justify-between gap-3 border-t border-line pt-5 sm:flex-row sm:flex-wrap sm:items-center">
-        <p className="text-sm text-ink-mute">Plan your week, then turn it into a shopping list.</p>
-        <button type="button" onClick={() => void handleReviewShopping()} disabled={meals.length === 0 || reviewing}
-          className="min-h-11 rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-terra-strong disabled:opacity-50">{reviewing ? "Building list…" : "Review shopping →"}</button>
-      </div>
-      {picker && <RecipePickerModal recipes={recipes} onPick={handlePick} onClose={() => setPicker(null)} />}
+      </ol>
+      {meals.length === 0 ? (
+        <div className="flex flex-col gap-3 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <p id={hintId} className="text-sm text-ink-mute">Add a recipe to any day to build a shopping list.</p>
+          <Button variant="secondary" disabled aria-describedby={hintId} className="self-start sm:self-auto">Review shopping →</Button>
+        </div>
+      ) : (
+        // Sticks above the mobile tab bar (plan 07's --tabbar-height) while the week scrolls; static from md.
+        <div className="sticky bottom-[calc(var(--tabbar-height,0px)+0.75rem)] z-10 flex justify-end border-line md:static md:border-t md:pt-5">
+          <div className="w-full rounded-full shadow-raised md:w-auto md:shadow-none">
+            <Button onClick={() => void handleReviewShopping()} loading={reviewing} fullWidth>{reviewing ? "Building list…" : "Review shopping →"}</Button>
+          </div>
+        </div>
+      )}
+      {picker && <RecipePickerModal recipes={recipes} dayLabel={pickerDay ? `${pickerDay.weekday} ${pickerDay.dayNum}` : undefined} onPick={handlePick} onClose={() => setPicker(null)} />}
     </div>
   );
 }

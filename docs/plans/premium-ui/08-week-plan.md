@@ -189,3 +189,57 @@ Steps 1–4 don't need plan 03; step 5 does.
 - [ ] `pwa-planning.spec.ts` and `LocalPlanning.test.tsx` pass unmodified
       in their accessible-name assertions, or this plan's PR includes the
       exact listed edits alongside the behavior change.
+
+## Implementation notes
+
+Branch `claude/premium-ui-08-week-plan`, cut from `ba270d8`. Only files in `components/plan/**` plus one test line changed. The plan heading area in `LocalScreens.tsx` did not need changes, so this branch does not touch that file and can't conflict with plan 02's cookbook grid hunk.
+
+### Shipped
+
+- `bef589d` **Picker on `Sheet`.** `RecipePickerModal` now runs on the shared `Sheet`, which gives it the focus trap, Escape/backdrop close, focus restore, scroll lock, and bottom sheet on mobile / centered panel on desktop. Changes:
+  - The heading is an `h2` "Pick a *recipe*" (the dialog's `aria-labelledby`). The subtitle names the day ("Adding to Tue 29.").
+  - A close `IconButton` sits in the header.
+  - A `type="search"` field ("Search recipes") filters titles case-insensitively through the exported `filterRecipes`. No-match state: "No recipes match "…"." in a `role="status"`.
+  - Row buttons keep `recipe.title` as their exact accessible name.
+  - The search field gets initial focus only on `(pointer: fine)`, so on phones the keyboard doesn't cover the list on open. It uses `text-base` on mobile to avoid iOS focus zoom.
+- `33c63bf` **Planned card.**
+  - The `×` is an `IconButton` (44×44) with the same `Remove {title}` name.
+  - The servings stepper puts `Decrease/Increase {title} servings` `IconButton`s around the unchanged `{title} servings` spinbutton. Its value, placeholder, `min`/`step`, and `null`-clears behavior are unchanged, and it now uses `tabular-nums`.
+  - The card is a paper surface with `shadow-card`. The title uses `break-words hyphens-auto`.
+- `0f37a9b` **Week layout, nav, and CTA.**
+  - Days are an `<ol>` of agenda rows (label column plus content) instead of a `lg:grid-cols-7` grid. Empty days are compact: weekday and serif date number plus a ghost `+ Add recipe`. Filled days show their cards in a 1/2/3-column grid (`sm`/`xl`) with a smaller `+ Add recipe` under them. Today keeps `border-terra bg-terra-soft/40` and gets `aria-current="date"`. Cards stay keyed by `plannedMealId` (`meal.id`).
+  - The header is an `h2` "Week of {date}", with "N recipes across M days" or "Nothing planned yet" in `tabular-nums`. The previous/next week controls are chevron `IconButton`s (names "Previous week"/"Next week"). A ghost `Button` link "This week" appears only when the viewed week isn't `currentMonday()`.
+  - **CTA (owner decision: outline).** With no meals, "Review shopping →" is a disabled `secondary` (outline) `Button` described by the hint "Add a recipe to any day to build a shopping list." Once meals exist it is a primary `Button`. Below `md` it is full width and sticky at `bottom: calc(var(--tabbar-height, 0px) + 0.75rem)` with `shadow-raised`; from `md` it sits static and right-aligned. While building, it shows `loading` and "Building list…".
+  - The footer copy "Plan your week, then turn it into a shopping list." is removed, since it duplicated the `SectionHeader` description.
+- New tests in `components/plan/__tests__/` (16): the picker (dialog name, exact-title pick, search filter, no-match, Escape and Close, empty library), the card (spinbutton contract, clear to `null`, stepping from base servings, the decrease floor, the 44px remove), and `PlanView` (outline/disabled CTA plus description before meals, enabled sticky CTA after, week nav hashes, the "This week" link only off-week, one `aria-current` today, the picker opening for the chosen day).
+- Planning writes are untouched: the same `onAdd`/`onRemove`/`onServingsChange`/`onGenerate` calls through the same serialized `run` queue, so IndexedDB transactions and outbox groups don't change.
+
+### Deviations
+
+- **Agenda rows instead of a 7-column grid on desktop.** A `lg:grid-cols-7` column is about 110px of content at 1280px. That can't fit a 44px remove button next to a title, or a 44+56+44px stepper. Rows give filled days room at every width and keep empty days to one line. Screenshots were taken at 393 and 1280 wide.
+- **The stepper steps whole servings, not ±0.5.** Stepping by halves took 4 taps to go from 4 to 6 servings. The buttons step by 1 with a floor of 0.5. The input still accepts halves (`step="0.5"`), and a `null` value steps from the recipe's base servings.
+- **"+ Add recipe" keeps its exact text on filled days** instead of "+ Add another". This keeps the `/Add recipe/` and exact `"+ Add recipe"` selectors valid for every day, and the button keeps its tree position when a day fills, so focus restores to it when the picker closes.
+- **Week chevrons are buttons that set the hash** (like the existing Review handler), because `IconButton` has no `href`. "This week" is a real link through `Button href`.
+- **Test edit:** `LocalPlanning.test.tsx:23` `findByText(/Plan your week/)` → `findByRole("heading", { name: "Plan your week." })`. The old query matched the footer copy removed here, not the heading (the heading's text is split by `<em>`). This matches the e2e assertion. No other selectors changed, and `pwa-planning.spec.ts` needed no changes.
+- Plan 10 items in these files: `tabular-nums` on the date numbers, count and servings; `hyphens-auto break-words` on card titles; the `×`, `−`, `+` and chevrons are lucide icons inside `IconButton`, which already wraps icons in `aria-hidden`. The `→` in "Review shopping →" stays in the accessible name on purpose, because both suites match it.
+
+### Checks
+
+From `frontend/` after `pnpm install --frozen-lockfile`:
+- `pnpm lint`: pass.
+- `pnpm exec tsc --noEmit`: pass.
+- `pnpm exec vitest run`: 54 files, 437 tests pass (baseline 421, plus 16 new). One earlier partial run of `src/components/app` reported "2 errors" with all tests passing. It didn't reproduce in four later runs, including on the unmodified tree.
+- `pnpm build`: pass (with CI's public env).
+- `pnpm test:pwa`: 7/7 pass, using the headless-shell shim from `IMPLEMENTING.md`.
+- Screenshots of the production build at 393×852 and 1280×860: empty week, the picker (open and filtered), a partly planned week, and next week. They showed the native blue search-cancel glyph, which is now hidden.
+
+### Handoffs
+
+- **Plan 07:** until `--tabbar-height` lands, the fallback is `0px`, so on phones the sticky CTA sits behind the fixed tab bar mid-scroll. It is visible at the end of the page thanks to `main`'s `pb-20`. No change is needed here once the variable exists. The "Offline ready" pill (`ServiceWorkerRegister.tsx`) overlaps the sticky CTA on phones and paints above the `Sheet` backdrop on desktop. Keep it above the tab bar and below overlays when you move it.
+- **Plan 06:** `Sheet` motion applies to the picker automatically.
+
+### Needs a device
+
+- The sticky "Review shopping →" position above the real tab bar and home indicator once plan 07's `--tabbar-height` lands, including during momentum scroll.
+- The picker sheet with the iOS keyboard open after tapping search: the list must stay reachable within `90dvh`, and there should be no focus zoom (the input is 16px on mobile).
+- `type="number"` with the spin buttons hidden: the iOS decimal keypad for servings, and 44px −/+ taps next to it.
