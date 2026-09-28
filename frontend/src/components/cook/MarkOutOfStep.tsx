@@ -74,7 +74,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
         <button
           type="button"
           onClick={finish}
-          className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-[#A55230] active:bg-[#A55230]"
+          className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-terra-strong active:bg-terra-strong"
         >
           Finish
         </button>
@@ -126,7 +126,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
       </div>
 
       {error && (
-        <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
+        <p className="rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">
           {error}
         </p>
       )}
@@ -136,7 +136,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
           type="button"
           onClick={handleSave}
           disabled={phase === "saving"}
-          className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-[#A55230] active:bg-[#A55230] disabled:opacity-60"
+          className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-terra-strong active:bg-terra-strong disabled:opacity-60"
         >
           {phase === "saving" ? "Saving…" : "Save & finish"}
         </button>

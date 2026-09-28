@@ -79,7 +79,7 @@ export function ImportFlow() {
         <button
           type="button"
           onClick={() => setState({ kind: "idle" })}
-          className="self-start rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230]"
+          className="self-start rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-terra-strong"
         >
           Add another
         </button>

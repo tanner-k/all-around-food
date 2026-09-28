@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { withEditedAmount, type Recipe } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
+import { Button } from "@/components/ui/Button";
 
 interface RecipeReviewProps {
   recipe: Recipe;
@@ -228,27 +229,24 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
       {/* Action buttons */}
       {editStatus === "saving" && <p role="status" className="text-sm text-ink-mute">Saving draft…</p>}
       {editStatus === "saved" && <p role="status" className="text-sm text-ink-mute">All changes saved locally</p>}
-      {editStatus === "error" && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+      {editStatus === "error" && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">
         <span>{editError}</span><button type="button" disabled={saving} onClick={() => persist(latestRecipe.current)} className="underline disabled:opacity-50">Retry saving draft</button>
       </div>}
-      {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">{error}</p>}
       <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={() => setEditing((v) => !v)}
           disabled={saving}
-          className="rounded-full border border-line bg-paper px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10"
         >
           {editing ? "Done" : "Edit"}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           onClick={() => void save()}
           disabled={saving || editStatus === "error"}
-          className="rounded-full bg-terra px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] min-h-11"
         >
           {saving ? "Saving…" : saveLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -68,7 +68,7 @@ export function CookDoneView({
       {/* Actions */}
       <div className="flex flex-col gap-3 w-full">
         {error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2">
+          <p className="text-sm text-danger bg-danger-soft rounded-lg px-4 py-2">
             {error} — please try again.
           </p>
         )}
@@ -76,7 +76,7 @@ export function CookDoneView({
           type="button"
           onClick={handleMarkCooked}
           disabled={loading}
-          className="w-full min-h-14 rounded-xl bg-terra text-white font-semibold text-base transition-colors hover:bg-[#A55230] active:bg-[#A55230] disabled:opacity-60"
+          className="w-full min-h-14 rounded-xl bg-terra text-white font-semibold text-base transition-colors hover:bg-terra-strong active:bg-terra-strong disabled:opacity-60"
         >
           {loading ? "Saving…" : "Mark as cooked"}
         </button>

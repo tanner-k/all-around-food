@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { withEditedAmount, type Recipe, type Ingredient, type Step } from "@/lib/recipe-schema";
 import { localHref } from "@/lib/local/navigation";
+import { Button } from "@/components/ui/Button";
 
 interface RecipeEditFormProps {
   recipe: Recipe;
@@ -292,7 +293,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
                 type="button"
                 onClick={() => removeIngredient(i)}
                 disabled={recipe.ingredients.length <= 1}
-                className="pb-2 text-ink-mute hover:text-red-500 transition-colors disabled:opacity-30"
+                className="pb-2 text-ink-mute hover:text-danger transition-colors disabled:opacity-30"
                 aria-label="Remove ingredient"
               >
                 ×
@@ -370,7 +371,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
               type="button"
               onClick={() => removeStep(i)}
               disabled={recipe.steps.length <= 1}
-              className="text-ink-mute hover:text-red-500 transition-colors self-start mt-1 disabled:opacity-30"
+              className="text-ink-mute hover:text-danger transition-colors self-start mt-1 disabled:opacity-30"
               aria-label="Remove step"
             >
               ×
@@ -388,25 +389,20 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
 
       {/* Save / Cancel */}
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2">
+        <p className="text-sm text-danger bg-danger-soft rounded-lg px-4 py-2">
           {error} — please try again.
         </p>
       )}
       <div className="flex gap-3 justify-end pt-2 border-t border-line">
-        <a
+        <Button
+          variant="secondary"
           href={isNew ? localHref("cookbook") : localHref("recipe", recipe.id)}
-          className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2"
         >
           Cancel
-        </a>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="rounded-full bg-terra px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#A55230] disabled:opacity-60"
-        >
+        </Button>
+        <Button onClick={handleSave} disabled={saving}>
           {saving ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </div>
     </div>
   );

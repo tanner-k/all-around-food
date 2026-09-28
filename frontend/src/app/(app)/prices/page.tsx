@@ -220,7 +220,7 @@ function ProductSearch({
       />
       <button
         type="submit"
-        className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] min-h-11 whitespace-nowrap"
+        className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-terra-strong min-h-11 whitespace-nowrap"
       >
         Search
       </button>

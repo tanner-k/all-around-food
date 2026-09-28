@@ -49,7 +49,7 @@ export function ShoppingRow({ item, onCheck, onDelete }: ShoppingRowProps) {
       </span>
 
       {item.pantry_covered && (
-        <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">
+        <span className="rounded-full bg-forest-soft px-2 py-0.5 text-[11px] font-medium text-forest">
           in pantry
         </span>
       )}
