@@ -14,16 +14,17 @@ describe("MobileTabBar", () => {
     window.location.hash = "#/cookbook";
   });
 
-  it("renders local tabs with visible Settings access in the app shell", () => {
+  it("renders exactly the four destination tabs in the app shell", () => {
     mockUsePathname.mockReturnValue("/app");
     render(<MobileTabBar />);
-    expect(screen.getByText("Cookbook")).toBeInTheDocument();
-    expect(screen.getByText("Pantry")).toBeInTheDocument();
-    expect(screen.getByText("Plan")).toBeInTheDocument();
-    expect(screen.getByText("Shop")).toBeInTheDocument();
-    expect(screen.getByText("Import")).toBeInTheDocument();
-    expect(screen.getByRole("link", {name:"Settings"})).toHaveAttribute("href", "/app#/settings");
+    const nav = screen.getByRole("navigation", { name: "Mobile navigation" });
+    expect(nav).toHaveAttribute("data-mobile-tabbar");
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(4);
+    expect(links.map((link) => link.textContent)).toEqual(["Plan", "Cookbook", "Shop", "Pantry"]);
     expect(screen.getByRole("link", { name: /cookbook/i })).toHaveAttribute("href", "/app#/cookbook");
+    expect(screen.queryByRole("link", { name: /import/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /settings/i })).not.toBeInTheDocument();
   });
 
   it("updates active tab on hashchange and back navigation", () => {
@@ -33,7 +34,7 @@ describe("MobileTabBar", () => {
     const pantryLink = screen.getByRole("link", { name: /pantry/i });
     expect(pantryLink).toHaveAttribute("aria-current", "page");
 
-    for (const label of ["Cookbook", "Plan", "Shop", "Import"]) {
+    for (const label of ["Cookbook", "Plan", "Shop"]) {
       const link = screen.getByRole("link", { name: new RegExp(label, "i") });
       expect(link).not.toHaveAttribute("aria-current");
     }
@@ -44,10 +45,15 @@ describe("MobileTabBar", () => {
   it("returns null (renders nothing) on cook routes", () => {
     mockUsePathname.mockReturnValue("/app");
     window.location.hash = "#/cookbook/abc123/cook";
-    render(<MobileTabBar />);
+    const { container } = render(<MobileTabBar />);
+    expect(container).toBeEmptyDOMElement();
     expect(screen.queryByText("Cookbook")).not.toBeInTheDocument();
-    expect(screen.queryByText("Pantry")).not.toBeInTheDocument();
-    expect(screen.queryByText("Prices")).not.toBeInTheDocument();
-    expect(screen.queryByText("Import")).not.toBeInTheDocument();
+  });
+
+  it("renders nothing outside the /app shell", () => {
+    mockUsePathname.mockReturnValue("/login");
+    const { container } = render(<MobileTabBar />);
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   });
 });

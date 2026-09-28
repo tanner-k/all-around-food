@@ -8,6 +8,12 @@
 /** Must equal `--color-terra` in `app/globals.css` (asserted by a unit test). */
 export const TERRA_HEX = "#C2613B";
 
+/**
+ * Dark-scheme `theme-color`. Placeholder (today's `--color-ink`) until plan 09
+ * sets the real dark palette.
+ */
+export const THEME_COLOR_DARK_HEX = "#1B1815";
+
 /** Legacy `/prices` chart colors (Recharts needs literal SVG colors). */
 export const PRICE_CHART_STORE_COLORS: Record<string, string> = {
   kroger: "#C25A30",
