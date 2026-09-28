@@ -60,6 +60,31 @@ Plans 01 and 03 are merged. Read the Implementation notes at the end of `01-sync
 - **10:** also switch the sync chip's dot colors in `SyncStatus.tsx` to the new tokens (`danger` for "Sync needs attention"), and adopt `Button`/`IconButton` in `ShoppingRow.tsx` and `ImportFlow.tsx`.
 - The hex guard in `eslint.config.mjs` rejects `#rrggbb` literals in `.ts`/`.tsx` outside `lib/theme.ts`. Use tokens.
 
+## Wave 2 results and handoffs (for wave 3)
+
+Plans 02 (phase 1), 04, 05, 07, 08 and 10 are merged, plus coordinator integration fixes in `6311f11`. Read the Implementation notes at the end of each of those plan files; their Handoffs sections name plan 06 and plan 09 directly.
+
+Changes to know about:
+- **"Offline ready" moved.** The passive status now lives in Settings' "Install for offline use" card, read through `lib/pwa-status.ts`. `ServiceWorkerRegister` floats only update, install and error notices.
+- **The header is `app/(app)/_components/AppHeader.tsx`.** It exports `useIsCookRoute()` and `AppMain`. There is a fixed status-bar scrim in `layout.tsx` for `black-translucent`.
+- **Recipe detail.** The cover is a 240px banner from `md:`. The `<h1>` is a single element, split into text plus `<em>`. Cookbook cards and the detail hero both render `RecipeCover`, which carries a `data-recipe-cover` hook.
+- **Cook mode.** It has its own session-only kitchen-dark block in `globals.css` (`[data-cook-theme="dark"]`, mirrored onto `<body>` so portaled sheets match). There is also a local `cook-rise` entrance animation.
+
+**Plan 06 (motion):**
+- Consider morphing `RecipeCover` (card → detail banner) as well as the title.
+- Fold `cook-rise` into the shared motion tokens.
+- Add `@starting-style` entry to the header `Menu` popover, `Sheet`/`Dialog` (`ui/internal/Overlay.tsx`, backdrop `[data-overlay-backdrop]`), and the active tab pill.
+- Press feedback goes in `Button` and `Card`. Plan 09 also edits `Button.tsx` in parallel (primary fill color), so keep your hunk to the class list for press feedback.
+
+**Plan 09 (dark mode and contrast):**
+- Replace `THEME_COLOR_DARK_HEX` in `lib/theme.ts`.
+- The status-bar scrim and header already use `--color-bg`.
+- The shared overlay backdrop is `bg-ink/40`, which turns light when `ink` is cream. Give it a dedicated scrim token that stays dark in both themes, and drop cook mode's local override once it does.
+- Point cook mode's kitchen block at your dark values, or make the kitchen toggle follow the app theme. Either way, remove duplicated hex values.
+- Re-check `RecipeCover` glyph contrast on its three tints in dark mode.
+- Apply the light-mode contrast decision above (`terra-strong` for primary fills and small accent text).
+- Plan 06 also edits `Button.tsx` and `ui/internal/Overlay.tsx` in parallel, so keep your hunks there small and limited to color.
+
 ## Hard rules
 
 - Frontend only. No Supabase migrations, no backend changes, no new dependencies.
@@ -81,7 +106,7 @@ pnpm build
 pnpm test:pwa   # Chromium is preinstalled; do not run `playwright install`
 ```
 
-Baseline after wave 1 (`b216471`): lint, typecheck, 421 unit tests, build, and 7/7 PWA tests pass.
+Baseline after wave 2 (`6311f11`): lint, typecheck, 503 unit tests, build, and 10/10 PWA tests pass.
 
 **Making `pnpm test:pwa` run in a cloud container.** CI installs its own Chromium. Here, the preinstalled build is 1194, but Playwright 1.60 wants `chromium_headless_shell-1223` at a different path. Don't run `playwright install`. Build with CI's public env and point Playwright at a shim:
 
