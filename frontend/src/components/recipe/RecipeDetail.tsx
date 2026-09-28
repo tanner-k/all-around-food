@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Recipe, Ingredient } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
+import { RecipeCover } from "./RecipeCover";
 import { pageTitle } from "@/lib/typography";
 import { localHref } from "@/lib/local/navigation";
 
@@ -107,8 +108,8 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
         <em className="italic text-terra not-italic">{titleEnd}</em>
       </h1>
 
-      {/* Hero placeholder — 16:10 */}
-      <div className="w-full rounded-xl bg-paper-2" style={{ aspectRatio: "16/10" }} />
+      {/* Hero cover — 16:10 */}
+      <RecipeCover recipe={recipe} className="aspect-[16/10] w-full rounded-card" />
 
       {/* Meta pills */}
       {metaPills.length > 0 && (
