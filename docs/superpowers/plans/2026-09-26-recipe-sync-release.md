@@ -10,3 +10,9 @@ Approved by the user: finish recipes/imports on Mac and iPhone, including offlin
 6. Record the installed iPhone/iPad offline/update test as pending until the user confirms it on the physical device. Browser simulations are separate evidence.
 
 Acceptance: same signed-in cookbook and completed imports on each device; offline changes later sync; conflicting versions survive; existing recipes can be deliberately copied. Expanded cooking/history/recovery and all-stage remain deferred.
+
+## Release status — 2026-09-27
+
+PR #15 merged to `dev`; release PR #16 merged to `main` at `5bba65423981d7e610421268306421fa45b29337`. Source tree `ce60184698de0c4c1ba332c39bddabcdf628b32e` is identical to that main tree. All eight release CI checks passed, and Vercel deployment `6689730033` succeeded at `2026-09-27T08:04:29Z`. Approved migrations `0006`/`0007` were applied to the pinned Supabase project after a fresh private backup; all thirteen legacy tables were preserved, and hosted migration history is now `0001`–`0007`. The Mac worker was unchanged. The Vercel stage defaults to recipes; local builds default to off, with explicit environment overrides. A read-only unauthenticated Chrome check confirmed the deployed app renders with recipe sync enabled.
+
+The real two-context proof and recipe copy have not run. They are pending explicit user approval for temporary-owner sign-ins and production test writes. Physical iPhone verification also remains pending. Do not promote the open narrow-release TODO until those outcomes are recorded. Planning, shopping, pantry, history restore, and all-stage remain deferred.
