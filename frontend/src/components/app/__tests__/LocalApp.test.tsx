@@ -75,7 +75,7 @@ it("keeps a completed manual cook idempotent after reload and starts a fresh coo
   await screen.findByRole("heading", { name: "Toast" });
 
   fireEvent.click(screen.getByRole("button", { name: "Mark cooked" }));
-  await screen.findByRole("button", { name: "Cooked ✓" });
+  await screen.findByRole("button", { name: "Cooked" });
   await expect(readSnapshot()).resolves.toMatchObject({
     recipes: [expect.objectContaining({ times_made: 1 })],
   });
@@ -85,12 +85,12 @@ it("keeps a completed manual cook idempotent after reload and starts a fresh coo
   render(<LocalApp />);
   await screen.findByRole("heading", { name: "Toast" });
   fireEvent.click(screen.getByRole("button", { name: "Mark cooked" }));
-  await screen.findByRole("button", { name: "Cooked ✓" });
+  await screen.findByRole("button", { name: "Cooked" });
   await expect(readSnapshot()).resolves.toMatchObject({
     recipes: [expect.objectContaining({ times_made: 1 })],
   });
 
-  fireEvent.click(screen.getByRole("link", { name: "Start cook mode →" }));
+  fireEvent.click(screen.getByRole("link", { name: "Start cooking" }));
   await waitFor(() => expect(window.location.hash).toBe("#/cookbook/recipe-1/cook"));
   await waitFor(() => expect(readSnapshot()).resolves.toMatchObject({
     cook_progress: [expect.objectContaining({ session_id: expect.any(String), completed_at: null })],
