@@ -103,3 +103,53 @@ Suggested split: steps 1-3 one PR, step 4 a follow-up.
 **Phase 2 (investigation only)**
 - [ ] Owner has answered Q1-Q3 above.
 - [ ] A follow-up plan/PR scopes exactly Phase 2a before any 2b/2c work starts.
+
+## Implementation notes
+
+Session scope: Phase 1 only (branch `claude/premium-ui-02-recipe-imagery`). Phase 2 stays investigation-only, per the owner decision. There are no IndexedDB, schema, backup or sync changes, and no `<img>`.
+
+### Shipped
+
+- `c15ff19` **`RecipeCover`** (`components/recipe/RecipeCover.tsx`, with `recipe/__tests__/RecipeCover.test.tsx`).
+  - Takes `{ recipe: Pick<Recipe, "title" | "cuisine" | "course">; className?: string }`.
+  - Tint: a char-code hash of the trimmed, lowercased `cuisine || course || title` picks one of `bg-terra-soft`, `bg-forest-soft` or `bg-warn-soft`. Blank strings fall through to the next field.
+  - Glyph: a serif initial in `text-ink-soft` for every tint. `coverInitial` is code-point safe, so an emoji stays whole. An empty title renders the tint only.
+  - The glyph scales with the cover through `@container` and `text-[clamp(3rem,22cqi,10rem)]`.
+  - The cover is decorative (`aria-hidden`) and marked with `data-recipe-cover` for tests.
+  - Contrast of `ink-soft` (#5C544A) on each tint: terra-soft 5.65:1, forest-soft 5.74:1, warn-soft 5.83:1. All three pass AA.
+- `556aa7c` **Cookbook cards.**
+  - The grid in `LocalScreens.tsx` is now a `<ul>` of the new `components/app/CookbookCard.tsx`. That file is built on `Card as="li" interactive padding="none"`, with the whole card as one link.
+  - Card contents, in order: `RecipeCover` (`aspect-video`), the serif title (`text-balance break-words`), and the meta line. The meta line comes from `cookbookMeta()`: `cuisine · N min · serves N`, using `total_time_min ?? cook_time_min` and skipping missing parts. It is set as an uppercase eyebrow with `tabular-nums`.
+  - After the meta line come the italic `line-clamp-2 text-pretty` description (when present) and the cooked count, whose copy is byte-identical to before (`N× cooked` / `just added`, now `tabular-nums`, pinned to the card bottom).
+  - The `LocalScreens.tsx` hunk is 7 lines: the import plus the grid.
+  - Tests: `app/__tests__/CookbookCard.test.tsx` covers the meta format and fallbacks, description only when present, the cooked copy, the featured highlight, and a `LocalScreens` cookbook render with no placeholder.
+- `a1f5b78` **Recipe detail hero.** The 16:10 placeholder becomes `<RecipeCover className="aspect-[16/10] w-full rounded-card" />`. The change is the hero hunk plus one import line. Tests: `recipe/__tests__/RecipeDetail.cover.test.tsx`.
+- `8d32bf6` **Import review hero** (`RecipeReview.tsx`). It now uses `RecipeCover` with `aspect-video rounded-card`, in its own commit so it can be dropped. Tests: `recipe/__tests__/RecipeReview.cover.test.tsx`.
+
+### Deviations
+
+- **Card in its own file.** The card lives in a new `CookbookCard.tsx` rather than inline, which keeps the `LocalScreens.tsx` diff minimal next to plan 08's heading edits.
+- **Featured highlight.** The first card's `border-2 border-terra` is now `ring-2 ring-terra`, passed through `Card`'s `className`, along with `overflow-hidden` to clip the cover to the card radius. `Card` already sets `border-line`, and a second border color class would depend on CSS order, while a ring composes with `shadow-card`. Both classes stretch the "layout-only" `className` rule. A `featured`/`highlight` prop on `Card` would be cleaner if plan 03's owner wants one.
+- **Heading level.** The card title stays a `<p>` (not a heading), so no role-based selectors change.
+- **Detail tests.** The plan asked for a full `RecipeDetail.test.tsx`. Plan 05 owns the rest of `RecipeDetail.tsx` and is renaming "Start cook mode →" and moving delete onto `Dialog`, so I added only a hero-scoped `RecipeDetail.cover.test.tsx`, to avoid a colliding file and assertions that plan 05 would immediately break. The action-handler tests are plan 05's.
+- **Review hero radius.** The review hero moved from `rounded-2xl` (16px) to `rounded-card` (12px), to match the detail hero.
+
+### Checks
+
+Run from `frontend/`:
+- `pnpm lint`: pass.
+- `pnpm exec tsc --noEmit`: pass.
+- `pnpm exec vitest run`: 55 files and 434 tests pass (baseline was 421; 13 are new).
+- `pnpm build`: pass, with CI's public env.
+- `pnpm test:pwa`: 7/7 pass, using the headless-shell shim from `IMPLEMENTING.md`.
+- **Screenshots.** Taken at 393×852 and 1280×860 of the cookbook (5 seeded recipes covering all three tints, missing fields and a clamped long description) and of recipe detail, against the production build. The covers, meta line, clamp and featured ring render as intended. No copy or roles changed, so no existing tests needed updating.
+
+### Handoffs
+
+- **Plan 05:** keep the `RecipeCover` import and the hero hunk in `RecipeDetail.tsx` when restructuring. The old `RecipeDetail.test.tsx` suggestion from this plan (action handlers) is yours.
+- **Plan 06:** `RecipeCover` is a good `view-transition-name` target for cookbook card → detail hero (it has a `data-recipe-cover` hook). Press feedback on `Card` will apply to cookbook cards automatically.
+- **Plan 09:** covers use `terra-soft`/`forest-soft`/`warn-soft` with an `ink-soft` glyph. Re-check glyph contrast for each tint against the dark token values.
+
+### Needs a device
+
+- None required for Phase 1. Optionally, confirm that the `cqi`-sized initial renders at the expected size in the installed iOS PWA (container query units need Safari 16+).
