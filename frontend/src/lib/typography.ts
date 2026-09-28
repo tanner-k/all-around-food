@@ -5,3 +5,5 @@ export const bodyText = "text-base leading-relaxed text-ink";
 export const caption = "text-xs uppercase tracking-wide text-ink-mute";
 /** Tailwind's built-in utility, named for reuse in timers and counts. */
 export const tabularNums = "tabular-nums";
+/** Section eyebrow: the `eyebrow` utility in globals.css plus the default muted color. */
+export const eyebrow = "eyebrow text-ink-mute";
