@@ -87,7 +87,7 @@ Suggested split: steps 1-3 one PR, step 4 a follow-up.
 
 - The initial glyph's contrast (`ink-soft` over three soft tints, `globals.css:13-18`) needs a manual check per tint, not one eyeball pass.
 - `RecipeReview.tsx` wasn't named in the task; including it (step 4) keeps all three sites consistent but can be dropped without affecting steps 1-3.
-- The "recipes sync is live" vs. "hosted Supabase only has 0001-0005" tension in `CLAUDE.md` is surfaced, not resolved, here — needs owner reconciliation before Phase 2c.
+- Resolved 2026-09-28: the hosted project is through migration `0008` (owner-confirmed; `CLAUDE.md` updated). A Phase 2c migration would be `0009`.
 - **Q1:** Is a device-only, backup-exempt photo (2a) acceptable as a first ship, or is backup coverage (2b) a hard requirement first?
 - **Q2:** Pull worker-sourced cover images (2d) into the first photo PR, or keep it deferred as recommended?
 - **Q3:** Should Phase 1's generated cover ship at all, or would a text-only card with no cover block be the preferred permanent look?
