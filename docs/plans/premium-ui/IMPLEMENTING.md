@@ -44,6 +44,11 @@ Use each plan's stated default unless listed otherwise:
 - 07: drop the Import tab (4 tabs); Import moves to the header quick-add. No splash artwork.
 - 08: before any meals exist, show "Review shopping →" as an outline button.
 - 10: replace native checkboxes with the `ShoppingRow` button-checkbox pattern.
+- 09: **fix light-mode contrast too** (owner, 2026-09-28). Today `#C2613B` fails 4.5:1 for small text on every light surface: 4.14 on white (button labels), 3.88 on `bg`, 3.58 on `paper-2`, 3.15 on `terra-soft` chips. Target:
+  - `terra` (`#C2613B`) stays the brand accent for large display type (3:1 is enough there: 3.88 on `bg`), icons, borders, progress bars and decorative fills.
+  - `terra-strong` becomes about `#9A4A2B`. Primary `Button` fills and every small terracotta text use it: section labels, links, the active tab label, and chip text on `terra-soft`. That gives 6.20 against white, 5.80 on `bg`, 5.36 on `paper-2` and 4.71 on `terra-soft`.
+  - A new `terra-deep` (about `#8A4125`, 7.33 against white) is the hover/active state for `terra-strong` fills.
+  - Add a unit test that computes WCAG ratios for the token pairs the app actually uses, in both themes: small text at least 4.5:1, large text and non-text UI at least 3:1. The palette then can't regress silently.
 
 ## Wave 1 results and handoffs
 

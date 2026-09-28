@@ -48,7 +48,7 @@ Collected from the individual plans; each plan states its default.
 | 07 | Drop the Import tab for a header quick-add plus the Cookbook buttons? | Drop it |
 | 07 | Make iOS splash-screen artwork now, or keep the manifest fallback? | Later |
 | 08 | Before any meals are planned, hide "Review shopping →" or show it as an outline? | Outline |
-| 09 | Also fix light-mode white-on-terra (4.14:1, below AA for small text)? | Owner call |
+| 09 | Also fix light-mode white-on-terra (4.14:1, below AA for small text)? | **Decided: yes** (2026-09-28); see `IMPLEMENTING.md` |
 | 10 | Replace native checkboxes with the `ShoppingRow` button-checkbox pattern? | Yes |
 
 ## Shared contract
