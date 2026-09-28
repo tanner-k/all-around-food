@@ -60,11 +60,11 @@ export function ThemeSettings() {
               tabIndex={checked ? 0 : -1}
               onClick={() => choose(index, false)}
               onKeyDown={(event) => onKeyDown(event, index)}
-              className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+              className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
                 checked ? "bg-terra-strong text-on-accent" : "text-ink-soft hover:bg-paper-2"
               }`}
             >
-              <Icon aria-hidden="true" className="size-4" />
+              <Icon aria-hidden="true" className="size-4 shrink-0" />
               {label}
             </button>
           );
