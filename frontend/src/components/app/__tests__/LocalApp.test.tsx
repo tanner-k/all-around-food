@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { closeLocalDB } from "@/lib/local/db";
 import { putRecipe, readSnapshot } from "@/lib/local/repository";
@@ -96,4 +96,30 @@ it("keeps a completed manual cook idempotent after reload and starts a fresh coo
     cook_progress: [expect.objectContaining({ session_id: expect.any(String), completed_at: null })],
   }));
   expect((await readSnapshot()).cook_progress[0].session_id).not.toBe(firstSession);
+});
+
+it("portals the sync chip into the header slot everywhere except cook mode", async () => {
+  await putRecipe(recipeFixture());
+  const slot = document.createElement("span");
+  slot.id = "app-header-status";
+  document.body.append(slot);
+  try {
+    render(<LocalApp />);
+    expect(await screen.findByText("Toast")).toBeInTheDocument();
+    const chip = within(slot).getByRole("link", { name: "Sign in to sync" });
+    expect(chip).toHaveAttribute("href", "/app#/settings");
+    expect(screen.getAllByRole("status", { hidden: true }).filter((node) => node.textContent === "Sign in to sync")).toHaveLength(1);
+    expect(screen.queryByRole("region", { name: "Library sync" })).toBeNull();
+
+    goTo("#/cookbook/recipe-1/cook");
+    await waitFor(() => expect(slot).toBeEmptyDOMElement());
+    expect(screen.queryByText(/sync/i)).toBeNull();
+
+    goTo("#/settings");
+    expect(await screen.findByRole("region", { name: "Library sync" })).toBeInTheDocument();
+    expect(within(slot).getByRole("status")).toHaveTextContent("Sign in to sync");
+    expect(screen.getAllByRole("link", { name: "Sign in" })).toHaveLength(1);
+  } finally {
+    slot.remove();
+  }
 });

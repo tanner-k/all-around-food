@@ -8,21 +8,48 @@ const subscribeHydration = () => () => { };
 const collectionLabels = { recipe: "Recipe", draft: "Recipe draft", planned_meal: "Planned meal", shopping: "Shopping item", pantry: "Pantry item", cook_session: "Cooking session" };
 const fieldLabels: Record<string, string> = { week_of: "Week starting", day_index: "Day", recipe_id: "Recipe reference", position: "Order in plan", quantity_text: "Quantity", checked: "Purchased", source: "Added from", generated_week_of: "Planner week", needs_review: "Quantity needs review", status: "Stock level" };
 const button = "rounded-xl border border-line-strong px-3 py-2 text-sm disabled:opacity-50";
-export function SyncStatus({ sync }: {
+/** Label priority, first match wins: conflicts, actionable error, signed out, waiting, connecting, up to date. */
+export function syncLabel({ account, status, stage, running, ready, authRequired }: LibrarySyncView) {
+    return status.conflicts ? "Review changes" : isActionable(status) ? "Sync needs attention" : authRequired || !account.ownerId ? "Sign in to sync" : status.pending || (stage === "all" && status.deferred) || !ready || stage === "off" ? "Saved on this device · waiting to sync" : running || !status.lastSuccessAt ? "Connecting your library" : "Up to date";
+}
+function isActionable(status: LibrarySyncView["status"]) {
+    return !!status.error && !["paused", "account", "auth"].includes(status.error.category);
+}
+/** Conflicts and actionable errors are the only sync states shown above screen content. */
+export function syncNeedsAttention(sync: LibrarySyncView) {
+    return !!sync.status.conflicts || isActionable(sync.status);
+}
+const useHydrated = () => useSyncExternalStore(subscribeHydration, () => true, () => false);
+const dotColors: Record<string, string> = { "Review changes": "bg-warn", "Sync needs attention": "bg-warn", "Sign in to sync": "bg-ink-mute", "Up to date": "bg-forest" };
+/** Compact header status; the only live region for the sync label. Always opens Settings. */
+export function SyncStatusChip({ sync }: {
     sync: LibrarySyncView;
 }) {
-    const mounted = useSyncExternalStore(subscribeHydration, () => true, () => false);
-    return mounted ? <AccountSyncStatus key={sync.account.generation} sync={sync}/> : <p role="status" className="mb-6 text-sm text-ink-soft">Checking your library…</p>;
+    const label = useHydrated() ? syncLabel(sync) : "Checking your library…";
+    return <a href="/app#/settings" aria-label={label} className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-line bg-paper px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-line-strong hover:text-ink">
+    <span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${dotColors[label] ?? "bg-terra"}`}/>
+    <span role="status" className="truncate">{label}</span>
+  </a>;
 }
-function AccountSyncStatus({ sync }: {
+/** Full sync detail: inline above content for conflicts or errors, and embedded in Settings. */
+export function SyncAttentionBanner({ sync, embedded = false }: {
     sync: LibrarySyncView;
+    embedded?: boolean;
+}) {
+    if (useHydrated())
+        return <SyncDetail key={sync.account.generation} sync={sync} embedded={embedded}/>;
+    return embedded ? <p className="text-sm text-ink-soft">Checking your library…</p> : null;
+}
+function SyncDetail({ sync, embedded }: {
+    sync: LibrarySyncView;
+    embedded: boolean;
 }) {
     const { account, status, stage, running, ready, authRequired } = sync;
     const [reviews, setReviews] = useState<LibraryConflictReview[] | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const actionable = status.error && !["paused", "account", "auth"].includes(status.error.category);
-    const label = status.conflicts ? "Review changes" : actionable ? "Sync needs attention" : authRequired || !account.ownerId ? "Sign in to sync" : status.pending || (stage === "all" && status.deferred) || !ready || stage === "off" ? "Saved on this device · waiting to sync" : running || !status.lastSuccessAt ? "Connecting your library" : "Up to date";
+    const actionable = isActionable(status);
+    const label = syncLabel(sync);
     async function action(operation: () => Promise<void>) {
         setBusy(true);
         setNotice(null);
@@ -50,11 +77,12 @@ function AccountSyncStatus({ sync }: {
         setNotice(resolved ? "Your choice is saved on this device and waiting to sync. Newer edits stay in your library and may still need review; choosing an older version does not discard them." : "These versions changed while you reviewed them. Review the latest changes before choosing again.");
         sync.syncNow();
     }
-    return <section aria-label="Library sync" className="mb-6 rounded-2xl border border-line bg-paper p-4 text-ink">
-    <div className="flex flex-wrap items-center justify-between gap-3"><p role="status" className="font-semibold">{label}</p><a href="/app#/settings" className="text-sm underline">Account / Settings</a></div>
+    return <section aria-label="Library sync" className={embedded ? "rounded-2xl border border-line bg-paper p-5 text-ink" : "mb-6 rounded-2xl border border-line bg-paper p-4 text-ink"}>
+    {embedded && <h2 className="mb-2 font-serif text-2xl">Library sync</h2>}
+    <div className="flex flex-wrap items-center justify-between gap-3"><p className="font-semibold">{label}</p>{!embedded && <a href="/app#/settings" className="text-sm underline">Account / Settings</a>}</div>
     {account.ownerId && <><p className="mt-2 text-sm text-ink-soft">{stage === "recipes" ? status.pending : status.pending + status.deferred} {stage === "recipes" ? "recipe changes" : "changes"} waiting · Last successful sync: {status.lastSuccessAt ? new Date(status.lastSuccessAt).toLocaleString() : "not yet"}</p>
       <div className="mt-3 flex flex-wrap gap-2"><button type="button" className={button} disabled={running || !ready || stage === "off"} onClick={sync.syncNow}>{running ? "Syncing…" : "Sync now"}</button>{!!status.conflicts && <button type="button" className={button} disabled={busy} onClick={() => void action(review)}>Review changes</button>}</div></>}
-    {(authRequired || !account.ownerId) && <a href="/login" className="mt-2 inline-block text-sm underline">Sign in</a>}
+    {!embedded && (authRequired || !account.ownerId) && <a href="/login" className="mt-2 inline-block text-sm underline">Sign in</a>}
     {stage === "off" && <p className="mt-2 text-sm text-ink-soft">Cloud sync is paused. Your library and waiting changes are kept on this device.</p>}
     {stage === "recipes" && !!status.deferred && <p className="mt-2 text-sm text-ink-soft">{status.deferred} device-only change groups are retained for a future release.</p>}
     {stage === "recipes" && <p className="mt-2 text-sm text-ink-soft">Recipes and recipe drafts sync. Plans, shopping, pantry, and cooking progress are saved on this device only.</p>}

@@ -16,6 +16,7 @@ import { localHref, type LocalRoute } from "@/lib/local/navigation";
 import { addPantryItem, addPlannedMeal, addRecipesToShopping, addShoppingItem, beginCookSession, completeCookSession, completeShopping, generateWeekShopping, putRecipe, removeRecipe, removePantryItem, removePlannedMeal, removeShoppingItem, saveCookProgress, setPantryStatus, setPlannedServings, setShoppingChecked } from "@/lib/local/repository";
 import { assertCurrentLocalAccount, captureLocalAccount, type LocalAccount } from "@/lib/local/db";
 import type { LibrarySnapshot } from "@/lib/local/schema";
+import type { LibrarySyncView } from "./useLibrarySync";
 
 // Bind before child queues schedule work; only new operations and publication
 // are cancelled. An already-started transaction may finish in its original DB.
@@ -61,7 +62,7 @@ function MissingRecipe() {
   </div>;
 }
 
-export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot: LibrarySnapshot }) {
+export function LocalScreens({ route, snapshot, sync }: { route: LocalRoute; snapshot: LibrarySnapshot; sync?: LibrarySyncView }) {
   const [account] = useState(captureLocalAccount);
   const recipe = "recipeId" in route ? snapshot.recipes.find((item) => item.id === route.recipeId) : undefined;
   const progress = recipe ? snapshot.cook_progress.find((item) => item.recipe_id === recipe.id) : undefined;
@@ -72,7 +73,7 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
     }
   }, [route.view, recipe, progress, account]);
 
-  if (route.view === "settings") return <DataSettings />;
+  if (route.view === "settings") return <DataSettings sync={sync} />;
 
   if (route.view === "cookbook") {
     const recipes = [...snapshot.recipes].sort((a, b) => b.times_made - a.times_made || b.created_at.localeCompare(a.created_at));
