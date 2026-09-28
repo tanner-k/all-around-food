@@ -12,13 +12,13 @@ Recover in a separate checkout at the recorded base, leaving the recipe release 
 git stash apply 015f592032581fc5512e8b00f8e1c50557d9bf55
 ```
 
-The preserved code includes additive migration0008, protocol2 completion/baseline controls, immutable cooking facts, DBv3/history/session stores and tests. Its known failing repository upgrade fixture assumes DBv2; Task6a is not complete. Do not deploy0008 or claim cooking counts/history sync until its remaining implementation and review pass.
+The preserved code includes a historical cooking migration numbered `0008`, protocol2 completion/baseline controls, immutable cooking facts, DBv3/history/session stores and tests. The live fingerprint repair now uses `0008_library_fingerprint.sql`; **renumber the preserved cooking migration to the next available version before restoring it**, and update its references and tests. Do not edit or drop the stash/archive to resolve the collision. Its known failing repository upgrade fixture assumes DBv2; Task6a is not complete. Do not deploy the cooking migration or claim cooking counts/history sync until its remaining implementation and review pass.
 
 Worktree: `/Users/tannerkunz/.codex/worktrees/account-sync/all-around-food`. Ignored durable scratch archive: `.superpowers/sdd/task6a-preserved/{files.tar.gz,tracked.patch,manifest.json,RECOVERY.md}`; additional verified copy: `/private/tmp/aaf-task6a-preserved-20260926`. Ignored design/handoffs remain `.superpowers/sdd/cooking-count-design.md`, `task-6a-report.md`, `task-6b-brief.md`, `task-7a-brief.md`, `task-7b-brief.md`, `task-8-brief.md`; protocol scratch explicitly labels the deferred section. Original broad plan: [2026-09-25 account sync](../superpowers/plans/2026-09-25-account-sync.md).
 
 ## Deferred product and integration work
 
-- Finish/review cooking history, session identity, exactly-once counts, operational cook actions/session selection/UI, reviewed legacy baseline and frozen-completion recovery; rehearse0008 separately.
+- Finish/review cooking history, session identity, exactly-once counts, operational cook actions/session selection/UI, reviewed legacy baseline and frozen-completion recovery; renumber and rehearse the preserved cooking migration separately.
 - Prove planning, shopping, and pantry sync integration before enabling all-stage. Their current local data and deferred outbox groups remain preserved; recipe-stage status reports them separately.
 - Design advanced account restore/Replace, source-draft enrollment, whole-library backup/history/conflict restoration, and recovery of unmatched deleted history. Recovery-reference conflict exports are not automatically restorable. Never replay foreign account cursors, revisions, receipts, or frozen requests.
 - Prove physical installed iPhone/iPad offline launch, editing, reconnect, auth/account isolation, import-draft Save propagation, and app updates. Use that evidence plus hosted/browser proof before expanding scope.
