@@ -4,6 +4,7 @@ import { AppHeader, AppMain } from "@/app/(app)/_components/AppHeader";
 import { MobileTabBar } from "@/app/(app)/_components/MobileTabBar";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import { TERRA_HEX, THEME_COLOR_DARK_HEX } from "@/lib/theme";
+import { themeInitScript } from "@/lib/theme-preference";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -58,7 +59,15 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${instrumentSerif.variable} ${manrope.variable}`}
+      // The head script sets data-theme before hydration, so the server HTML differs.
+      suppressHydrationWarning
     >
+      <head>
+        {/* Resolve the Light/Dark/System preference before first paint.
+            No Content-Security-Policy is sent today; if one is added, this
+            inline script needs a nonce or hash. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript() }} />
+      </head>
       <body>
         {/* Status-bar scrim: 0px tall in browsers. On an installed iPhone
             (black-translucent status bar) it keeps scrolled content from
