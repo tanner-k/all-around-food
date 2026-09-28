@@ -105,8 +105,8 @@ over hide — it keeps footer layout stable and signals the affordance up
 front. Either way the element must exist with the exact name `"Review
 shopping →"` once `meals.length > 0`, since neither test suite asserts a
 disabled state first. Once meals exist, make the CTA sticky on mobile
-above the tab bar (same clearance problem plan 05 solves for the recipe
-detail primary action — reuse whatever convention lands first).
+above the tab bar, positioned with the shared `--tabbar-height` value
+(see the README's shared surfaces; same convention as plan 05).
 
 **Bottom copy** (`PlanView.tsx:89`) isn't a protected string and isn't
 tested — free to reword or drop given the near-duplicate `SectionHeader`

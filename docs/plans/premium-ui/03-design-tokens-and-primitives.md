@@ -34,7 +34,7 @@ Give the `/app` PWA a semantic token layer and a small set of shared primitives 
 
 `@theme inline` is for values that are themselves references to a variable Tailwind doesn't manage — exactly `--font-sans: var(--font-manrope)`, where `--font-manrope` is a scoped custom property `next/font` attaches via a class on `<html>` (`layout.tsx:61`); Tailwind's own guidance calls this out for `next/font`-style integrations specifically. Using `inline` for plain color literals (as `globals.css` does today) gives no benefit and risks the utility baking in the literal instead of keeping the `var(--color-terra)` indirection plan 09 needs.
 
-**Decision:** split the block. Plain `@theme` for every color/radius/shadow/motion token (needs runtime override); `@theme inline` only for the two font aliases. Verify against the installed `tailwindcss` (`postcss.config.mjs`) by inspecting generated CSS for one token after `pnpm build` before merging PR 1 — flagged under Risks since it wasn't compiled while writing this plan.
+**Decision:** split the block. Plain `@theme` for every color/radius/shadow/motion token (needs runtime override); `@theme inline` only for the two font aliases. Verified on 2026-09-28 against the installed `tailwindcss` 4.3.0: a plain `@theme` color compiles to `.bg-bg { background-color: var(--color-bg) }` and a `[data-theme="dark"] { --color-bg: … }` rule overrides it; `@theme inline` fonts compile to `font-family: var(--font-manrope)`.
 
 ```css
 @theme {
@@ -44,9 +44,11 @@ Give the `/app` PWA a semantic token layer and a small set of shared primitives 
   --color-danger-soft: #F9DEDC;   /* replaces raw red-50/100 */
   --color-focus: #A55230;         /* 2px outline + 2px offset */
 
-  --radius-sm: 0.5rem;   /* 8px — inputs, chips, icon buttons */
-  --radius-md: 0.75rem;  /* 12px — folds rounded-xl (73 uses), cards, buttons */
-  --radius-lg: 1.25rem;  /* 20px — folds rounded-2xl (24), sheets/dialogs */
+  /* Semantic names on purpose: Tailwind 4 already defines --radius-sm/md/lg,
+     and redefining them would silently resize every existing rounded-sm/md/lg. */
+  --radius-control: 0.5rem;  /* 8px: inputs, chips, icon buttons -> rounded-control */
+  --radius-card: 0.75rem;    /* 12px: cards, buttons; same as today's rounded-xl -> rounded-card */
+  --radius-sheet: 1.25rem;   /* 20px: sheets/dialogs -> rounded-sheet */
   /* rounded-full stays Tailwind's built-in utility for pills/avatars */
 
   --shadow-card: 0 1px 2px rgba(27,24,21,.04), 0 1px 1px rgba(27,24,21,.03);
@@ -77,7 +79,7 @@ export const tabularNums = "tabular-nums"; // Tailwind's built-in utility, named
 
 - **`Button`** — `variant: "primary" | "secondary" | "ghost" | "danger"` (default `primary`), `size: "sm" | "md" | "lg"` (default `md`, `min-h-11`/44px matching today's repeated `min-h-11`), `href?: string` (renders `<a>`, no `asChild`), `loading?: boolean`, extends native button attrs minus `className`. `primary` = `rounded-full bg-terra text-white hover:bg-terra-strong`, replacing the six pill-CTA sites verbatim (same text, same tag when `href` is set).
 - **`IconButton`** — square, 44×44 minimum hit area, required `aria-label` (not optional on the type), `icon: ReactNode`, `variant: "default" | "ghost"`. Replaces ad hoc close buttons like `TimerSheet.tsx:68-76`.
-- **`Card`** — `interactive?: boolean`, `padding: "none" | "sm" | "md" | "lg"` (default `md`). Renders `border border-line bg-paper rounded-[var(--radius-md)] shadow-[var(--shadow-card)]`; `interactive` adds `hover:shadow-[var(--shadow-raised)]` for the cookbook grid (`LocalScreens.tsx:87`).
+- **`Card`** — `interactive?: boolean`, `padding: "none" | "sm" | "md" | "lg"` (default `md`). Renders `border border-line bg-paper rounded-card shadow-card`; `interactive` adds `hover:shadow-raised` for the cookbook grid (`LocalScreens.tsx:87`).
 - **`Sheet`** / **`Dialog`** — share one internal, unexported overlay (`src/components/ui/internal/Overlay.tsx`): focus capture on open and restore on close (`TimerSheet.tsx:27,31,40`), body-scroll lock while open (`TimerSheet.tsx:33-37`), Escape listener (`TimerSheet.tsx:44-51`), Tab cycling via the existing `trapTabKey` from `lib/focus-trap.ts` (reused, not rewritten — exactly what `RecipePickerModal.tsx` is missing today), backdrop click-to-close with the panel stopping propagation (`RecipePickerModal.tsx:20-26`), and `role="dialog" aria-modal="true"` plus a required `aria-label`/`aria-labelledby`. `Sheet` is bottom-anchored with safe-area padding on mobile, centered at `md:`; `Dialog` is always centered, narrower, and built to replace the native-`confirm` delete flow `frontend/context.md`'s "Recipe deletion" section describes (`onConfirm`, `variant: "default" | "danger"` — wiring is plan 05's job; this plan ships the component only).
 - **`Menu`** — `trigger: ReactNode`, `items: { label; onSelect; danger? }[]`. V1 is click-outside + Escape close only (no roving-tabindex — see open questions) for the "⋯" actions the README calls out.
 
@@ -85,7 +87,7 @@ export const tabularNums = "tabular-nums"; // Tailwind's built-in utility, named
 
 Ordered, PR-sized:
 
-1. **Tokens only** — rewrite `globals.css`, add `src/lib/theme.ts`, extend `typography.ts`. No component changes; visual diff is zero. Verify with `pnpm build` that no utility silently changed (spot-check `bg-terra`, `rounded-xl` output).
+1. **Tokens only** — rewrite `globals.css`, add `src/lib/theme.ts`, extend `typography.ts`. No component changes; visual diff is zero because no new token reuses a Tailwind default name. Verify with `pnpm build` that no utility silently changed (spot-check `bg-terra`, `rounded-xl`, `rounded-lg` output).
 2. **Primitives, unadopted** — add the six components plus co-located `__tests__/*.test.tsx` (matching the existing convention, not literal sibling files). Nothing imports them yet; reviewable purely as new, isolated code.
 3. **Mechanical color sweep** — replace all 18 `#A55230` and the `red-*`/`green-*` occurrences with `terra-strong`/`danger`/`danger-soft`/`forest`/`forest-soft`, without adopting primitives. Include the legacy, nav-hidden `/prices` surface (`ZipSelector.tsx`) in this rename since it's the same low-effort sweep, even though it's excluded from primitive adoption below.
 4. **Primitive adoption, screen by screen** — see inventory below, ordered by a11y risk (dialogs first) then visibility.
@@ -102,7 +104,7 @@ Ordered, PR-sized:
 | `shopping/ShoppingRow.tsx`, `shopping/ShoppingListView.tsx` | tokens only | small badges, no primitive needed |
 | `components/prices/*`, `app/(app)/prices/page.tsx` | tokens only | legacy/hidden, no primitive adoption |
 
-**Lint guard:** a core-ESLint (no new dependency) `no-restricted-syntax` rule in `eslint.config.mjs`, scoped to `frontend/src/**/*.{ts,tsx}`, matching `Literal`/`JSXAttribute` values against `/#[0-9A-Fa-f]{6}/`, with an override exempting `src/lib/theme.ts` (the one file allowed to hold the canonical literal). Runs inside the existing `pnpm lint` gate, no new CI step.
+**Lint guard:** a core-ESLint (no new dependency) `no-restricted-syntax` rule in `eslint.config.mjs`, scoped to `frontend/src/**/*.{ts,tsx}`, matching `Literal`/`JSXAttribute` values against `/#[0-9A-Fa-f]{6}/`, with an override exempting `src/lib/theme.ts` (the one file allowed to hold the canonical literal). The hidden `/prices` chart (`components/prices/PriceHistoryChart.tsx`) passes eight hex colors to Recharts as SVG attributes; move them into `theme.ts` as named exports in the same PR rather than exempting the folder. Runs inside the existing `pnpm lint` gate, no new CI step.
 
 ## Tests and verification
 
@@ -112,14 +114,14 @@ Ordered, PR-sized:
 
 ## Risks and open questions
 
-1. The `@theme`/`@theme inline` split is a documented Tailwind v4 pattern but wasn't compiled here — diff generated CSS for one token against the installed `tailwindcss` version before merging PR 1.
+1. The `@theme`/`@theme inline` split is verified (see Design §1). Re-check if `tailwindcss` is upgraded past 4.3.
 2. `--color-danger`/`-soft` hexes are placeholders matching today's `red-600`/`red-50`; confirm whether error color should instead be warm-palette-tinted like `--color-warn`.
 3. `Menu` ships without arrow-key roving-tabindex in v1 (click/Escape only) — confirm that's acceptable, or pull full keyboard nav into this plan.
 
 ## Acceptance criteria
 
 - [ ] `globals.css` has zero raw hex outside the token block; `layout.tsx` sources `themeColor` from `lib/theme.ts`, asserted equal to `--color-terra` by a unit test
-- [ ] `terra-strong`, `danger`, `danger-soft`, `focus`, `radius-sm/md/lg`, `shadow-card/raised/overlay`, `ease-out-soft/spring`, `duration-fast/base/slow` all defined and consumed by at least one migrated file
+- [ ] `terra-strong`, `danger`, `danger-soft`, `focus`, `radius-control/card/sheet`, `shadow-card/raised/overlay`, `ease-out-soft/spring`, `duration-fast/base/slow` all defined and consumed by at least one migrated file
 - [ ] Zero remaining `#A55230` and zero raw `red-*`/`green-*` color utilities under `frontend/src/`
 - [ ] `Button`, `IconButton`, `Card`, `Sheet`, `Dialog`, `Menu` exist in `frontend/src/components/ui/` with passing co-located tests
 - [ ] `RecipePickerModal.tsx` has a working focus trap and Escape handling (currently has neither)

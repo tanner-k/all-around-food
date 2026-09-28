@@ -69,9 +69,9 @@ the checkmark — it's a state confirmation, unlike the arrow); overflow
 `Menu` via an `IconButton aria-label="Recipe options"` ("⋯") with two items,
 **Edit** (same `localHref("edit", recipe.id)` as today) and **Delete**
 (opens the `Dialog`). On mobile, "Start cooking" pins above `MobileTabBar`
-(measure its real rendered height + `env(safe-area-inset-bottom)` rather
-than hardcoding `56px` in two places; reuse plan 07's safe-area convention
-if it lands first). On `md:`+ (`MobileTabBar` is `md:hidden`) it sits inline
+using the shared `--tabbar-height` value from plan 07
+(`bottom: calc(var(--tabbar-height) + 0.75rem)`; see the README's shared
+surfaces). On `md:`+ (`MobileTabBar` is `md:hidden`) it sits inline
 at the end of the action row, no `sticky` needed.
 
 **Dialog** replaces `window.confirm`: same copy as line 88, "Delete"
@@ -160,8 +160,9 @@ Steps 1–3 and 5 don't need plan 03 and can ship first if sequencing slips.
 - "Start cook mode →" isn't on the README's protected-string list but is
   asserted verbatim in `LocalApp.test.tsx:93` — a real breaking rename, not
   a free one; needs a coordinated test edit.
-- The sticky-button-above-tab-bar offset needs a measured height, not a
-  hardcoded guess, to avoid drift if plan 07 changes the tab bar.
+- The sticky offset depends on plan 07's `--tabbar-height`. If this plan
+  ships first, add that variable to `globals.css` as the README describes
+  rather than hard-coding `56px`.
 - Confirm whether plan 03's `Menu` must close before `Dialog` opens, so the
   delete flow never has two overlays open at once.
 
