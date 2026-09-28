@@ -88,3 +88,46 @@ No `Button`/`IconButton`/`Sheet`/`Menu`/tokens needed. The chip is a plain `<a>`
 - [ ] Settings shows full detail unconditionally, with exactly one "Sign in" link.
 - [ ] All listed tests updated and passing; `"Up to date"`/`"Offline ready"` strings unchanged.
 - [ ] `frontend/context.md` updated.
+
+## Implementation notes
+
+Branch `claude/premium-ui-01-sync-status`, cut from the plan-set commit `e98a69b`.
+
+**Shipped:**
+- `69ca468` feat(sync): move sync status into a header chip and Settings.
+  - `SyncStatus.tsx`: `SyncStatus` is replaced by two exports. `SyncStatusChip` is a pill-shaped `<a href="/app#/settings">` with a colored dot and the unchanged label in the only `role="status"`. It shows "Checking your library…" before hydration. `SyncAttentionBanner` is the old `AccountSyncStatus` behind the same hydration guard. It takes `embedded?: boolean`, which adds a "Library sync" heading and removes the "Account / Settings" self-link and the "Sign in" link. The label logic moved into `syncLabel()` with the same order. New `syncNeedsAttention()` returns true for conflicts or an actionable error. The banner's label paragraph no longer has `role="status"`, so the chip is the only live region. `Readable` is unchanged.
+  - Dot colors use today's palette: `bg-warn` for "Review changes" and "Sync needs attention", `bg-ink-mute` for "Sign in to sync", `bg-forest` for "Up to date", and `bg-terra` for waiting, connecting and checking. Plan 03 can switch these to `danger`/`focus` tokens.
+  - `layout.tsx`: adds an empty `<span id="app-header-status" className="-ml-5 flex min-w-0" />` right after the brand mark. Nothing else in the header changed.
+  - `LocalApp.tsx`: still calls `useLibrarySync()` exactly as before. It finds the slot with `useSyncExternalStore`, using `null` on the server, and portals `<SyncStatusChip />` into it. It renders `<SyncAttentionBanner />` only when `syncNeedsAttention(sync)` is true. Neither renders when `route.view === "cook"`. It passes `sync` to `LocalScreens`.
+  - `LocalScreens.tsx`: accepts an optional `sync` prop and passes it to `DataSettings`.
+  - `DataSettings.tsx`: accepts an optional `sync` prop and mounts `<SyncAttentionBanner sync={sync} embedded />` whenever it is present, right after the Account card.
+  - Tests:
+    - `SyncStatus.test.tsx` is rewritten around the two exports. It covers label priority on the chip, a single live region linking to Settings for every non-attention label, the `syncNeedsAttention` rules, the embedded mode dropping both links, and the hydration shell for both components. The existing conflict-review tests now target the banner.
+    - `LocalApp.test.tsx` gains a test that the chip is portaled into `#app-header-status`, that no banner appears in the normal state, that the slot empties on a cook route, and that Settings shows the full detail with exactly one "Sign in" link.
+    - `DataSettings.test.tsx` gains a test that `sync` renders the full detail with one "Sign in" link and a working "Sync now".
+- `ebc993e` docs(frontend): the "Account library sync" section of `frontend/context.md` now describes the chip, the banner, the Settings mount and the slot.
+
+**Deviations:**
+- `sync` is optional on `LocalScreens` and `DataSettings`, so existing tests that render them without it still compile. The only caller in the app, `LocalApp`, always passes it.
+- In Chromium, the chip link had no accessible name because the text sits inside a `role="status"` child. I added `aria-label={label}` to the link, so its name is the label text.
+- The embedded Settings card shows a "Library sync" heading. That text was already the section's `aria-label`, and `RecipeCopySettings` already tells users to "Check Library sync", so no new wording was added.
+- `e2e/pwa-import.spec.ts` changed because "Sync now" and "Syncing…" are now only in Settings. The test switches the hash to `#/settings` to press "Sync now" and to check "Syncing…" while the pull is held, then switches back to `#/import`. Hash changes don't reload the page, so the held pass is still the same one. Line 104's `getByText("Up to date", { exact: true })` is unchanged; it now matches the chip. I also added a check that `#app-header-status` holds a link named "Up to date" pointing to `/app#/settings`.
+
+**Checks:** all run from `frontend/` after `pnpm install --frozen-lockfile`.
+- `pnpm lint`: pass.
+- `pnpm exec tsc --noEmit`: pass.
+- `pnpm exec vitest run`: 43 files, 370 tests pass (baseline 362 plus 8 new).
+- `pnpm build`: pass.
+- `pnpm test:pwa`: 7 of 7 pass, with two setup differences from a plain run:
+  - The build used CI's environment: `NEXT_PUBLIC_SUPABASE_URL=https://aaf-mock.supabase.co`, `NEXT_PUBLIC_SUPABASE_ANON_KEY=public-test-key`, `NEXT_PUBLIC_ACCOUNT_SYNC_STAGE=recipes`. Without it, the import spec can't reach "Up to date" on any branch.
+  - This repo's Playwright expects `chromium_headless_shell-1223`, but the container has `-1194`. I ran the same config through a temporary wrapper, not committed, that only sets `launchOptions.executablePath` to `/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell`. A plain `pnpm test:pwa` here fails at browser launch before any test runs.
+- Screenshots at 393×852 and 1280×860 of `/app#/plan` and `/app#/settings`, signed out, look right. On a phone, a long label such as "Saved on this device · waiting to sync" is truncated with an ellipsis in the chip; the full text stays in the accessible name and in Settings.
+
+**Handoffs:**
+- Plan 07 (header): keep `#app-header-status` next to the brand when the header moves into `AppHeader.tsx`. Its `-ml-5` offsets the nav's `gap-8`. The chip is about 30px tall, under the 44px touch target, so size it with the header's touch rules. Hiding the header on cook routes has no effect on the chip, since `LocalApp` already leaves it out.
+- Plan 03: swap the chip's dot colors to the `danger`/`focus` tokens, and later upgrade the chip to a `Sheet`/`Menu` preview if wanted.
+- Out of scope, still open: the "Offline ready" pill in `ServiceWorkerRegister.tsx` also floats on every page, including cook mode.
+
+**Needs a device:**
+- Header fit with the `black-translucent` status bar and safe-area insets on an iPhone, once plan 07 lands.
+- VoiceOver reading the chip's name and announcing label changes, on iOS and iPadOS.
