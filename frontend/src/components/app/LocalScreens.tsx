@@ -7,6 +7,7 @@ import { RecipeEditForm } from "@/components/recipe/RecipeEditForm";
 import { CookMode } from "@/components/cook/CookMode";
 import { DataSettings } from "@/components/settings/DataSettings";
 import { LocalImports } from "./LocalImports";
+import { CookbookCard } from "./CookbookCard";
 import { PlanView } from "@/components/plan/PlanView";
 import { ShoppingListView } from "@/components/shopping/ShoppingListView";
 import { PantryView } from "@/components/pantry/PantryView";
@@ -16,6 +17,7 @@ import { localHref, type LocalRoute } from "@/lib/local/navigation";
 import { addPantryItem, addPlannedMeal, addRecipesToShopping, addShoppingItem, beginCookSession, completeCookSession, completeShopping, generateWeekShopping, putRecipe, removeRecipe, removePantryItem, removePlannedMeal, removeShoppingItem, saveCookProgress, setPantryStatus, setPlannedServings, setShoppingChecked } from "@/lib/local/repository";
 import { assertCurrentLocalAccount, captureLocalAccount, type LocalAccount } from "@/lib/local/db";
 import type { LibrarySnapshot } from "@/lib/local/schema";
+import type { LibrarySyncView } from "./useLibrarySync";
 
 // Bind before child queues schedule work; only new operations and publication
 // are cancelled. An already-started transaction may finish in its original DB.
@@ -57,11 +59,11 @@ function MissingRecipe() {
   return <div className="mx-auto max-w-xl rounded-2xl border border-line bg-paper p-8 text-center">
     <h1 className="font-serif text-3xl text-ink">Recipe unavailable</h1>
     <p className="mt-3 text-ink-mute">This recipe is not in your local cookbook.</p>
-    <a className="mt-5 inline-block text-terra underline" href={localHref("cookbook")}>Back to cookbook</a>
+    <a className="mt-5 inline-block text-terra-strong underline" href={localHref("cookbook")}>Back to cookbook</a>
   </div>;
 }
 
-export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot: LibrarySnapshot }) {
+export function LocalScreens({ route, snapshot, sync }: { route: LocalRoute; snapshot: LibrarySnapshot; sync?: LibrarySyncView }) {
   const [account] = useState(captureLocalAccount);
   const recipe = "recipeId" in route ? snapshot.recipes.find((item) => item.id === route.recipeId) : undefined;
   const progress = recipe ? snapshot.cook_progress.find((item) => item.recipe_id === recipe.id) : undefined;
@@ -72,21 +74,19 @@ export function LocalScreens({ route, snapshot }: { route: LocalRoute; snapshot:
     }
   }, [route.view, recipe, progress, account]);
 
-  if (route.view === "settings") return <DataSettings />;
+  if (route.view === "settings") return <DataSettings sync={sync} />;
 
   if (route.view === "cookbook") {
     const recipes = [...snapshot.recipes].sort((a, b) => b.times_made - a.times_made || b.created_at.localeCompare(a.created_at));
     return <>
       <SectionHeader number="02" scene="YOUR LIBRARY" title={<>Every recipe you&apos;ve <em className="italic text-terra">saved</em>.</>} description="Sorted by what you cook most." />
       <div className="mt-8 flex flex-wrap gap-3">
-        <a href={localHref("edit")} className="rounded-full bg-terra px-5 py-2.5 text-sm font-semibold text-white">+ Add recipe</a>
+        <a href={localHref("edit")} className="rounded-full bg-terra-strong px-5 py-2.5 text-sm font-semibold text-on-accent">+ Add recipe</a>
         <a href={localHref("import")} className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink">Import recipe</a>
       </div>
       {recipes.length === 0 ? <div className="mt-12 rounded-2xl border border-line bg-paper p-12 text-center text-ink-mute">Your cookbook is empty. Add a recipe to get started.</div>
-        : <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">{recipes.map((item, index) =>
-          <a key={item.id} href={localHref("recipe", item.id)} className={`block overflow-hidden rounded-xl bg-paper transition-shadow hover:shadow-md ${index === 0 ? "border-2 border-terra" : "border border-line"}`}>
-            <div className="aspect-video bg-paper-2" /><div className="flex flex-col gap-1 p-4"><p className="font-serif text-xl text-ink">{item.title}</p><p className="text-sm text-ink-mute">{item.times_made ? `${item.times_made}× cooked` : "just added"}</p></div>
-          </a>)}</div>}
+        : <ul className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">{recipes.map((item, index) =>
+          <CookbookCard key={item.id} recipe={item} featured={index === 0} index={index} />)}</ul>}
     </>;
   }
 

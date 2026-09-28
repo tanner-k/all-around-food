@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, Manrope } from "next/font/google";
+import { AppHeader, AppMain } from "@/app/(app)/_components/AppHeader";
 import { MobileTabBar } from "@/app/(app)/_components/MobileTabBar";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { TERRA_HEX, THEME_COLOR_DARK_HEX } from "@/lib/theme";
+import { themeInitScript } from "@/lib/theme-preference";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -25,7 +28,8 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "All Around Food",
-    statusBarStyle: "default",
+    // Cream header runs under the status bar; AppHeader pads for safe-area-inset-top.
+    statusBarStyle: "black-translucent",
   },
   icons: {
     icon: [
@@ -37,18 +41,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#C2613B",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: TERRA_HEX },
+    { media: "(prefers-color-scheme: dark)", color: THEME_COLOR_DARK_HEX },
+  ],
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
 };
-
-const navLinks = [
-  { label: "Plan", href: "/app#/plan" },
-  { label: "Cookbook", href: "/app#/cookbook" },
-  { label: "Shop", href: "/app#/shop" },
-  { label: "Pantry", href: "/app#/pantry" },
-];
 
 export default function RootLayout({
   children,
@@ -59,50 +59,25 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${instrumentSerif.variable} ${manrope.variable}`}
+      // The head script sets data-theme before hydration, so the server HTML differs.
+      suppressHydrationWarning
     >
+      <head>
+        {/* Resolve the Light/Dark/System preference before first paint.
+            No Content-Security-Policy is sent today; if one is added, this
+            inline script needs a nonce or hash. */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript() }} />
+      </head>
       <body>
-        {/* ── Top navigation ────────────────────────────────────── */}
-        <header className="border-b border-line">
-          <nav className="mx-auto flex max-w-[1400px] items-center gap-8 px-4 md:px-14 py-4">
-            {/* Brand mark */}
-            <a
-              href="/app#/plan"
-              className="font-serif italic text-xl text-terra tracking-tight shrink-0"
-            >
-              All Around Food
-            </a>
-
-            {/* Spacer */}
-            <div className="flex-1" />
-
-            {/* Nav items */}
-            <div className="hidden md:flex items-center gap-6 text-sm font-medium">
-              {navLinks.map(({ label, href }) => (
-                <a
-                  key={href}
-                  href={href}
-                  className="text-ink-soft transition-colors hover:text-ink"
-                >
-                  {label}
-                </a>
-              ))}
-
-              {/* + Import — terracotta pill accent */}
-              <a
-                href="/app#/import"
-                className="rounded-full bg-terra-soft px-3 py-1 text-terra transition-colors hover:bg-terra hover:text-paper"
-              >
-                + Import
-              </a>
-              <a href="/app#/settings" className="text-ink-soft transition-colors hover:text-ink">Settings</a>
-            </div>
-          </nav>
-        </header>
-
-        {/* ── Page container ────────────────────────────────────── */}
-        <main className="mx-auto w-full max-w-[1400px] px-4 md:px-14 py-16 pb-20 md:pb-24">
-          {children}
-        </main>
+        {/* Status-bar scrim: 0px tall in browsers. On an installed iPhone
+            (black-translucent status bar) it keeps scrolled content from
+            showing through behind the clock and battery. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-x-0 top-0 z-[60] h-[env(safe-area-inset-top)] bg-bg/85 backdrop-blur"
+        />
+        <AppHeader />
+        <AppMain>{children}</AppMain>
         <MobileTabBar />
         <ServiceWorkerRegister />
       </body>

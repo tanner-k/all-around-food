@@ -3,8 +3,13 @@
 import { useState } from "react";
 import type { Recipe, Ingredient } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
+import { RecipeCover } from "./RecipeCover";
 import { pageTitle } from "@/lib/typography";
 import { localHref } from "@/lib/local/navigation";
+import { formatIngredientAmount } from "@/lib/format-quantity";
+import { Button } from "@/components/ui/Button";
+import { Dialog } from "@/components/ui/Dialog";
+import { Menu } from "@/components/ui/Menu";
 
 interface RecipeDetailProps {
   recipe: Recipe;
@@ -15,7 +20,7 @@ interface RecipeDetailProps {
 
 function PillMeta({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center bg-paper-2 text-ink-soft px-3 py-1 rounded-full text-sm border border-line">
+    <span className="inline-flex items-center tabular-nums bg-paper-2 text-ink-soft px-3 py-1 rounded-full text-sm border border-line">
       {children}
     </span>
   );
@@ -23,18 +28,19 @@ function PillMeta({ children }: { children: React.ReactNode }) {
 
 function IngredientRow({ ing }: { ing: Ingredient }) {
   return (
-    <li className="flex items-baseline gap-2 text-sm">
-      <span className="text-ink-mute flex-shrink-0">·</span>
-      <span className="text-ink">{ing.name}</span>
-      <span className="bg-terra-soft text-terra px-1.5 py-0.5 rounded-md text-xs font-medium whitespace-nowrap">
-        {ing.quantity.as_written}
+    <li className="flex items-baseline gap-3 border-b border-line py-2 text-sm last:border-b-0">
+      <span className="w-20 shrink-0 text-right font-medium tabular-nums text-terra-strong">
+        {formatIngredientAmount(ing.quantity)}
       </span>
-      {ing.preparation && (
-        <span className="text-ink-mute text-xs">{ing.preparation}</span>
-      )}
-      {ing.optional && (
-        <span className="text-ink-mute text-xs italic">optional</span>
-      )}
+      <span className="min-w-0 text-ink">
+        {ing.name}
+        {ing.preparation && (
+          <span className="text-ink-mute">, {ing.preparation}</span>
+        )}
+        {ing.optional && (
+          <span className="ml-1.5 text-ink-mute text-xs italic">optional</span>
+        )}
+      </span>
     </li>
   );
 }
@@ -43,6 +49,7 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
   const [busy, setBusy] = useState(false);
   const [logged, setLogged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const displayTime = recipe.total_time_min ?? recipe.cook_time_min;
   const breadcrumb = [recipe.course, displayTime ? `${displayTime} min` : null]
@@ -54,9 +61,9 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
   const titleStart = words.slice(0, -1).join(" ");
   const titleEnd = words[words.length - 1];
 
-  // Meta pills
+  // Meta pills. Time lives only in the breadcrumb, which still shows it
+  // when there is no course.
   const metaPills: React.ReactNode[] = [];
-  if (displayTime) metaPills.push(<>⏱ {displayTime} min</>);
   if (recipe.servings) metaPills.push(<>serves {recipe.servings}</>);
   if (recipe.nutrition?.kcal) metaPills.push(<>{recipe.nutrition.kcal} kcal</>);
   if (recipe.difficulty)
@@ -85,15 +92,14 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
   }
 
   async function handleDelete() {
-    if (!window.confirm(`Delete “${recipe.title}” from your cookbook? If this recipe is connected to your account, its deletion will sync when online. Plans and other references are kept.`)) return;
     setBusy(true); setError(null);
     try { await onDelete(); }
     catch (failure) { setError(failure instanceof Error ? failure.message : "Unable to delete recipe."); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setConfirmingDelete(false); }
   }
 
   return (
-    <div className="flex flex-col gap-8 max-w-3xl mx-auto">
+    <div data-recipe-detail={recipe.id} className="flex flex-col gap-8 max-w-3xl lg:max-w-4xl mx-auto">
       {/* Breadcrumb */}
       {breadcrumb && (
         <p className="text-ink-mute text-xs uppercase tracking-wide">
@@ -102,13 +108,13 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
       )}
 
       {/* Title */}
-      <h1 className={`font-serif leading-tight text-ink ${pageTitle}`}>
+      <h1 data-recipe-title="" className={`font-serif leading-tight text-ink text-balance break-words hyphens-auto ${pageTitle}`}>
         {titleStart && <>{titleStart} </>}
         <em className="italic text-terra not-italic">{titleEnd}</em>
       </h1>
 
-      {/* Hero placeholder — 16:10 */}
-      <div className="w-full rounded-xl bg-paper-2" style={{ aspectRatio: "16/10" }} />
+      {/* Hero cover: 16:10 on phones, a 240px banner from md: so it never dominates the page */}
+      <RecipeCover recipe={recipe} className="aspect-[16/10] w-full rounded-card md:aspect-auto md:h-60" />
 
       {/* Meta pills */}
       {metaPills.length > 0 && (
@@ -124,58 +130,97 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
         <p className="text-ink-soft leading-relaxed">{recipe.description}</p>
       )}
 
-      {/* Ingredients */}
-      <section>
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute mb-3">
-          Ingredients
-        </p>
-        {hasGroups ? (
-          <div className="flex flex-col gap-4">
-            {[...groups.entries()].map(([group, ings]) => (
-              <div key={group}>
-                {group !== "__ungrouped__" && (
-                  <p className="font-serif italic text-ink-soft text-sm mb-1.5">
-                    {group}
-                  </p>
-                )}
-                <ul className="flex flex-col gap-1.5">
-                  {ings.map((ing, i) => (
-                    <IngredientRow key={i} ing={ing} />
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <ul className="flex flex-col gap-1.5">
-            {recipe.ingredients.map((ing, i) => (
-              <IngredientRow key={i} ing={ing} />
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* Actions. On phones the wrapper dissolves (display: contents) so
+          "Start cooking" can sit last in the column and stick above the tab
+          bar; from md it joins the row. The fallback applies until the shared
+          --tabbar-height lands. */}
+      <div className="contents md:flex md:items-center md:gap-3">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="secondary"
+            size="lg"
+            onClick={handleMarkCooked}
+            disabled={busy || logged}
+            className="flex-1 md:flex-none"
+          >
+            {logged ? <>Cooked <span aria-hidden="true" className="text-[1em] leading-none align-[-0.05em]">✓</span></> : "Mark cooked"}
+          </Button>
+          <Menu
+            label="Recipe options"
+            items={[
+              { label: "Edit", onSelect: () => { window.location.href = localHref("edit", recipe.id); } },
+              { label: "Delete", danger: true, disabled: busy, onSelect: () => setConfirmingDelete(true) },
+            ]}
+          />
+        </div>
+        <div className="order-last sticky z-30 bottom-[calc(var(--tabbar-height,calc(3.5rem+env(safe-area-inset-bottom)))+0.75rem)] rounded-full shadow-raised md:static md:order-none md:ml-auto md:shadow-none">
+          <Button
+            href={localHref("cook", recipe.id)}
+            size="lg"
+            fullWidth
+            onClick={(event: React.MouseEvent<HTMLAnchorElement>) => { event.preventDefault(); void onStartCook().catch((err: unknown) => setError(err instanceof Error ? err.message : "Unable to start cook mode.")); }}
+          >
+            Start cooking
+          </Button>
+        </div>
+      </div>
+      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
 
-      {/* Steps */}
-      <section>
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute mb-3">
-          Steps
-        </p>
-        <ol className="flex flex-col gap-4">
-          {recipe.steps.map((step) => (
-            <li key={step.order} className="flex gap-4">
-              <span className="font-serif italic text-terra text-2xl leading-none flex-shrink-0 mt-0.5">
-                {step.order}.
-              </span>
-              <p className="text-sm text-ink leading-relaxed">
-                <InlineAmountText
-                  instruction={step.instruction}
-                  ingredients={recipe.ingredients}
-                />
-              </p>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <div className="flex flex-col gap-8 md:grid md:grid-cols-[minmax(260px,320px)_1fr] md:gap-10">
+        {/* Ingredients */}
+        <section className="md:sticky md:top-6 md:self-start md:max-h-[calc(100dvh-3rem)] md:overflow-y-auto">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute mb-3">
+            Ingredients
+          </p>
+          {hasGroups ? (
+            <div className="flex flex-col gap-4">
+              {[...groups.entries()].map(([group, ings]) => (
+                <div key={group}>
+                  {group !== "__ungrouped__" && (
+                    <p className="font-serif italic text-ink-soft text-sm mb-1.5">
+                      {group}
+                    </p>
+                  )}
+                  <ul className="flex flex-col">
+                    {ings.map((ing, i) => (
+                      <IngredientRow key={i} ing={ing} />
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <ul className="flex flex-col">
+              {recipe.ingredients.map((ing, i) => (
+                <IngredientRow key={i} ing={ing} />
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Steps */}
+        <section>
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute mb-3">
+            Steps
+          </p>
+          <ol className="flex flex-col gap-4">
+            {recipe.steps.map((step) => (
+              <li key={step.order} className="flex gap-4">
+                <span className="w-7 text-right font-serif italic text-terra text-2xl leading-none flex-shrink-0 mt-0.5">
+                  <span className="tabular-nums">{step.order}</span>.
+                </span>
+                <p className="text-sm text-ink leading-relaxed text-pretty">
+                  <InlineAmountText
+                    instruction={step.instruction}
+                    ingredients={recipe.ingredients}
+                    variant="inline"
+                  />
+                </p>
+              </li>
+            ))}
+          </ol>
+        </section>
+      </div>
 
       {/* Notes */}
       {recipe.notes && (
@@ -187,32 +232,16 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
         </section>
       )}
 
-      {/* Action row */}
-      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 flex-wrap pt-2 border-t border-line">
-        <a
-          href={localHref("edit", recipe.id)}
-          className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10 flex items-center justify-center sm:inline-flex"
-        >
-          Edit
-        </a>
-        <button type="button" onClick={() => void handleDelete()} disabled={busy} className="min-h-11 rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-warn disabled:opacity-50">Delete recipe</button>
-        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
-        <button
-          type="button"
-          onClick={handleMarkCooked}
-          disabled={busy || logged}
-          className="rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10"
-        >
-          {logged ? "Cooked ✓" : "Mark cooked"}
-        </button>
-        <a
-          href={localHref("cook", recipe.id)}
-          onClick={(event) => { event.preventDefault(); void onStartCook().catch((err: unknown) => setError(err instanceof Error ? err.message : "Unable to start cook mode.")); }}
-          className="rounded-full bg-terra px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#A55230] sm:ml-auto min-h-11 flex items-center justify-center"
-        >
-          Start cook mode →
-        </a>
-      </div>
+      <Dialog
+        open={confirmingDelete}
+        onClose={() => setConfirmingDelete(false)}
+        onConfirm={() => void handleDelete()}
+        title="Delete recipe?"
+        description={`Delete “${recipe.title}” from your cookbook? If this recipe is connected to your account, its deletion will sync when online. Plans and other references are kept.`}
+        confirmLabel="Delete"
+        variant="danger"
+        busy={busy}
+      />
     </div>
   );
 }

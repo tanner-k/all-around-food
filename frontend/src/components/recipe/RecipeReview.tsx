@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { withEditedAmount, type Recipe } from "@/lib/recipe-schema";
 import { InlineAmountText } from "./InlineAmountText";
+import { RecipeCover } from "./RecipeCover";
+import { Button } from "@/components/ui/Button";
+import { eyebrow } from "@/lib/typography";
 
 interface RecipeReviewProps {
   recipe: Recipe;
@@ -106,8 +109,8 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
         <p className="font-semibold">Check these details before saving</p>
         <ul className="mt-2 list-disc pl-5">{warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>
       </div>}
-      {/* Hero placeholder */}
-      <div className="aspect-video w-full rounded-2xl bg-paper-2" />
+      {/* Hero cover */}
+      <RecipeCover recipe={recipe} className="aspect-video w-full rounded-card" />
 
       {/* Title + meta row */}
       <div className="flex items-start justify-between gap-4">
@@ -148,14 +151,14 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
         </div>
 
         {/* Parsed badge */}
-        <span className="inline-block text-xs uppercase tracking-wide bg-terra-soft text-terra px-2 py-0.5 rounded flex-shrink-0">
+        <span className="inline-block text-xs uppercase tracking-wide bg-terra-soft text-terra-strong px-2 py-0.5 rounded flex-shrink-0">
           parsed
         </span>
       </div>
 
       {/* Ingredients */}
       <div className="flex flex-col gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute">
+        <p className={eyebrow}>
           Ingredients · tap to edit
         </p>
         <ul className="flex flex-col gap-1.5 text-sm leading-relaxed">
@@ -169,7 +172,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
                 <input aria-label={`Ingredient ${idx + 1} amount`} disabled={saving} value={ing.quantity.as_written} onChange={(e) => change({ ...recipe,
                   ingredients: recipe.ingredients.map((item, index) => index === idx ? { ...item, quantity: withEditedAmount(item.quantity, e.target.value) } : item),
                 })} className="w-24 rounded border border-line bg-paper px-2 py-1 text-ink" />
-              </> : <><span className="text-ink">{ing.name}</span><span className="bg-terra-soft text-terra px-1.5 py-0.5 rounded-md text-xs font-medium">{ing.quantity.as_written}</span></>}
+              </> : <><span className="text-ink">{ing.name}</span><span className="bg-terra-soft text-terra-strong px-1.5 py-0.5 rounded-md text-xs font-medium">{ing.quantity.as_written}</span></>}
               {ing.preparation && (
                 <span className="text-ink-mute text-xs">{ing.preparation}</span>
               )}
@@ -180,7 +183,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
           <button
             type="button"
             onClick={() => setShowAllIngredients(true)}
-            className="text-sm text-terra hover:underline text-left"
+            className="text-sm text-terra-strong hover:underline text-left"
           >
             + {hiddenCount} more
           </button>
@@ -189,7 +192,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
 
       {/* Steps */}
       <div className="flex flex-col gap-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute">
+        <p className={eyebrow}>
           Steps
         </p>
         <ol className="flex flex-col gap-4">
@@ -228,27 +231,24 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
       {/* Action buttons */}
       {editStatus === "saving" && <p role="status" className="text-sm text-ink-mute">Saving draft…</p>}
       {editStatus === "saved" && <p role="status" className="text-sm text-ink-mute">All changes saved locally</p>}
-      {editStatus === "error" && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">
+      {editStatus === "error" && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">
         <span>{editError}</span><button type="button" disabled={saving} onClick={() => persist(latestRecipe.current)} className="underline disabled:opacity-50">Retry saving draft</button>
       </div>}
-      {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">{error}</p>}
       <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
-        <button
-          type="button"
+        <Button
+          variant="secondary"
           onClick={() => setEditing((v) => !v)}
           disabled={saving}
-          className="rounded-full border border-line bg-paper px-5 py-2 text-sm font-semibold text-ink transition-colors hover:bg-paper-2 min-h-10"
         >
           {editing ? "Done" : "Edit"}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
           onClick={() => void save()}
           disabled={saving || editStatus === "error"}
-          className="rounded-full bg-terra px-5 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] min-h-11"
         >
           {saving ? "Saving…" : saveLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );

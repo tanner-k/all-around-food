@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { setOfflineReady } from "@/lib/pwa-status";
 import { assertCurrentLocalAccount, captureLocalAccount, getLocalDB, isCurrentLocalAccount, subscribeToLocalAccountChange, type LocalAccount } from "@/lib/local/db";
 import { readSnapshot, saveSetting, subscribeToLocalChanges } from "@/lib/local/repository";
 
@@ -35,7 +36,6 @@ async function waitForCommittedWrites(account: LocalAccount) {
 }
 
 export default function ServiceWorkerRegister() {
-  const [ready, setReady] = useState(false);
   const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null);
   const [updateApplied, setUpdateApplied] = useState(false);
@@ -69,7 +69,7 @@ export default function ServiceWorkerRegister() {
     const reportReady = (result: { ready: boolean; buildId?: string }) => {
       if (stopped) return;
       if (!pageBuildId.current && result.ready) pageBuildId.current = result.buildId ?? null;
-      setReady(result.ready);
+      setOfflineReady(result.ready);
       if (result.ready) setError(null);
     };
     const onControllerChange = () => {
@@ -178,10 +178,11 @@ export default function ServiceWorkerRegister() {
     setInstallPrompt(null);
   }
 
-  if (!ready && !waiting && !error && !installPrompt) return null;
-  return <div className="fixed bottom-20 right-4 z-50 flex max-w-xs flex-col gap-2 rounded-xl border border-line bg-paper p-3 text-sm text-ink shadow-lg md:bottom-4">
-    {ready && <p role="status" aria-label="Offline ready" className="text-forest">Offline ready</p>}
-    {waiting && <div role="status"><p>Update available</p><button type="button" disabled={updating} onClick={() => void applyUpdate()} className="mt-2 rounded-lg bg-forest px-3 py-2 font-semibold text-white disabled:opacity-50">{updating ? "Finishing saves…" : "Update now"}</button></div>}
+  // The passive "Offline ready" status lives in Settings (useOfflineReady); only
+  // notices that need action float here: updates, installs and errors.
+  if (!waiting && !updateApplied && !error && !installPrompt) return null;
+  return <div className="fixed bottom-[calc(max(var(--tabbar-height),env(safe-area-inset-bottom))+1rem)] right-4 z-50 flex max-w-xs flex-col gap-2 rounded-xl border border-line bg-paper p-3 text-sm text-ink shadow-overlay">
+    {waiting && <div role="status"><p>Update available</p><button type="button" disabled={updating} onClick={() => void applyUpdate()} className="mt-2 rounded-lg bg-forest px-3 py-2 font-semibold text-on-accent disabled:opacity-50">{updating ? "Finishing saves…" : "Update now"}</button></div>}
     {updateApplied && <p role="status">Update installed. Reload when you are ready.</p>}
     {installPrompt && <button type="button" onClick={() => void install()} className="rounded-lg border border-line-strong px-3 py-2 font-semibold">Install app</button>}
     {error && <p role="alert" className="text-warn">{error}</p>}

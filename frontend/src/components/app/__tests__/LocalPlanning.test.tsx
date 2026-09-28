@@ -20,7 +20,7 @@ afterEach(reset);
 it("plans repeated recipes, generates shopping, and stocks checked items offline", async () => {
   await putRecipe(recipeFixture());
   render(<LocalApp />);
-  await screen.findByText(/Plan your week/);
+  await screen.findByRole("heading", { name: "Plan your week." });
   fireEvent.click(screen.getAllByRole("button", { name: /Add recipe/ })[0]);
   fireEvent.click(screen.getByRole("button", { name: "Toast" }));
   await screen.findByText("Toast");

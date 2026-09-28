@@ -1,4 +1,5 @@
 import type { Ingredient } from "@/lib/recipe-schema";
+import { formatIngredientAmount } from "@/lib/format-quantity";
 
 function IngredientList({ ingredients }: { ingredients: Ingredient[] }) {
   return (
@@ -7,9 +8,9 @@ function IngredientList({ ingredients }: { ingredients: Ingredient[] }) {
         <li key={i} className="flex items-baseline gap-2 text-sm">
           <span className="text-ink-mute">·</span>
           <span className="text-ink">{ing.name}</span>
-          {ing.quantity.as_written && (
-            <span className="bg-terra-soft text-terra px-1.5 py-0.5 rounded-md text-xs font-medium whitespace-nowrap">
-              {ing.quantity.as_written}
+          {formatIngredientAmount(ing.quantity) && (
+            <span className="bg-terra-soft text-terra-strong px-1.5 py-0.5 rounded-control text-xs font-medium whitespace-nowrap tabular-nums">
+              {formatIngredientAmount(ing.quantity)}
             </span>
           )}
         </li>
@@ -36,7 +37,7 @@ export function CookIngredientPanel({
   if (variant === "mobile") {
     return (
       <aside className="lg:hidden">
-        <details className="rounded-xl border border-line bg-paper-2">
+        <details className="rounded-card border border-line bg-paper-2">
           <summary className="px-4 py-3 text-sm font-semibold text-ink cursor-pointer select-none list-none flex items-center justify-between">
             <span>Ingredients ({ingredients.length})</span>
             <span className="text-ink-mute text-xs">tap to expand</span>
@@ -51,7 +52,7 @@ export function CookIngredientPanel({
 
   return (
     <aside className="hidden lg:block w-64 flex-shrink-0">
-      <div className="sticky top-6 rounded-xl border border-line bg-paper-2 p-4">
+      <div className="sticky top-20 rounded-card border border-line bg-paper-2 p-4">
         <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute mb-3">
           Ingredients
         </p>

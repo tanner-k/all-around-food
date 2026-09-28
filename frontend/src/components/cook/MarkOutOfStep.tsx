@@ -4,15 +4,16 @@ import { useState } from "react";
 import type { PantryItem, PantryStatus } from "@/lib/pantry-schema";
 import { captureLocalAccount, isCurrentLocalAccount } from "@/lib/local/db";
 import { normalizeName } from "@/lib/normalize";
+import { Button } from "@/components/ui/Button";
 
 const STATUS_OPTIONS: {
   value: PantryStatus;
   label: string;
   active: string;
 }[] = [
-  { value: "in_stock", label: "Still have", active: "bg-forest text-white" },
-  { value: "low", label: "Running low", active: "bg-warn text-white" },
-  { value: "out", label: "Used it up", active: "bg-ink-mute text-white" },
+  { value: "in_stock", label: "Still have", active: "bg-forest text-on-accent" },
+  { value: "low", label: "Running low", active: "bg-warn text-on-accent" },
+  { value: "out", label: "Used it up", active: "bg-ink-mute text-on-accent" },
 ];
 
 interface MarkOutOfStepProps {
@@ -61,7 +62,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
 
   if (choices.length === 0) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-center gap-6 px-4 py-12 text-center">
+      <div className="animate-rise mx-auto flex max-w-md flex-col items-center gap-6 px-4 py-12 text-center">
         <div>
           <h2 className="font-serif text-3xl tracking-tight text-ink">
             Pantry <em className="italic text-terra">check</em>
@@ -71,19 +72,15 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
             yet.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={finish}
-          className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-[#A55230] active:bg-[#A55230]"
-        >
+        <Button size="lg" fullWidth onClick={finish}>
           Finish
-        </button>
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-4 py-12">
+    <div className="animate-rise mx-auto flex max-w-md flex-col gap-6 px-4 py-12">
       <div className="text-center">
         <h2 className="font-serif text-3xl tracking-tight text-ink">
           What did you <em className="italic text-terra">run out of</em>?
@@ -93,7 +90,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
         </p>
       </div>
 
-      <div className="rounded-xl border border-line bg-paper px-4">
+      <div className="rounded-card border border-line bg-paper px-4">
         {choices.map(({ item, status }) => (
           <div
             key={item.id}
@@ -126,28 +123,24 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
       </div>
 
       {error && (
-        <p className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">
+        <p className="rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">
           {error}
         </p>
       )}
 
       <div className="flex flex-col gap-3">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={phase === "saving"}
-          className="min-h-14 w-full rounded-xl bg-terra font-semibold text-white transition-colors hover:bg-[#A55230] active:bg-[#A55230] disabled:opacity-60"
-        >
+        <Button size="lg" fullWidth onClick={handleSave} disabled={phase === "saving"}>
           {phase === "saving" ? "Saving…" : "Save & finish"}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="secondary"
+          size="lg"
+          fullWidth
           onClick={finish}
           disabled={phase === "saving"}
-          className="min-h-14 w-full rounded-xl border border-line bg-paper font-semibold text-ink transition-colors hover:bg-paper-2 active:bg-paper-2 disabled:opacity-60"
         >
           Skip
-        </button>
+        </Button>
       </div>
     </div>
   );

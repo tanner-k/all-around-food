@@ -32,10 +32,10 @@ function StatNumber({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-serif italic text-terra text-3xl md:text-5xl leading-none">
+      <span className="font-serif italic text-terra text-3xl md:text-5xl leading-none tabular-nums">
         {value}
       </span>
-      <span className="text-xs font-semibold uppercase tracking-wide text-ink-mute">
+      <span className="eyebrow text-ink-mute">
         {label}
       </span>
     </div>

@@ -10,7 +10,8 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   workers: 1,
-  use: { baseURL: `http://127.0.0.1:${port}`, trace: "retain-on-failure" },
+  // Reduced motion takes route-transition.ts's direct-commit path, so no test races a view transition.
+  use: { baseURL: `http://127.0.0.1:${port}`, trace: "retain-on-failure", contextOptions: { reducedMotion: "reduce" } },
   webServer: {
     command: `${shellQuote(process.execPath)} ${shellQuote(nextBin)} start --hostname 127.0.0.1 --port ${port}`,
     url: `http://127.0.0.1:${port}/app`,

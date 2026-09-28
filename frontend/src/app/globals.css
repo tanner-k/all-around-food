@@ -1,23 +1,57 @@
 @import "tailwindcss";
 
-@theme inline {
+/* Plain @theme: each token becomes a real custom property on :root and its
+   utilities reference var(--token), so a later [data-theme] rule (plan 09)
+   can override them at runtime. */
+@theme {
   /* ── Color tokens ────────────────────────────────────────────── */
   --color-bg: #FAF7F2;
   --color-paper: #FFFFFF;
   --color-paper-2: #F3EEE3;
   --color-ink: #1B1815;
   --color-ink-soft: #5C544A;
-  --color-ink-mute: #8C8579;
+  --color-ink-mute: #6F685D; /* plan 09: was #8C8579 (3.4:1 on bg) */
   --color-line: #E8E1D2;
   --color-line-strong: #C9C0AB;
-  --color-terra: #C2613B;
+  --color-terra: #C2613B; /* keep in sync with TERRA_HEX in lib/theme.ts */
   --color-terra-soft: #F3DCCF;
+  /* plan 09 (light-mode contrast): terra stays for large display type, icons,
+     borders and decorative fills; terra-strong carries primary fills and all
+     small terracotta text; terra-deep is the hover/active of those fills. */
+  --color-terra-strong: #9A4A2B;
+  --color-terra-deep: #8A4125;
   --color-forest: #355E3B;
   --color-forest-soft: #DBE5D6;
-  --color-warn: #B97A14;
+  --color-warn: #8A5A0B; /* plan 09: was #B97A14 (3.6:1 on paper) */
   --color-warn-soft: #F5E2B8;
+  --color-danger: #B3261E; /* close to red-600: errors, destructive actions */
+  --color-danger-soft: #F9DEDC; /* close to red-50: error surfaces */
+  --color-focus: #9A4A2B; /* focus outline */
+  --color-on-accent: #FFFFFF; /* text and glyphs on filled accents */
+  --color-scrim: rgb(27 24 21 / 0.4); /* overlay backdrop; stays dark in both themes */
 
-  /* ── Font family tokens ──────────────────────────────────────── */
+  /* ── Radius tokens ───────────────────────────────────────────── */
+  /* Semantic names on purpose: Tailwind already defines --radius-sm/md/lg,
+     and redefining them would resize every existing rounded-sm/md/lg. */
+  --radius-control: 0.5rem; /* 8px: inputs, chips, icon buttons */
+  --radius-card: 0.75rem; /* 12px: cards; same as rounded-xl */
+  --radius-sheet: 1.25rem; /* 20px: sheets and dialogs */
+
+  /* ── Shadow tokens (warm-tinted from ink) ────────────────────── */
+  --shadow-card: 0 1px 2px rgb(27 24 21 / 0.04), 0 1px 1px rgb(27 24 21 / 0.03);
+  --shadow-raised: 0 4px 12px rgb(27 24 21 / 0.08), 0 2px 4px rgb(27 24 21 / 0.04);
+  --shadow-overlay: 0 24px 48px rgb(27 24 21 / 0.18), 0 8px 16px rgb(27 24 21 / 0.08);
+
+  /* ── Motion tokens ───────────────────────────────────────────── */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 120ms;
+  --duration-base: 220ms;
+  --duration-slow: 360ms;
+}
+
+/* @theme inline only for aliases of variables next/font sets on <html>. */
+@theme inline {
   --font-sans: var(--font-manrope);
   --font-serif: var(--font-instrument-serif);
 }
@@ -28,3 +62,267 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* ── Navigation frame and touch (plan 07) ──────────────────────── */
+/* --tabbar-height: space the mobile tab bar covers at the bottom of the
+   viewport. Sticky footers sit at calc(var(--tabbar-height) + 0.75rem).
+   It is 0px wherever the bar isn't rendered (cook mode, non-/app pages)
+   and from md: up, where the bar is hidden. */
+:root {
+  --tabbar-row: 3.5rem; /* h-14 */
+  --tabbar-height: 0px;
+  -webkit-tap-highlight-color: transparent;
+}
+:root:has([data-mobile-tabbar]) {
+  --tabbar-height: calc(var(--tabbar-row) + env(safe-area-inset-bottom));
+}
+@media (width >= 48rem) {
+  :root:has([data-mobile-tabbar]) {
+    --tabbar-height: 0px;
+  }
+}
+
+/* Keep the page's native rubber-band bounce, but stop scrolling inside a
+   sheet, dialog or menu panel from dragging the page behind it. */
+[data-overlay-backdrop] > [aria-modal],
+[role="menu"] {
+  overscroll-behavior: contain;
+}
+
+/* ── Cook mode (plan 04) ─────────────────────────────────────────────
+   Owned by plan 04. Session-only dark "kitchen" presentation: CookMode sets
+   data-cook-theme="dark" on its root and on <body> (so portaled sheets and
+   the page background match). Its colors come from the plan 09 dark theme
+   block below, which lists [data-cook-theme="dark"] in its selector. */
+/* ── End cook mode (plan 04) ──────────────────────────────────────── */
+
+/* ── Plan 10: detail polish ──────────────────────────────────────
+   Owned by plan 10. Other plans add their own delimited blocks. */
+::selection {
+  background: var(--color-terra-soft);
+  color: var(--color-ink);
+}
+
+/* Section eyebrow: small uppercase label above a group. Color is left to
+   the call site (text-ink-mute by default, text-terra for scene labels). */
+@utility eyebrow {
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+/* ── End plan 10 ─────────────────────────────────────────────── */
+
+/* ── Dark theme (plan 09) ─────────────────────────────────────────────
+   Owned by plan 09. Warm "espresso" dark values for every color and shadow
+   token. The pre-hydration script in layout.tsx always writes the resolved
+   theme ("light" or "dark") to <html data-theme>, so the attribute rule is
+   the one that normally applies. The media-query copy is the no-JavaScript
+   fallback for the system setting. Both copies must stay identical; the
+   contrast test in lib/__tests__/contrast.test.ts parses and compares them.
+   Cook mode's kitchen toggle ([data-cook-theme="dark"]) reuses these values. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-cook-theme="dark"], [data-cook-theme="dark"] *));
+
+:root {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"],
+[data-cook-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #1C1512;
+  --color-paper: #241A15;
+  --color-paper-2: #2E211A;
+  --color-ink: #F3EAE0;
+  --color-ink-soft: #C9B8A8;
+  --color-ink-mute: #A08D7A;
+  --color-line: #3A2C22;
+  --color-line-strong: #4E3C2E;
+  --color-terra: #E08055;
+  --color-terra-soft: #3B241A;
+  --color-terra-strong: #F2946A;
+  --color-terra-deep: #F7A987;
+  --color-forest: #7FAE7A;
+  --color-forest-soft: #253327;
+  --color-warn: #E0A542;
+  --color-warn-soft: #3A2E14;
+  --color-danger: #EC7463;
+  --color-danger-soft: #331A16;
+  --color-focus: #F0A868;
+  --color-on-accent: #1C1512;
+  --color-scrim: rgb(0 0 0 / 0.6);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-raised: 0 6px 16px rgb(0 0 0 / 0.45), 0 2px 4px rgb(0 0 0 / 0.3);
+  --shadow-overlay: 0 24px 48px rgb(0 0 0 / 0.6), 0 8px 16px rgb(0 0 0 / 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-bg: #1C1512;
+    --color-paper: #241A15;
+    --color-paper-2: #2E211A;
+    --color-ink: #F3EAE0;
+    --color-ink-soft: #C9B8A8;
+    --color-ink-mute: #A08D7A;
+    --color-line: #3A2C22;
+    --color-line-strong: #4E3C2E;
+    --color-terra: #E08055;
+    --color-terra-soft: #3B241A;
+    --color-terra-strong: #F2946A;
+    --color-terra-deep: #F7A987;
+    --color-forest: #7FAE7A;
+    --color-forest-soft: #253327;
+    --color-warn: #E0A542;
+    --color-warn-soft: #3A2E14;
+    --color-danger: #EC7463;
+    --color-danger-soft: #331A16;
+    --color-focus: #F0A868;
+    --color-on-accent: #1C1512;
+    --color-scrim: rgb(0 0 0 / 0.6);
+    --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-raised: 0 6px 16px rgb(0 0 0 / 0.45), 0 2px 4px rgb(0 0 0 / 0.3);
+    --shadow-overlay: 0 24px 48px rgb(0 0 0 / 0.6), 0 8px 16px rgb(0 0 0 / 0.4);
+  }
+}
+/* ── End dark theme (plan 09) ─────────────────────────────────────── */
+
+/* ── Motion (plan 06) ────────────────────────────────────────────
+   Owned by plan 06. Motion only: keyframes, animations, transitions and
+   view-transition rules. Timing always comes from the plan 03 tokens. */
+
+/* Shared entrance: a short rise and fade. animate-rise uses the default
+   12px; --rise-from shortens it (the cookbook stagger uses 4px). */
+@theme {
+  --animate-rise: rise var(--duration-base) var(--ease-out-soft) both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--rise-from, 12px);
+    }
+  }
+}
+
+/* Cookbook list stagger: 30ms per item, capped at the sixth so a long
+   library never waits. Set data-stagger and --stagger-index per item. */
+[data-stagger] {
+  --rise-from: 4px;
+  animation: rise var(--duration-fast) var(--ease-out-soft) both;
+  animation-delay: calc(min(var(--stagger-index, 0), 6) * 30ms);
+}
+
+/* Overlay backdrop (Sheet, Dialog) fades in on mount. Kept here rather than
+   in Overlay.tsx so the backdrop's class list stays color-only (plan 09).
+   The panels' own entry lives in Sheet.tsx and Dialog.tsx. */
+[data-overlay-backdrop] {
+  transition: opacity var(--duration-base) var(--ease-out-soft);
+}
+@starting-style {
+  [data-overlay-backdrop] {
+    opacity: 0;
+  }
+}
+
+/* Route transitions (lib/local/route-transition.ts). The header and tab bar
+   get their own groups so they hold still while the page moves under them. */
+header:has(#app-header-status) {
+  view-transition-name: app-header;
+}
+[data-mobile-tabbar] {
+  view-transition-name: app-tabbar;
+}
+
+@media not (prefers-reduced-motion: reduce) {
+  /* Default and tab switches: a quick cross-fade (tabs are lateral). */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: var(--duration-fast);
+    animation-timing-function: var(--ease-out-soft);
+  }
+
+  /* Push (deeper): the new screen slides in from the right over the old,
+     which drifts left and fades. Pop reverses it. */
+  :root[data-nav-direction="push"]::view-transition-old(root) {
+    animation: var(--duration-base) var(--ease-out-soft) both nav-out-left;
+  }
+  :root[data-nav-direction="push"]::view-transition-new(root) {
+    animation: var(--duration-base) var(--ease-out-soft) both nav-in-right;
+  }
+  :root[data-nav-direction="pop"]::view-transition-old(root) {
+    animation: var(--duration-base) var(--ease-out-soft) both nav-out-right;
+  }
+  :root[data-nav-direction="pop"]::view-transition-new(root) {
+    animation: var(--duration-base) var(--ease-out-soft) both nav-in-left;
+  }
+
+  /* Card ↔ detail morph: one title and one cover carry these names at a time. */
+  ::view-transition-group(recipe-title),
+  ::view-transition-group(recipe-cover) {
+    animation-duration: var(--duration-slow);
+    animation-timing-function: var(--ease-out-soft);
+  }
+  ::view-transition-old(recipe-title),
+  ::view-transition-new(recipe-title) {
+    animation-duration: var(--duration-base);
+  }
+  /* Covers change aspect ratio (card 16:9, detail 16:10 or a 240px banner):
+     fill the moving box and crop rather than letterbox or stretch. */
+  ::view-transition-group(recipe-cover) {
+    overflow: clip;
+    border-radius: var(--radius-card);
+  }
+  ::view-transition-old(recipe-cover),
+  ::view-transition-new(recipe-cover) {
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Header and tab bar: a quick cross-fade for the active-tab change. */
+  ::view-transition-group(app-header),
+  ::view-transition-group(app-tabbar) {
+    animation-duration: var(--duration-fast);
+  }
+}
+
+@keyframes nav-out-left {
+  to {
+    opacity: 0;
+    translate: -8% 0;
+  }
+}
+@keyframes nav-in-right {
+  from {
+    opacity: 0;
+    translate: 12% 0;
+  }
+}
+@keyframes nav-out-right {
+  to {
+    opacity: 0;
+    translate: 12% 0;
+  }
+}
+@keyframes nav-in-left {
+  from {
+    opacity: 0;
+    translate: -8% 0;
+  }
+}
+
+/* Reduced motion, app-wide: every animation and transition finishes at once.
+   This also covers every transition-colors and animate-pulse call site.
+   route-transition.ts skips view transitions entirely under this setting. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* ── End motion (plan 06) ────────────────────────────────────────── */
