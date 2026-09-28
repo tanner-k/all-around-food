@@ -94,22 +94,6 @@ body {
    data-cook-theme="dark" on its root and on <body> (so portaled sheets and
    the page background match). Its colors come from the plan 09 dark theme
    block below, which lists [data-cook-theme="dark"] in its selector. */
-@keyframes cook-rise {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-}
-
-.cook-rise {
-  animation: cook-rise var(--duration-base) var(--ease-out-soft) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cook-rise {
-    animation: none;
-  }
-}
 /* ── End cook mode (plan 04) ──────────────────────────────────────── */
 
 /* ── Plan 10: detail polish ──────────────────────────────────────
@@ -203,3 +187,142 @@ body {
   }
 }
 /* ── End dark theme (plan 09) ─────────────────────────────────────── */
+
+/* ── Motion (plan 06) ────────────────────────────────────────────
+   Owned by plan 06. Motion only: keyframes, animations, transitions and
+   view-transition rules. Timing always comes from the plan 03 tokens. */
+
+/* Shared entrance: a short rise and fade. animate-rise uses the default
+   12px; --rise-from shortens it (the cookbook stagger uses 4px). */
+@theme {
+  --animate-rise: rise var(--duration-base) var(--ease-out-soft) both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--rise-from, 12px);
+    }
+  }
+}
+
+/* Cookbook list stagger: 30ms per item, capped at the sixth so a long
+   library never waits. Set data-stagger and --stagger-index per item. */
+[data-stagger] {
+  --rise-from: 4px;
+  animation: rise var(--duration-fast) var(--ease-out-soft) both;
+  animation-delay: calc(min(var(--stagger-index, 0), 6) * 30ms);
+}
+
+/* Overlay backdrop (Sheet, Dialog) fades in on mount. Kept here rather than
+   in Overlay.tsx so the backdrop's class list stays color-only (plan 09).
+   The panels' own entry lives in Sheet.tsx and Dialog.tsx. */
+[data-overlay-backdrop] {
+  transition: opacity var(--duration-base) var(--ease-out-soft);
+}
+@starting-style {
+  [data-overlay-backdrop] {
+    opacity: 0;
+  }
+}
+
+/* Route transitions (lib/local/route-transition.ts). The header and tab bar
+   get their own groups so they hold still while the page moves under them. */
+header:has(#app-header-status) {
+  view-transition-name: app-header;
+}
+[data-mobile-tabbar] {
+  view-transition-name: app-tabbar;
+}
+
+@media not (prefers-reduced-motion: reduce) {
+  /* Default and tab switches: a quick cross-fade (tabs are lateral). */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: var(--duration-fast);
+    animation-timing-function: var(--ease-out-soft);
+  }
+
+  /* Push (deeper): the new screen slides in from the right over the old,
+     which drifts left and fades. Pop reverses it. */
+  :root[data-nav-direction="push"]::view-transition-old(root) {
+    animation: var(--duration-base) var(--ease-out-soft) both nav-out-left;
+  }
+  :root[data-nav-direction="push"]::view-transition-new(root) {
+    animation: var(--duration-base) var(--ease-out-soft) both nav-in-right;
+  }
+  :root[data-nav-direction="pop"]::view-transition-old(root) {
+    animation: var(--duration-base) var(--ease-out-soft) both nav-out-right;
+  }
+  :root[data-nav-direction="pop"]::view-transition-new(root) {
+    animation: var(--duration-base) var(--ease-out-soft) both nav-in-left;
+  }
+
+  /* Card ↔ detail morph: one title and one cover carry these names at a time. */
+  ::view-transition-group(recipe-title),
+  ::view-transition-group(recipe-cover) {
+    animation-duration: var(--duration-slow);
+    animation-timing-function: var(--ease-out-soft);
+  }
+  ::view-transition-old(recipe-title),
+  ::view-transition-new(recipe-title) {
+    animation-duration: var(--duration-base);
+  }
+  /* Covers change aspect ratio (card 16:9, detail 16:10 or a 240px banner):
+     fill the moving box and crop rather than letterbox or stretch. */
+  ::view-transition-group(recipe-cover) {
+    overflow: clip;
+    border-radius: var(--radius-card);
+  }
+  ::view-transition-old(recipe-cover),
+  ::view-transition-new(recipe-cover) {
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Header and tab bar: a quick cross-fade for the active-tab change. */
+  ::view-transition-group(app-header),
+  ::view-transition-group(app-tabbar) {
+    animation-duration: var(--duration-fast);
+  }
+}
+
+@keyframes nav-out-left {
+  to {
+    opacity: 0;
+    translate: -8% 0;
+  }
+}
+@keyframes nav-in-right {
+  from {
+    opacity: 0;
+    translate: 12% 0;
+  }
+}
+@keyframes nav-out-right {
+  to {
+    opacity: 0;
+    translate: 12% 0;
+  }
+}
+@keyframes nav-in-left {
+  from {
+    opacity: 0;
+    translate: -8% 0;
+  }
+}
+
+/* Reduced motion, app-wide: every animation and transition finishes at once.
+   This also covers every transition-colors and animate-pulse call site.
+   route-transition.ts skips view transitions entirely under this setting. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* ── End motion (plan 06) ────────────────────────────────────────── */

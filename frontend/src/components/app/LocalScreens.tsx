@@ -86,7 +86,7 @@ export function LocalScreens({ route, snapshot, sync }: { route: LocalRoute; sna
       </div>
       {recipes.length === 0 ? <div className="mt-12 rounded-2xl border border-line bg-paper p-12 text-center text-ink-mute">Your cookbook is empty. Add a recipe to get started.</div>
         : <ul className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">{recipes.map((item, index) =>
-          <CookbookCard key={item.id} recipe={item} featured={index === 0} />)}</ul>}
+          <CookbookCard key={item.id} recipe={item} featured={index === 0} index={index} />)}</ul>}
     </>;
   }
 

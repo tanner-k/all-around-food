@@ -72,3 +72,8 @@ The evaluation dashboard uses the owner-scoped Supabase `evaluation_stats` view.
 
 ## Recipe deletion
 - Recipe detail provides a Delete action (overflow menu, confirmed with a danger `Dialog`) through the captured account boundary. Removal and a valid recipe tombstone intent commit together. Synced rows use their shadow base; unsent creates supply a dependency. Guest or unknown unenrolled local recipes are removed locally without an invalid never-existing cloud tombstone. Referenced plans, shopping, and cook progress remain recoverable. Missing recipes are a no-op.
+
+## Motion
+- Route transitions start in `LocalApp`'s `hashchange` listener through `lib/local/route-transition.ts`: the route commits with `flushSync` inside `document.startViewTransition`, and `data-nav-direction` (`push`/`pop`/`tab`, from route depth) drives the CSS. Links are never intercepted. Unsupported browsers, `prefers-reduced-motion` and the first read on mount commit directly.
+- The cookbook card ↔ recipe detail morph names one title and one cover at a time through `data-recipe-card`, `data-recipe-detail`, `data-recipe-title` and `data-recipe-cover`. Keep those hooks if the card or detail markup changes.
+- All motion CSS lives in the delimited plan 06 block in `globals.css` and uses the `--duration-*`/`--ease-*` tokens; `animate-rise` is the shared entrance. One global `prefers-reduced-motion` rule zeroes every animation and transition. Overlay, menu and tab-pill entry use Tailwind's `starting:` variant (`@starting-style`).

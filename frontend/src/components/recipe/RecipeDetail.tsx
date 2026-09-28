@@ -99,7 +99,7 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
   }
 
   return (
-    <div className="flex flex-col gap-8 max-w-3xl lg:max-w-4xl mx-auto">
+    <div data-recipe-detail={recipe.id} className="flex flex-col gap-8 max-w-3xl lg:max-w-4xl mx-auto">
       {/* Breadcrumb */}
       {breadcrumb && (
         <p className="text-ink-mute text-xs uppercase tracking-wide">
@@ -108,7 +108,7 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
       )}
 
       {/* Title */}
-      <h1 className={`font-serif leading-tight text-ink text-balance break-words hyphens-auto ${pageTitle}`}>
+      <h1 data-recipe-title="" className={`font-serif leading-tight text-ink text-balance break-words hyphens-auto ${pageTitle}`}>
         {titleStart && <>{titleStart} </>}
         <em className="italic text-terra not-italic">{titleEnd}</em>
       </h1>

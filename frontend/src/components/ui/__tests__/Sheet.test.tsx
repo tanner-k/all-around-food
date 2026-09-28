@@ -151,4 +151,16 @@ describe("Sheet", () => {
     renderSheet({ size: "lg" });
     expect(screen.getByRole("dialog")).toHaveClass("md:max-w-2xl");
   });
+
+  // The backdrop's fade is a [data-overlay-backdrop] rule in globals.css.
+  it("declares CSS-only entry motion on the panel", () => {
+    renderSheet();
+    const panel = screen.getByRole("dialog");
+    expect(panel).toHaveClass(
+      "starting:translate-y-full",
+      "md:starting:translate-y-2",
+      "md:starting:scale-[0.98]",
+      "md:starting:opacity-0"
+    );
+  });
 });

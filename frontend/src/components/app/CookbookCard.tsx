@@ -1,3 +1,4 @@
+import { useState, type CSSProperties } from "react";
 import { Card } from "@/components/ui/Card";
 import { RecipeCover } from "@/components/recipe/RecipeCover";
 import type { Recipe } from "@/lib/recipe-schema";
@@ -12,14 +13,19 @@ export function cookbookMeta(recipe: Pick<Recipe, "cuisine" | "total_time_min" |
 }
 
 /** Typographic cookbook card: generated cover, title, meta, description, cooked count. */
-export function CookbookCard({ recipe, featured = false }: { recipe: Recipe; featured?: boolean }) {
+export function CookbookCard({ recipe, featured = false, index = 0 }: { recipe: Recipe; featured?: boolean; index?: number }) {
   const meta = cookbookMeta(recipe);
+  // Stagger in on arrival, except when coming back from a recipe: that pop
+  // morphs this card's title and cover, which shouldn't also fade in.
+  const [stagger] = useState(() => typeof document === "undefined" || document.documentElement.dataset.navDirection !== "pop");
   return (
-    <Card as="li" interactive padding="none" className={`overflow-hidden ${featured ? "ring-2 ring-terra" : ""}`}>
-      <a href={localHref("recipe", recipe.id)} className="flex h-full flex-col focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus">
+    <Card as="li" interactive padding="none" className={`overflow-hidden ${featured ? "ring-2 ring-terra" : ""}`}
+      data-stagger={stagger ? "" : undefined} style={stagger ? { "--stagger-index": index } as CSSProperties : undefined}>
+      {/* data-recipe-card/-title/-cover are the view-transition hooks for the card ↔ detail morph. */}
+      <a href={localHref("recipe", recipe.id)} data-recipe-card={recipe.id} className="flex h-full flex-col focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus">
         <RecipeCover recipe={recipe} className="aspect-video" />
         <div className="flex flex-1 flex-col gap-1.5 p-4">
-          <p className="font-serif text-xl leading-snug text-ink text-balance break-words">{recipe.title}</p>
+          <p data-recipe-title="" className="font-serif text-xl leading-snug text-ink text-balance break-words">{recipe.title}</p>
           {meta && <p className="text-xs uppercase tracking-[0.08em] text-ink-mute tabular-nums">{meta}</p>}
           {recipe.description && <p className="line-clamp-2 text-sm italic text-ink-soft text-pretty">{recipe.description}</p>}
           <p className="mt-auto pt-1 text-sm text-ink-mute tabular-nums">{recipe.times_made ? `${recipe.times_made}× cooked` : "just added"}</p>

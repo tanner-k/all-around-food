@@ -62,7 +62,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
 
   if (choices.length === 0) {
     return (
-      <div className="cook-rise mx-auto flex max-w-md flex-col items-center gap-6 px-4 py-12 text-center">
+      <div className="animate-rise mx-auto flex max-w-md flex-col items-center gap-6 px-4 py-12 text-center">
         <div>
           <h2 className="font-serif text-3xl tracking-tight text-ink">
             Pantry <em className="italic text-terra">check</em>
@@ -80,7 +80,7 @@ export function MarkOutOfStep({ ingredientNames, pantry, onSetPantryStatus, onDo
   }
 
   return (
-    <div className="cook-rise mx-auto flex max-w-md flex-col gap-6 px-4 py-12">
+    <div className="animate-rise mx-auto flex max-w-md flex-col gap-6 px-4 py-12">
       <div className="text-center">
         <h2 className="font-serif text-3xl tracking-tight text-ink">
           What did you <em className="italic text-terra">run out of</em>?

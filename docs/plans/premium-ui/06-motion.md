@@ -87,3 +87,80 @@ transitionRoute(prev: LocalRoute, next: LocalRoute, commit: () => void)
 - [ ] `Button`/`Card` press feedback matches cook mode's existing `active:scale-[0.98]` feel.
 - [ ] Playwright PWA suite runs with `reducedMotion: "reduce"` and isn't flaky across 3 consecutive local runs.
 - [ ] No new npm dependency added.
+
+## Implementation notes
+
+Branch `claude/premium-ui-06-motion`, cut from `b895973`. Two subagents did the overlay/menu/tab-pill entry and the press feedback on disjoint files; I reviewed their diffs and ran every check myself.
+
+### Shipped
+
+- `97a75e5` **Motion CSS, reduced motion, shared rise.** One delimited `/* ── Motion (plan 06) ── */ … /* ── End motion (plan 06) ── */` block at the end of `globals.css`:
+  - A `rise` keyframe (opacity plus `translate: 0 var(--rise-from, 12px)`) and an `animate-rise` utility (`--duration-base`, `--ease-out-soft`) declared in a second plain `@theme`. **`cook-rise` is folded into it:** the keyframes, class and local reduced-motion rule are deleted from the plan 04 block, and `CookDoneView`/`MarkOutOfStep` use `animate-rise`. The look is the same 12px rise.
+  - The cookbook stagger (`[data-stagger]`: 4px rise at `--duration-fast`, `animation-delay: calc(min(var(--stagger-index), 6) * 30ms)`).
+  - The overlay backdrop fade (`[data-overlay-backdrop]` transition plus `@starting-style { opacity: 0 }`).
+  - View-transition rules. `header:has(#app-header-status)` and `[data-mobile-tabbar]` get their own groups (`app-header`, `app-tabbar`) so the chrome holds still while the page moves. The default and `tab` transitions are a `--duration-fast` cross-fade. `push` slides the new screen in from the right (12%) over the old one drifting left (8%) and fading, at `--duration-base`; `pop` mirrors it. The `recipe-title`/`recipe-cover` groups morph at `--duration-slow`. The cover's old/new images fill and crop (`object-fit: cover`) because the card is 16:9 and the detail 16:10 or a 240px banner. All of this sits under `@media not (prefers-reduced-motion: reduce)`.
+  - The global rule from §5, plus `animation-delay: 0s !important` so a staggered card never waits invisible under reduced motion.
+  - `playwright.pwa.config.ts`: `contextOptions: { reducedMotion: "reduce" }`. `reducedMotion` is not a top-level `use` option in Playwright 1.60's types, so it goes through `contextOptions`.
+- `65adfa7` **Route transitions.** New `lib/local/route-transition.ts`: `routeDepth`, `navDirection`, `sameRoute`, `prefersReducedMotion` and `transitionRoute(prev, next, commit)`.
+  - It commits directly when `startViewTransition` is missing, under reduced motion, or when the route didn't change.
+  - Otherwise it sets `data-nav-direction`, names the morph pair on the old side, and calls `document.startViewTransition(() => { flushSync(commit); … })`. Inside the callback it clears the old names and names the new side.
+  - On `finished` it clears the names and removes the attribute, but only if no newer transition has started (a token counter).
+  - `LocalApp`: the listener keeps the previous route in a ref and calls `transitionRoute`. The read on mount, and after an account switch, stays a direct `setRoute`.
+  - Tests: `route-transition.test.ts` (24) covers depth, every direction pair, the three fallbacks, the synchronous commit inside the callback, the direction cleared on `finished` and kept for a newer transition, naming only the tapped card and then only the detail, the pop pairing, skipping an off-screen card, and no names on other navigations. `LocalApp.transition.test.tsx` (2): the new screen is on the page when the callback returns, with direction `push`; mount doesn't transition; reduced motion never calls `startViewTransition`.
+- `593336c` **Morph hooks and stagger.**
+  - `CookbookCard`: `data-recipe-card={id}` on the link and `data-recipe-title` on the title. `RecipeCover`'s existing `data-recipe-cover` is the cover hook.
+  - `RecipeDetail`: `data-recipe-detail={id}` on the page root and `data-recipe-title` on the `<h1>`.
+  - Names are set only by `route-transition.ts`, never statically, so at most one title and one cover carry them.
+  - The stagger (`data-stagger` plus `--stagger-index`) is skipped when the cookbook mounts during a `pop`, because the returning card is mid-morph and shouldn't also fade in. `LocalScreens` passes `index`.
+- `b951f62` **`@starting-style` entry** through Tailwind's `starting:` variant:
+  - `Sheet`: a full-height slide-up below `md:`; from `md:` an 8px lift, a 0.98 scale and a fade, at `--duration-base`/`--ease-out-soft`.
+  - `Dialog`: a fade plus scale from 0.96.
+  - `Menu` popover: a fade plus scale from 0.95 at `--duration-fast`, with `origin-top-right`/`origin-top-left` by `align`. The header `+` menu gets this too.
+  - Tab pill: the active pill is now its own element (`data-tab-pill`, inside an `isolate` wrapper), mounted only on the active tab, so it scales in from `scale-x-50` with `--ease-spring` on every tab change. Icon, labels and `aria-current` are unchanged.
+  - One class test was added in each of `Sheet`, `Dialog`, `Menu` and `MobileTabBar`.
+- `85c4523` **Press feedback.**
+  - `Button` base: `not-disabled:not-aria-disabled:active:scale-[0.98]`, and `transition-colors` becomes `transition-[color,background-color,border-color,scale]` at `--duration-fast`/`--ease-out-soft`. It compiles to `:not(:disabled):not([aria-disabled=true]):active{scale:.98}`, so disabled, loading and `aria-disabled` buttons and links don't move.
+  - Interactive `Card`: `active:scale-[0.99]` with `transition-[box-shadow,scale]`. It is 0.99 rather than 0.98 because a full-width card at 0.98 reads as a lurch. Non-interactive cards are unchanged.
+  - One test each.
+
+### Deviations
+
+- **No `lib/motion-tokens.ts`.** No JS reads a duration: every timing lives in CSS rules that use the tokens directly. A mirror would only be a second copy that could drift. Add it when something in JS needs a number.
+- **The cover morphs too**, not just the title, per the wave 2 handoff. The plan's `recipe-title-*` wildcard became two fixed names, `recipe-title` and `recipe-cover`.
+- **Names are set on both sides imperatively.** The plan put a static `viewTransitionName` on the detail `<h1>`. A static name would lift the title out of the page on every other transition from recipe detail (to edit, cook or a tab) and animate it on its own. Setting both sides from `route-transition.ts` keeps the name on screen only during the morph.
+- **Off-screen cards don't morph.** If the matching card isn't in the viewport (a long, scrolled library), there is no morph and the route transition runs alone.
+- **Backdrop fade is in `globals.css`, not `Overlay.tsx`.** Plan 09 is changing the backdrop's `bg-ink/40` class on that line in parallel, so this plan doesn't touch `Overlay.tsx` at all. The rule targets `[data-overlay-backdrop]`.
+- **Tab pill is a transition on a mounted element.** The old pill was a class toggle on a span that persists across navigation, and `@starting-style` doesn't fire on a class change, so the active pill is now a separate element rendered only when active.
+- **Stagger duration** follows the plan (`--duration-fast`, 4px, 30ms steps capped at 6). It also runs on tab switches into the cookbook, inside the cross-fade.
+- **No loading-state wait.** Recipe detail renders from the already-loaded snapshot, so `flushSync` always lands on the real destination. The promise-returning mitigation from Risks wasn't needed.
+
+### Checks
+
+Run from `frontend/` after `pnpm install --frozen-lockfile`, with CI's public env and the 1194→1223 headless-shell shim:
+- `pnpm lint`: pass.
+- `pnpm exec tsc --noEmit`: pass.
+- `pnpm exec vitest run`: 70 files, 535 tests pass (baseline 503; 32 new).
+- `pnpm build`: pass. The emitted CSS contains the `::view-transition-*` rules, `data-nav-direction` selectors, the `rise`/`nav-*` keyframes, the reduced-motion rule and 9 `@starting-style` blocks.
+- `pnpm test:pwa`: 10/10 pass on 3 consecutive runs with `reducedMotion: "reduce"`, and 10/10 on one manual pass with `"no-preference"` (a temporary config copy, not committed).
+- **Real browser** (Chromium 1194 against `next start`, a restored 4-recipe library, animations slowed to 0.1× over CDP), at 393×852 and 1280×860:
+  - Card → detail sets `data-nav-direction="push"` and names exactly one `recipe-title` and one `recipe-cover`. `document.getAnimations()` shows the `root`, `recipe-title`, `recipe-cover`, `app-header` and `app-tabbar` groups.
+  - After `finished`, the attribute and all names are cleared.
+  - Back sets `pop` and morphs the cover back into its card. A tab switch sets `tab`.
+  - The Menu popover transitions `opacity` and `scale`. The Dialog opens fully.
+  - Mid-transition screenshots show the cover and title flying between card and banner, with the old page sliding out.
+  - With `reducedMotion: "reduce"`, `startViewTransition` is called 0 times (5 times without it), no direction attribute is ever set, and computed transition durations are `1e-05s`.
+
+### Handoffs
+
+- **Plan 09 / coordinator (`globals.css`):** this branch deletes the `cook-rise` lines at the end of the plan 04 cook block. Only one blank line separates them from `[data-cook-theme="dark"] [data-overlay-backdrop]`, which plan 09 is removing. If the merge conflicts there, keep both deletions. Plan 06 didn't touch the cook block's token overrides.
+- **Plan 09 (`Button.tsx`):** only the `base` string changed (`transition-colors` became the longer transition list plus the press variant), so your `variants` edit shouldn't conflict.
+- **Plan 09 (`Overlay.tsx`):** untouched here, so it's all yours.
+- **Plan 07 files, noted but not changed:** hash navigation never resets scroll, so tapping a card low in the cookbook opens the detail at the same scroll offset. This is today's behavior, not something the transitions introduced; the morph still lands because it follows the real positions. Scrolling to the top on a push would be a small `LocalApp` follow-up, but it changes behavior, so I left it out of a motion plan.
+
+### Needs a device
+
+- View transitions and the card morph in an installed iOS 18+ home-screen app. Check the header and tab bar holding still, and `black-translucent` with the status-bar scrim during a slide.
+- iOS Safari's edge-swipe back: Safari animates its own swipe and then fires `hashchange`. Check whether our `pop` transition plays a second, redundant slide after the native gesture. If it does, the fix is to skip the transition on `pop` for back-forward navigations on iOS.
+- `@starting-style` (Safari 17.5+) on the bottom sheet slide, the menu and the tab pill.
+- Press feedback feel on `Button`, and on a full-width cookbook card during scroll (no accidental scale while flicking).
+- Reduce Motion in iOS Settings turns off every transition and animation, including the cook `animate-rise`.

@@ -37,4 +37,24 @@ describe("Card", () => {
     const card = screen.getByRole("article", { name: "Recipe" });
     expect(card.className).not.toMatch(/\bp-\d/);
   });
+
+  it("adds press feedback only when interactive", () => {
+    render(
+      <>
+        <Card interactive data-testid="interactive">
+          A
+        </Card>
+        <Card data-testid="static">B</Card>
+      </>
+    );
+    const interactive = screen.getByTestId("interactive").className;
+    expect(interactive).toContain("active:scale-[0.99]");
+    expect(interactive).toContain("transition-[box-shadow,scale]");
+    expect(interactive).toContain("duration-(--duration-fast)");
+    expect(interactive).toContain("ease-(--ease-out-soft)");
+
+    const staticCard = screen.getByTestId("static").className;
+    expect(staticCard).not.toContain("scale");
+    expect(staticCard).not.toContain("transition");
+  });
 });

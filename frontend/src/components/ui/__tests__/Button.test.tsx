@@ -87,4 +87,27 @@ describe("Button", () => {
     expect(className).toContain("w-full");
     expect(className).toContain("sm:ml-auto");
   });
+
+  it("adds press feedback that skips disabled states, on buttons and links", () => {
+    render(
+      <>
+        <Button>Press</Button>
+        <Button href="/app">Link</Button>
+      </>
+    );
+    for (const el of [
+      screen.getByRole("button", { name: "Press" }),
+      screen.getByRole("link", { name: "Link" }),
+    ]) {
+      expect(el.className).toContain(
+        "not-disabled:not-aria-disabled:active:scale-[0.98]"
+      );
+      expect(el.className).toContain(
+        "transition-[color,background-color,border-color,scale]"
+      );
+      expect(el.className).toContain("duration-(--duration-fast)");
+      expect(el.className).toContain("ease-(--ease-out-soft)");
+      expect(el.className).not.toMatch(/(^|\s)active:scale-/);
+    }
+  });
 });

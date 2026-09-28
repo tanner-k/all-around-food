@@ -31,6 +31,9 @@ export interface MenuProps {
 const popoverBase =
   "absolute top-full z-40 mt-1 min-w-44 rounded-card border border-line bg-paper py-1 shadow-raised";
 
+const popoverMotion =
+  "transition-[opacity,scale] duration-(--duration-fast) ease-(--ease-out-soft) starting:opacity-0 starting:scale-95";
+
 const itemBase =
   "flex min-h-11 w-full items-center px-4 text-left text-sm transition-colors hover:bg-paper-2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent";
 
@@ -97,7 +100,11 @@ export function Menu({ label, trigger, items, align = "end" }: MenuProps) {
           id={menuId}
           role="menu"
           aria-label={label}
-          className={[popoverBase, align === "start" ? "left-0" : "right-0"]
+          className={[
+            popoverBase,
+            popoverMotion,
+            align === "start" ? "left-0 origin-top-left" : "right-0 origin-top-right",
+          ]
             .filter(Boolean)
             .join(" ")}
         >
