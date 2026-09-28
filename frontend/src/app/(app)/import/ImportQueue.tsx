@@ -26,9 +26,9 @@ const STATUS_LABEL: Record<ParseJobStatus, string> = {
 
 const STATUS_CLASS: Record<ParseJobStatus, string> = {
   pending: "border-line text-ink-mute bg-paper-2",
-  processing: "border-terra/40 text-terra bg-terra-soft",
+  processing: "border-terra/40 text-terra-strong bg-terra-soft",
   done: "border-line text-ink-soft bg-paper-2",
-  error: "border-terra text-terra bg-terra-soft",
+  error: "border-terra text-terra-strong bg-terra-soft",
 };
 
 const KIND_LABEL: Record<ParseJob["kind"], string> = {
@@ -202,14 +202,14 @@ export function ImportQueue() {
               <p className="text-sm text-ink-soft">{statusCopy(job)}</p>
 
               {job.status === "error" && job.error && (
-                <p className="text-sm text-terra break-words">{job.error}</p>
+                <p className="text-sm text-terra-strong break-words">{job.error}</p>
               )}
 
               <div className="flex items-center gap-3">
                 {job.status === "done" && job.result_recipe_id && (
                   <Link
                     href={`/cookbook/${job.result_recipe_id}`}
-                    className="text-terra font-medium hover:underline text-sm"
+                    className="text-terra-strong font-medium hover:underline text-sm"
                   >
                     View recipe →
                   </Link>
@@ -219,7 +219,7 @@ export function ImportQueue() {
                     type="button"
                     onClick={() => void handleRetry(job.id)}
                     disabled={retrying === job.id}
-                    className="rounded-xl border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra disabled:opacity-50"
+                    className="rounded-xl border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra-strong disabled:opacity-50"
                   >
                     {retrying === job.id ? "Retrying…" : "Retry"}
                   </button>

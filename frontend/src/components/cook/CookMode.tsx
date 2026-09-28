@@ -310,7 +310,7 @@ export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete,
                     className={[
                       "min-h-8 px-3 py-1 transition-colors",
                       layout === "step"
-                        ? "bg-terra text-white"
+                        ? "bg-terra-strong text-on-accent"
                         : "bg-paper text-ink-soft hover:bg-paper-2 active:bg-paper-2",
                     ].join(" ")}
                   >
@@ -323,7 +323,7 @@ export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete,
                     className={[
                       "min-h-8 px-3 py-1 transition-colors",
                       layout === "scroll"
-                        ? "bg-terra text-white"
+                        ? "bg-terra-strong text-on-accent"
                         : "bg-paper text-ink-soft hover:bg-paper-2 active:bg-paper-2",
                     ].join(" ")}
                   >

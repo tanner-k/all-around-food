@@ -22,7 +22,7 @@ export function SectionHeader({
 
       {/* Right column — scene + title + description */}
       <div>
-        <p className="eyebrow text-terra mb-2.5">
+        <p className="eyebrow text-terra-strong mb-2.5">
           {scene}
         </p>
         <h1

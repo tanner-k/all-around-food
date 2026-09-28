@@ -5,9 +5,9 @@ import { IconButton } from "@/components/ui/IconButton";
 
 const STATUS_OPTIONS: { value: PantryStatus; label: string; active: string }[] =
   [
-    { value: "in_stock", label: "In stock", active: "bg-forest text-white" },
-    { value: "low", label: "Low", active: "bg-warn text-white" },
-    { value: "out", label: "Out", active: "bg-ink-mute text-white" },
+    { value: "in_stock", label: "In stock", active: "bg-forest text-on-accent" },
+    { value: "low", label: "Low", active: "bg-warn text-on-accent" },
+    { value: "out", label: "Out", active: "bg-ink-mute text-on-accent" },
   ];
 
 interface PantryRowProps {

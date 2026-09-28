@@ -38,7 +38,7 @@ export function MobileTabBar() {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={`flex h-full flex-col items-center justify-center gap-0.5 text-[11px] ${
-                  active ? "font-semibold text-terra" : "text-ink-soft hover:text-ink active:text-ink"
+                  active ? "font-semibold text-terra-strong" : "text-ink-soft hover:text-ink active:text-ink"
                 }`}
               >
                 <span

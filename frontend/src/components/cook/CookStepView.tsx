@@ -72,8 +72,8 @@ export function CookStepView({
               >
                 <div
                   className={[
-                    "font-serif italic text-terra tabular-nums leading-none",
-                    isActive ? "text-3xl md:text-4xl mb-3" : "text-xl mb-2",
+                    "font-serif italic tabular-nums leading-none",
+                    isActive ? "text-3xl md:text-4xl mb-3 text-terra" : "text-xl mb-2 text-terra-strong",
                   ].join(" ")}
                 >
                   {step.order}.
@@ -93,7 +93,7 @@ export function CookStepView({
                   <button
                     type="button"
                     onClick={() => onStartTimer(step.duration_min!)}
-                    className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-full border border-terra-soft bg-terra-soft px-4 text-sm font-semibold text-terra tabular-nums transition-colors hover:bg-terra hover:text-white active:bg-terra active:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                    className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-full border border-terra-soft bg-terra-soft px-4 text-sm font-semibold text-terra-strong tabular-nums transition-colors hover:bg-terra-strong hover:text-on-accent active:bg-terra-strong active:text-on-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
                   >
                     <Timer className="size-4" aria-hidden="true" />
                     Start {step.duration_min} min timer

@@ -63,7 +63,7 @@ export function RecipePickerModal({ recipes, dayLabel, onPick, onClose }: Recipe
             <ul>
               {matches.map((recipe) => <li key={recipe.id} className="border-b border-line last:border-b-0">
                 <button type="button" onClick={() => onPick(recipe.id)}
-                  className="-mx-2 flex min-h-12 w-[calc(100%+1rem)] items-center rounded-control px-2 py-2.5 text-left text-base text-ink transition-colors hover:bg-paper-2 hover:text-terra focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus md:text-sm">
+                  className="-mx-2 flex min-h-12 w-[calc(100%+1rem)] items-center rounded-control px-2 py-2.5 text-left text-base text-ink transition-colors hover:bg-paper-2 hover:text-terra-strong focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus md:text-sm">
                   {recipe.title}
                 </button>
               </li>)}

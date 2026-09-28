@@ -57,8 +57,8 @@ export function CheckboxButton({
           "flex items-center justify-center border-[1.5px] transition-colors",
           boxSize[size],
           checked
-            ? "border-terra bg-terra text-white"
-            : "border-line-strong bg-paper",
+            ? "border-terra bg-terra text-on-accent"
+            : "border-ink-mute bg-paper",
         ].join(" ")}
       >
         {checked && (

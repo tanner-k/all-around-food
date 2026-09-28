@@ -9,7 +9,7 @@ function IngredientList({ ingredients }: { ingredients: Ingredient[] }) {
           <span className="text-ink-mute">·</span>
           <span className="text-ink">{ing.name}</span>
           {formatIngredientAmount(ing.quantity) && (
-            <span className="bg-terra-soft text-terra px-1.5 py-0.5 rounded-control text-xs font-medium whitespace-nowrap tabular-nums">
+            <span className="bg-terra-soft text-terra-strong px-1.5 py-0.5 rounded-control text-xs font-medium whitespace-nowrap tabular-nums">
               {formatIngredientAmount(ing.quantity)}
             </span>
           )}

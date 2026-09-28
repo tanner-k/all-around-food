@@ -151,7 +151,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
         </div>
 
         {/* Parsed badge */}
-        <span className="inline-block text-xs uppercase tracking-wide bg-terra-soft text-terra px-2 py-0.5 rounded flex-shrink-0">
+        <span className="inline-block text-xs uppercase tracking-wide bg-terra-soft text-terra-strong px-2 py-0.5 rounded flex-shrink-0">
           parsed
         </span>
       </div>
@@ -172,7 +172,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
                 <input aria-label={`Ingredient ${idx + 1} amount`} disabled={saving} value={ing.quantity.as_written} onChange={(e) => change({ ...recipe,
                   ingredients: recipe.ingredients.map((item, index) => index === idx ? { ...item, quantity: withEditedAmount(item.quantity, e.target.value) } : item),
                 })} className="w-24 rounded border border-line bg-paper px-2 py-1 text-ink" />
-              </> : <><span className="text-ink">{ing.name}</span><span className="bg-terra-soft text-terra px-1.5 py-0.5 rounded-md text-xs font-medium">{ing.quantity.as_written}</span></>}
+              </> : <><span className="text-ink">{ing.name}</span><span className="bg-terra-soft text-terra-strong px-1.5 py-0.5 rounded-md text-xs font-medium">{ing.quantity.as_written}</span></>}
               {ing.preparation && (
                 <span className="text-ink-mute text-xs">{ing.preparation}</span>
               )}
@@ -183,7 +183,7 @@ export function RecipeReview({ recipe: initialRecipe, onSave, onChange, warnings
           <button
             type="button"
             onClick={() => setShowAllIngredients(true)}
-            className="text-sm text-terra hover:underline text-left"
+            className="text-sm text-terra-strong hover:underline text-left"
           >
             + {hiddenCount} more
           </button>

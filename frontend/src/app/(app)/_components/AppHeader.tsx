@@ -70,7 +70,7 @@ export function AppHeader() {
         {/* Brand mark */}
         <a
           href="/app#/plan"
-          className="font-serif italic text-xl text-terra tracking-tight shrink-0"
+          className="font-serif italic text-xl text-terra-strong tracking-tight shrink-0"
         >
           All Around Food
         </a>

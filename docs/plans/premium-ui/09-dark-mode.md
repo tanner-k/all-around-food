@@ -115,3 +115,152 @@ Replace `viewport.themeColor` with Next's media-array form (`light` → `#C2613B
 - [ ] `theme-color` and iOS status bar track the active scheme.
 - [ ] Every `text-white`-on-`terra` site passes 4.5:1 in dark mode.
 - [ ] `pnpm lint`, typecheck, `pnpm test`, `pnpm build`, `pnpm test:pwa` all pass.
+
+
+## Implementation notes
+
+Branch `claude/premium-ui-09-dark-mode`, cut from `b895973` (wave 2 merged). Wave 3, in parallel with plan 06. Two subagents worked on separate sets of files: one on the theme setting, the head script and the Settings control, and one on the color audit. I did the palette, the contrast test and the primitives, then reviewed their diffs before committing.
+
+### Shipped
+
+- `6b0f900` **Palette and contrast test.**
+  - `globals.css` adds a delimited `Dark theme (plan 09)` block. It defines dark values for every `--color-*` and `--shadow-*` token under `:root[data-theme="dark"], [data-cook-theme="dark"]`, and a second, identical copy under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }` as the no-JavaScript fallback. It also sets `color-scheme` per theme and defines `@custom-variant dark` on `[data-theme="dark"]` and `[data-cook-theme="dark"]`.
+  - Light-mode contrast fix in the `@theme` block: `terra-strong` is `#9A4A2B` (was `#A55230`), there is a new `terra-deep` `#8A4125`, and `focus` follows `terra-strong`. `terra` stays `#C2613B`.
+  - New tokens: `on-accent` (text and glyphs on a filled accent: white in light, espresso in dark) and `scrim` (the overlay backdrop: ink at 40% in light, black at 60% in dark).
+  - `Button` primary is `bg-terra-strong text-on-accent hover/active:bg-terra-deep`, and danger uses `text-on-accent`. The only change in `Overlay.tsx` is `bg-ink/40` → `bg-scrim`.
+  - `THEME_COLOR_DARK_HEX` is `#1C1512`, the dark `bg`. `theme.test.ts` asserts that match.
+  - Cook mode's kitchen block no longer has its own hex set or backdrop override. `[data-cook-theme="dark"]` is in the dark block's selector, so the kitchen toggle uses the app's dark values. Its `cook-rise` animation is unchanged.
+  - New `lib/__tests__/contrast.test.ts` reads both themes from `globals.css`. It computes WCAG ratios for 41 pairs the app renders (the table below): small text needs at least 4.5:1, large text and non-text UI at least 3:1. It also checks that the dark block overrides every light color token, and that the two dark copies are identical, shadows and scrim included.
+- `3b1b0c2` **Audit** (class names only; no copy or roles changed):
+  - Every `text-white` on a filled accent is now `text-on-accent`: pantry and out-of-stock pills, the update toast, the checkbox tick, and cook mode's toggle and timer pill.
+  - Filled terra that carries a label is now `bg-terra-strong`, with `hover:bg-terra-deep`. That covers "+ Add recipe", the DropZone, ZipSelector and prices submit buttons (which were `text-paper`, and that also fails in dark), the Step/Scroll toggle, and the running timer pill.
+  - Small terracotta text is now `text-terra-strong`: links, eyebrows, chips on `terra-soft`, inline and ingredient amounts, the active tab label, the brand mark (20px), today's weekday, queue status pills, and small `<em>` accents inside `text-xl` headings.
+  - `terra` stays on display type at 24px and up (SectionHeader, the recipe title, modal titles, serif step numbers, the active cook step number), on icons and borders, and on icon-only fills.
+  - The unchecked checkbox border moves from `line-strong` (1.7:1) to `ink-mute`.
+  - Raw `shadow-sm`/`shadow-lg` become `shadow-card`/`shadow-overlay`, so they darken with the theme.
+- `6c770e2` **Setting and no-flash script.**
+  - New `lib/theme-preference.ts`. The preference (`light`, `dark` or `system`, default `system`) lives in `localStorage` under `aaf-theme`. It is per device, so it survives sign-in and sign-out and is readable before first paint.
+  - It exports `readThemePreference`, `resolveTheme`, `applyTheme`, `setThemePreference`, `subscribeThemePreference` (for `useSyncExternalStore`, including other tabs) and `themeInitScript()`.
+  - `layout.tsx` inlines that script in an explicit `<head>`, with `suppressHydrationWarning` on `<html>`. The script always writes the **resolved** theme to `data-theme`, including for System. It follows `matchMedia` changes while the preference is System, and `storage` events from other tabs.
+  - For a manual choice it sets every `theme-color` meta to that scheme's color. For System it restores each meta's color from its `media` attribute.
+  - New `components/settings/ThemeSettings.tsx`: an "Appearance" card in Settings, right after "Install for offline use". It is a Light/Dark/System `radiogroup` with 44px options, a roving tabindex, and Arrow, Home and End keys.
+  - Settings' forest buttons and "Your data" eyebrow use the new tokens.
+  - Tests: `theme-preference.test.ts` (19, which run the inline script itself against stored dark and light, System dark and light, a garbage value, storage that throws, no `matchMedia`, a live scheme change and the legacy `addListener`), `ThemeSettings.test.tsx` (4), and the new `e2e/pwa-theme.spec.ts` (4). The e2e spec covers a stored dark theme on first paint, System following the emulated scheme live and after reload, a Settings choice that survives a reload and an offline reload from the service-worker cache, and JavaScript disabled with a dark scheme still painting the dark background.
+- `9046ef8` The theme options' icons no longer shrink at 360px.
+
+### Final palette
+
+| Token | Light | Dark |
+|---|---|---|
+| `bg` | `#FAF7F2` | `#1C1512` |
+| `paper` | `#FFFFFF` | `#241A15` |
+| `paper-2` | `#F3EEE3` | `#2E211A` |
+| `ink` | `#1B1815` | `#F3EAE0` |
+| `ink-soft` | `#5C544A` | `#C9B8A8` |
+| `ink-mute` | `#6F685D` | `#A08D7A` |
+| `line` | `#E8E1D2` | `#3A2C22` |
+| `line-strong` | `#C9C0AB` | `#4E3C2E` |
+| `terra` | `#C2613B` | `#E08055` |
+| `terra-soft` | `#F3DCCF` | `#3B241A` |
+| `terra-strong` | `#9A4A2B` | `#F2946A` |
+| `terra-deep` | `#8A4125` | `#F7A987` |
+| `forest` | `#355E3B` | `#7FAE7A` |
+| `forest-soft` | `#DBE5D6` | `#253327` |
+| `warn` | `#8A5A0B` | `#E0A542` |
+| `warn-soft` | `#F5E2B8` | `#3A2E14` |
+| `danger` | `#B3261E` | `#EC7463` |
+| `danger-soft` | `#F9DEDC` | `#331A16` |
+| `focus` | `#9A4A2B` | `#F0A868` |
+| `on-accent` | `#FFFFFF` | `#1C1512` |
+
+`scrim` is `rgb(27 24 21 / 0.4)` in light and `rgb(0 0 0 / 0.6)` in dark. Dark shadows use black at 0.3–0.6, the same values plan 04's kitchen block had.
+
+### Contrast (asserted by `contrast.test.ts`)
+
+| Pair | Use | Min | Light | Dark |
+|---|---|---|---|---|
+| `ink` on `bg` | body text (text) | 4.5 | 16.54 | 15.15 |
+| `ink` on `paper` | cards, sheets, inputs (text) | 4.5 | 17.68 | 14.31 |
+| `ink` on `paper-2` | hover rows, chips (text) | 4.5 | 15.28 | 13.09 |
+| `ink` on `terra-soft` | ::selection, today row (text) | 4.5 | 13.42 | 12.15 |
+| `ink-soft` on `bg` | descriptions (text) | 4.5 | 6.96 | 9.36 |
+| `ink-soft` on `paper` | card descriptions (text) | 4.5 | 7.44 | 8.84 |
+| `ink-soft` on `paper-2` | DropZone pills (text) | 4.5 | 6.43 | 8.09 |
+| `ink-soft` on `terra-soft` | RecipeCover glyph (text) | 4.5 | 5.65 | 7.50 |
+| `ink-soft` on `forest-soft` | RecipeCover glyph (text) | 4.5 | 5.74 | 6.90 |
+| `ink-soft` on `warn-soft` | RecipeCover glyph (text) | 4.5 | 5.83 | 6.90 |
+| `ink-mute` on `bg` | meta lines, eyebrows (text) | 4.5 | 5.15 | 5.65 |
+| `ink-mute` on `paper` | card meta, empty states (text) | 4.5 | 5.51 | 5.34 |
+| `ink-mute` on `paper-2` | queue pending badge, table header (text) | 4.5 | 4.76 | 4.88 |
+| `terra-strong` on `bg` | links, eyebrows, amounts (text) | 4.5 | 5.80 | 7.91 |
+| `terra-strong` on `paper` | links and labels in cards (text) | 4.5 | 6.20 | 7.47 |
+| `terra-strong` on `paper-2` | hover text on paper-2 rows (text) | 4.5 | 5.36 | 6.84 |
+| `terra-strong` on `terra-soft` | chips, active tab pill (text) | 4.5 | 4.71 | 6.34 |
+| `forest` on `bg` | success text (text) | 4.5 | 6.98 | 7.07 |
+| `forest` on `paper` | success text in cards (text) | 4.5 | 7.46 | 6.68 |
+| `forest` on `forest-soft` | success chips and notices (text) | 4.5 | 5.75 | 5.21 |
+| `warn` on `bg` | warnings (text) | 4.5 | 5.54 | 8.26 |
+| `warn` on `paper` | warnings in cards (text) | 4.5 | 5.92 | 7.81 |
+| `warn` on `warn-soft` | grade chips (text) | 4.5 | 4.64 | 6.09 |
+| `danger` on `bg` | errors (text) | 4.5 | 6.12 | 6.22 |
+| `danger` on `paper` | errors, danger menu item (text) | 4.5 | 6.54 | 5.87 |
+| `danger` on `danger-soft` | error notices (text) | 4.5 | 5.14 | 5.57 |
+| `on-accent` on `terra-strong` | primary Button, filled pills (text) | 4.5 | 6.20 | 7.91 |
+| `on-accent` on `terra-deep` | primary Button hover/active (text) | 4.5 | 7.33 | 9.42 |
+| `on-accent` on `forest` | In stock pill, backup buttons (text) | 4.5 | 7.46 | 7.07 |
+| `on-accent` on `warn` | Low pill (text) | 4.5 | 5.92 | 8.26 |
+| `on-accent` on `ink-mute` | Out pill (text) | 4.5 | 5.51 | 5.65 |
+| `on-accent` on `danger` | danger Button (text) | 4.5 | 6.54 | 6.22 |
+| `terra` on `bg` | serif headings, step numbers (large) | 3 | 3.88 | 6.34 |
+| `terra` on `paper` | serif headings in cards and sheets (large) | 3 | 4.14 | 5.99 |
+| `terra` on `bg` | icons, progress, checked checkbox (ui) | 3 | 3.88 | 6.34 |
+| `terra` on `paper` | checked checkbox, borders (ui) | 3 | 4.14 | 5.99 |
+| `on-accent` on `terra` | checkbox tick (ui) | 3 | 4.14 | 6.34 |
+| `ink-mute` on `paper` | unchecked checkbox boundary (ui) | 3 | 5.51 | 5.34 |
+| `focus` on `bg` | focus ring (ui) | 3 | 5.80 | 9.02 |
+| `focus` on `paper` | focus ring in cards (ui) | 3 | 6.20 | 8.52 |
+| `focus` on `paper-2` | focus ring on paper-2 (ui) | 3 | 5.36 | 7.79 |
+
+### Deviations
+
+- **Light `ink-mute` and `warn` also changed.** The owner decision named only terracotta, but the contrast test it asked for fails on two more light tokens the app uses for small text:
+  - `ink-mute` `#8C8579` gives 3.42:1 on `bg`. It is used about 100 times for meta lines and captions. It is now `#6F685D` (5.15:1 on `bg`, 4.76:1 on `paper-2`).
+  - `warn` `#B97A14` gives 3.59:1 on `paper`, and white on the "Low" pill gives 3.59:1. It is now `#8A5A0B` (5.92:1 on `paper`, 4.64:1 on `warn-soft`).
+  - Both are visibly a little darker. Relaxing the test for them would have been loosening it.
+- **Dark values that differ from the plan's table:**
+  - `ink-mute`: `#93816F` → `#A08D7A`. The plan's value is 4.16:1 on `paper-2`.
+  - `danger`: `#E2604F` → `#EC7463`. The plan's value is 4.46:1 on `paper-2`.
+  - Everything else matches the plan.
+- **`terra-strong` and `terra-deep` in dark are brighter than `terra`**, not darker. They keep their role (small accent text and the fill carrying a label), and in dark mode that role needs more luminance. The fill's hover (`terra-deep`) goes lighter again.
+- **Labels on filled accents use one token, `on-accent`,** rather than an on-terra token only. Forest, warn, ink-mute and danger fills all turn bright in dark mode, so the same swap applies to every filled accent.
+- **Kitchen toggle.** I kept the toggle and pointed it at the app's dark values rather than removing it. With the app already dark, turning it on changes nothing visible, and its Moon icon stays unpressed. The `body[data-cook-theme]` mirroring in `CookMode.tsx` is still needed, because the kitchen attribute isn't on `<html>`.
+- **Hairlines stay hairlines.** `line`/`line-strong` are 1.2–1.7:1 on purpose, per the plan. The unchecked checkbox, whose boundary is its only cue, moved to `ink-mute`. The secondary `Button` border is still `line-strong`; its label identifies it, so it isn't in the 3:1 set.
+- **`manifest.webmanifest` stays light-only.** The format has no per-scheme colors.
+- **Test changes:** `Button.test.tsx`, `Dialog.test.tsx` and `PlanView.test.tsx` now assert `bg-terra-strong`/`hover:bg-terra-deep` instead of `bg-terra`/`hover:bg-terra-strong`. No assertion was loosened. No copy or roles changed.
+
+### Checks
+
+Run from `frontend/` after `pnpm install --frozen-lockfile`, on `9046ef8`:
+- `pnpm lint`: pass.
+- `pnpm exec tsc --noEmit`: pass.
+- `pnpm exec vitest run`: 71 files, 612 tests pass (baseline 503; 109 new: 85 in `contrast.test.ts` (41 pairs × 2 themes, plus 3 definition checks), 1 theme literal, 19 theme-preference, 4 ThemeSettings).
+- `pnpm build`: pass, with CI's public env.
+- `pnpm test:pwa`: 14/14 pass (10 existing and 4 new in `pwa-theme.spec.ts`), using the headless-shell shim from `IMPLEMENTING.md`.
+- **Screenshots** against the production build at 393×852 and 1280×860, in light and dark: plan, cookbook, recipe detail, cook mode, shop, pantry, settings, the open recipe-picker `Sheet` and the delete `Dialog`, plus the kitchen toggle on a light app. The scrim darkens the page in both themes. Cover initials read clearly on all three dark tints. Primary fills are `terra-strong` with a dark label in dark mode. There is no horizontal overflow; the theme control fits at 360px.
+
+### Handoffs
+
+- **Plan 06 (motion), running in parallel:**
+  - My hunks in shared files are color-only. In `Button.tsx`, it's the `primary` and `danger` entries of `variants`. In `Overlay.tsx`, it's `bg-ink/40` → `bg-scrim` in the backdrop class. In `globals.css`, it's color lines in `@theme` plus my own delimited block at the end.
+  - I also trimmed the cook block's header comment and removed its token and backdrop rules. `cook-rise` is untouched, so expect a small merge there if you fold it into the motion tokens.
+  - A theme-switch transition, if you want one, belongs to you. The plan leaves it out.
+- **Plan 04 (cook) / coordinator:** optionally hide the kitchen toggle while `html[data-theme="dark"]`, or make it a three-state control, since it is a no-op in app dark mode.
+- **Plan 03 (primitives):** the secondary `Button` border is `line-strong` (about 1.7:1). It is fine by WCAG because the label identifies the control, but raise it if a stronger outline is wanted.
+
+### Needs a device
+
+- No flash on a cold home-screen launch on iPhone and iPad, offline and online, with Dark, Light and System chosen.
+- `theme-color` and the `black-translucent` status bar: the status bar shows the espresso header in dark mode, and whether iOS standalone ignores `theme-color` (Safari tabs use it).
+- Switching the iOS appearance while the app is open: System follows it live through the `matchMedia` listener.
+- `color-scheme: dark` on native controls (the file input, selects, the date picker) in iOS Safari.
+- Legibility of the dark palette on a real OLED screen in low light, and of the kitchen mode in a real kitchen.

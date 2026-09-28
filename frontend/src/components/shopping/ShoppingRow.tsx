@@ -40,7 +40,7 @@ export function ShoppingRow({ item, onCheck, onDelete }: ShoppingRowProps) {
       )}
 
       {item.pantry_low && (
-        <span className="rounded-full bg-terra-soft px-2 py-0.5 text-[11px] font-medium text-terra">
+        <span className="rounded-full bg-terra-soft px-2 py-0.5 text-[11px] font-medium text-terra-strong">
           low
         </span>
       )}

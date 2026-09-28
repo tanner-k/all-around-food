@@ -9,10 +9,10 @@
 export const TERRA_HEX = "#C2613B";
 
 /**
- * Dark-scheme `theme-color`. Placeholder (today's `--color-ink`) until plan 09
- * sets the real dark palette.
+ * Dark-scheme `theme-color`. Must equal the dark `--color-bg` in
+ * `app/globals.css` (asserted by a unit test).
  */
-export const THEME_COLOR_DARK_HEX = "#1B1815";
+export const THEME_COLOR_DARK_HEX = "#1C1512";
 
 /** Legacy `/prices` chart colors (Recharts needs literal SVG colors). */
 export const PRICE_CHART_STORE_COLORS: Record<string, string> = {
