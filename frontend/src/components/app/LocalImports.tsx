@@ -126,11 +126,11 @@ export function LocalImports({ drafts }: { drafts: RecipeDraft[] }) {
       {pending.length === 0 ? <div className="mt-3"><Inbox aria-hidden="true" size={26} strokeWidth={1.5} className="mb-2 text-line-strong" /><p className="text-pretty text-sm text-ink-mute">Nothing waiting right now.</p></div> :
         <ul className="mt-4 space-y-3">{pending.map((row) => <li key={row.id} className="rounded-xl border border-line bg-paper p-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-terra-soft px-2.5 py-1 text-xs font-semibold capitalize text-terra">{row.kind}</span>
+            <span className="rounded-full bg-terra-soft px-2.5 py-1 text-xs font-semibold capitalize text-terra-strong">{row.kind}</span>
             <span className="text-sm font-medium text-ink">{row.state === "queued" ? "Waiting to send" : row.state === "submitted" ? row.remote_status === "done" ? "Finished · waiting for library sync" : "Processing" : "Needs attention"}</span>
           </div>
           <p className="mt-2 break-all text-sm text-ink-soft">{importSource(row)}</p>
-          {row.error && <p className="mt-2 text-sm text-terra">{row.error}</p>}
+          {row.error && <p className="mt-2 text-sm text-terra-strong">{row.error}</p>}
           {row.state === "error" && <div className="mt-3 flex flex-wrap items-center gap-3">
             {row.error !== "Import expired; submit again" && <Button variant="secondary" onClick={() => void retry(row.id)} disabled={retrying === row.id}>Retry</Button>}
             {row.kind === "screenshot" && !row.upload && <label className={`inline-flex min-h-11 items-center rounded-full border border-line px-4 text-sm font-semibold text-ink ${retrying === row.id ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}>

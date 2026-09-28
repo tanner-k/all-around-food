@@ -15,8 +15,8 @@ interface InlineAmountTextProps {
 }
 
 const amountClasses = {
-  chip: "ml-1 bg-terra-soft text-terra px-1.5 py-0.5 rounded-md text-[0.9em] font-medium",
-  inline: "ml-1 text-terra font-medium tabular-nums",
+  chip: "ml-1 bg-terra-soft text-terra-strong px-1.5 py-0.5 rounded-md text-[0.9em] font-medium",
+  inline: "ml-1 text-terra-strong font-medium tabular-nums",
 } as const;
 
 /**

@@ -314,7 +314,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
         <button
           type="button"
           onClick={addIngredient}
-          className="self-start text-sm text-terra hover:underline"
+          className="self-start text-sm text-terra-strong hover:underline"
         >
           + Add ingredient
         </button>
@@ -389,7 +389,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
         <button
           type="button"
           onClick={addStep}
-          className="self-start text-sm text-terra hover:underline"
+          className="self-start text-sm text-terra-strong hover:underline"
         >
           + Add step
         </button>

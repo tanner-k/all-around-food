@@ -29,7 +29,7 @@ function PillMeta({ children }: { children: React.ReactNode }) {
 function IngredientRow({ ing }: { ing: Ingredient }) {
   return (
     <li className="flex items-baseline gap-3 border-b border-line py-2 text-sm last:border-b-0">
-      <span className="w-20 shrink-0 text-right font-medium tabular-nums text-terra">
+      <span className="w-20 shrink-0 text-right font-medium tabular-nums text-terra-strong">
         {formatIngredientAmount(ing.quantity)}
       </span>
       <span className="min-w-0 text-ink">

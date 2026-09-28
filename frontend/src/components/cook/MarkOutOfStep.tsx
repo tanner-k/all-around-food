@@ -11,9 +11,9 @@ const STATUS_OPTIONS: {
   label: string;
   active: string;
 }[] = [
-  { value: "in_stock", label: "Still have", active: "bg-forest text-white" },
-  { value: "low", label: "Running low", active: "bg-warn text-white" },
-  { value: "out", label: "Used it up", active: "bg-ink-mute text-white" },
+  { value: "in_stock", label: "Still have", active: "bg-forest text-on-accent" },
+  { value: "low", label: "Running low", active: "bg-warn text-on-accent" },
+  { value: "out", label: "Used it up", active: "bg-ink-mute text-on-accent" },
 ];
 
 interface MarkOutOfStepProps {

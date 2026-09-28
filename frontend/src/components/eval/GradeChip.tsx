@@ -8,7 +8,7 @@ export function GradeChip({ grade }: GradeChipProps) {
       ? "bg-forest-soft text-forest"
       : grade >= 4
       ? "bg-warn-soft text-warn"
-      : "bg-terra-soft text-terra";
+      : "bg-terra-soft text-terra-strong";
 
   return (
     <span

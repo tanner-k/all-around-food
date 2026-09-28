@@ -30,7 +30,7 @@ describe("PlanView", () => {
     renderPlan("2026-09-21", [{ id: "m1", recipe_id: "r1", day_index: 2, servings: null }]);
     const cta = screen.getByRole("button", { name: "Review shopping →" });
     expect(cta).toBeEnabled();
-    expect(cta).toHaveClass("bg-terra");
+    expect(cta).toHaveClass("bg-terra-strong");
     expect(cta.closest(".sticky")).not.toBeNull();
     expect(screen.getAllByRole("button", { name: "+ Add recipe" })).toHaveLength(7);
     expect(screen.getByText("1 recipe across 1 day")).toBeInTheDocument();

@@ -84,7 +84,7 @@ export function ImportFlow() {
             className="shrink-0 text-terra"
           />
           <p className="font-serif italic text-xl text-ink">
-            Added to the <em className="text-terra">queue</em>
+            Added to the <em className="text-terra-strong">queue</em>
           </p>
         </div>
         <p className="text-sm text-ink-mute text-pretty">

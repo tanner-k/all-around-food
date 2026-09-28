@@ -40,10 +40,10 @@ export function CookTimerPill({
   const time = formatTime(secondsLeft);
   const label = expired ? "Time's up" : time;
   const tone = expired
-    ? "bg-terra text-white motion-safe:animate-pulse"
+    ? "bg-terra-strong text-on-accent motion-safe:animate-pulse"
     : running
-      ? "bg-terra text-white"
-      : "bg-terra-soft text-terra";
+      ? "bg-terra-strong text-on-accent"
+      : "bg-terra-soft text-terra-strong";
   const pill = `inline-flex items-center gap-1.5 rounded-full px-3 text-sm font-semibold ${tone}`;
   const content = (
     <>

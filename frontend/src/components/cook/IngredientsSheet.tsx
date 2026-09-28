@@ -23,7 +23,7 @@ function IngredientList({ ingredients }: { ingredients: Ingredient[] }) {
           </span>
           <span className="text-pretty text-ink">{ing.name}</span>
           {formatIngredientAmount(ing.quantity) && (
-            <span className="whitespace-nowrap rounded-control bg-terra-soft px-1.5 py-0.5 text-xs font-medium tabular-nums text-terra">
+            <span className="whitespace-nowrap rounded-control bg-terra-soft px-1.5 py-0.5 text-xs font-medium tabular-nums text-terra-strong">
               {formatIngredientAmount(ing.quantity)}
             </span>
           )}
@@ -75,7 +75,7 @@ export function IngredientsSheetTrigger({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="md:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-paper border border-line text-xs font-medium text-ink-soft shadow-sm hover:text-ink hover:bg-paper-2 active:bg-paper-2 active:text-ink transition-colors"
+      className="md:hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-paper border border-line text-xs font-medium text-ink-soft shadow-card hover:text-ink hover:bg-paper-2 active:bg-paper-2 active:text-ink transition-colors"
       aria-label="Show ingredients"
     >
       <List className="w-3.5 h-3.5" aria-hidden="true" />

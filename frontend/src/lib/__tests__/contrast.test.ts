@@ -139,8 +139,9 @@ describe("dark theme definition", () => {
     expect(pick(blockAfter(':root:not([data-theme="light"]) {'))).toEqual(attr);
   });
 
-  it("matches the WCAG reference values", () => {
-    expect(contrastRatio("#FFFFFF", "#000000")).toBeCloseTo(21, 5);
-    expect(contrastRatio("#C2613B", "#FFFFFF")).toBeCloseTo(4.14, 2);
+  it("reproduces the ratios quoted in the owner decision", () => {
+    // White on the old terra fill, and white on the new terra-strong fill.
+    expect(contrastRatio(light["on-accent"], light.terra)).toBeCloseTo(4.14, 2);
+    expect(contrastRatio(light["on-accent"], light["terra-strong"])).toBeCloseTo(6.2, 1);
   });
 });

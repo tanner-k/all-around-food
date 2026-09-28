@@ -18,7 +18,7 @@ interface DayColumnProps {
   onServingsChange: (id: string, servings: number | null) => void;
 }
 
-const addButton = "-ml-3 min-h-11 rounded-control px-3 text-ink-mute text-sm font-medium transition-colors hover:bg-paper-2 hover:text-terra focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
+const addButton = "-ml-3 min-h-11 rounded-control px-3 text-ink-mute text-sm font-medium transition-colors hover:bg-paper-2 hover:text-terra-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus";
 
 /** One day of the week as an agenda row: quiet when empty, cards when filled. */
 export function DayColumn({ day, meals, onAdd, onRemove, onServingsChange }: DayColumnProps) {
@@ -29,7 +29,7 @@ export function DayColumn({ day, meals, onAdd, onRemove, onServingsChange }: Day
         filled ? "py-3" : "py-1.5",
         day.isToday ? "border-terra bg-terra-soft/40" : "border-transparent"].join(" ")}>
       <div className="flex min-h-11 flex-col justify-center">
-        <span className={["text-xs font-semibold uppercase tracking-wide", day.isToday ? "text-terra" : "text-ink-mute"].join(" ")}>{day.weekday}</span>
+        <span className={["text-xs font-semibold uppercase tracking-wide", day.isToday ? "text-terra-strong" : "text-ink-mute"].join(" ")}>{day.weekday}</span>
         <span className="font-serif text-2xl leading-none tabular-nums text-ink">{day.dayNum}</span>
       </div>
       <div className="flex min-w-0 flex-col items-start gap-2">

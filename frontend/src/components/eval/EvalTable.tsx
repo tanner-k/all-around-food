@@ -147,13 +147,13 @@ function EvalExpandedDetail({ ev }: { ev: Evaluation }) {
       {/* Weaknesses */}
       {ev.weaknesses.length > 0 && (
         <div>
-          <p className="eyebrow text-terra mb-1.5">
+          <p className="eyebrow text-terra-strong mb-1.5">
             Weaknesses
           </p>
           <ul className="flex flex-col gap-1">
             {ev.weaknesses.map((w, i) => (
               <li key={i} className="flex gap-2 text-ink">
-                <span className="text-terra flex-shrink-0">·</span>
+                <span className="text-terra-strong flex-shrink-0">·</span>
                 {w}
               </li>
             ))}
@@ -206,7 +206,7 @@ function EvalExpandedDetail({ ev }: { ev: Evaluation }) {
                             ? "text-forest"
                             : fc.issue === "missing"
                             ? "text-warn"
-                            : "text-terra"
+                            : "text-terra-strong"
                         }
                       >
                         {fc.issue}
