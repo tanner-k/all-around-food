@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Instrument_Serif, Manrope } from "next/font/google";
 import { MobileTabBar } from "@/app/(app)/_components/MobileTabBar";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { TERRA_HEX } from "@/lib/theme";
 import "./globals.css";
 
 const instrumentSerif = Instrument_Serif({
@@ -37,7 +38,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#C2613B",
+  themeColor: TERRA_HEX,
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

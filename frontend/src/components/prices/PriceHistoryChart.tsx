@@ -11,28 +11,25 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import {
+  PRICE_CHART_FALLBACK_COLOR,
+  PRICE_CHART_GRID,
+  PRICE_CHART_LABEL,
+  PRICE_CHART_STORE_COLORS,
+  PRICE_CHART_TICK,
+  PRICE_CHART_TOOLTIP_BG,
+  PRICE_CHART_TOOLTIP_BORDER,
+} from "@/lib/theme";
 
 interface PriceHistoryChartProps {
   points: PricePoint[];
 }
 
-// Stable colour palette for up to 8 retailers.
-const RETAILER_COLOURS: Record<string, string> = {
-  kroger: "#C25A30",
-  walmart: "#0071CE",
-  costco: "#E31837",
-  wholefoods: "#00674B",
-  instacart: "#43B02A",
-  ubereats: "#06C167",
-  default0: "#7C6AF5",
-  default1: "#F5A623",
-};
-
 function retailerColour(name: string, index: number): string {
   return (
-    RETAILER_COLOURS[name.toLowerCase()] ??
-    RETAILER_COLOURS[`default${index % 2}`] ??
-    "#888888"
+    PRICE_CHART_STORE_COLORS[name.toLowerCase()] ??
+    PRICE_CHART_STORE_COLORS[`default${index % 2}`] ??
+    PRICE_CHART_FALLBACK_COLOR
   );
 }
 
@@ -104,27 +101,27 @@ export function PriceHistoryChart({ points }: PriceHistoryChartProps) {
           data={rows}
           margin={{ top: 8, right: 16, left: 8, bottom: 8 }}
         >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e1db" />
+          <CartesianGrid strokeDasharray="3 3" stroke={PRICE_CHART_GRID} />
           <XAxis
             dataKey="date"
-            tick={{ fontSize: 11, fill: "#9E8E82" }}
+            tick={{ fontSize: 11, fill: PRICE_CHART_TICK }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
             tickFormatter={centsToDisplay}
-            tick={{ fontSize: 11, fill: "#9E8E82" }}
+            tick={{ fontSize: 11, fill: PRICE_CHART_TICK }}
             axisLine={false}
             tickLine={false}
             width={64}
           />
           <Tooltip
             formatter={(value: number) => [centsToDisplay(value), ""]}
-            labelStyle={{ color: "#3D2B1F", fontWeight: 600 }}
+            labelStyle={{ color: PRICE_CHART_LABEL, fontWeight: 600 }}
             contentStyle={{
-              border: "1px solid #E5E1DB",
+              border: `1px solid ${PRICE_CHART_TOOLTIP_BORDER}`,
               borderRadius: "12px",
-              background: "#FDFBF8",
+              background: PRICE_CHART_TOOLTIP_BG,
             }}
           />
           <Legend

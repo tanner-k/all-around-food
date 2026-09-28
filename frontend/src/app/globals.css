@@ -1,6 +1,9 @@
 @import "tailwindcss";
 
-@theme inline {
+/* Plain @theme: each token becomes a real custom property on :root and its
+   utilities reference var(--token), so a later [data-theme] rule (plan 09)
+   can override them at runtime. */
+@theme {
   /* ── Color tokens ────────────────────────────────────────────── */
   --color-bg: #FAF7F2;
   --color-paper: #FFFFFF;
@@ -10,14 +13,39 @@
   --color-ink-mute: #8C8579;
   --color-line: #E8E1D2;
   --color-line-strong: #C9C0AB;
-  --color-terra: #C2613B;
+  --color-terra: #C2613B; /* keep in sync with TERRA_HEX in lib/theme.ts */
   --color-terra-soft: #F3DCCF;
+  --color-terra-strong: #A55230; /* hover/active darken of terra */
   --color-forest: #355E3B;
   --color-forest-soft: #DBE5D6;
   --color-warn: #B97A14;
   --color-warn-soft: #F5E2B8;
+  --color-danger: #B3261E; /* close to red-600: errors, destructive actions */
+  --color-danger-soft: #F9DEDC; /* close to red-50: error surfaces */
+  --color-focus: #A55230; /* focus outline */
 
-  /* ── Font family tokens ──────────────────────────────────────── */
+  /* ── Radius tokens ───────────────────────────────────────────── */
+  /* Semantic names on purpose: Tailwind already defines --radius-sm/md/lg,
+     and redefining them would resize every existing rounded-sm/md/lg. */
+  --radius-control: 0.5rem; /* 8px: inputs, chips, icon buttons */
+  --radius-card: 0.75rem; /* 12px: cards; same as rounded-xl */
+  --radius-sheet: 1.25rem; /* 20px: sheets and dialogs */
+
+  /* ── Shadow tokens (warm-tinted from ink) ────────────────────── */
+  --shadow-card: 0 1px 2px rgb(27 24 21 / 0.04), 0 1px 1px rgb(27 24 21 / 0.03);
+  --shadow-raised: 0 4px 12px rgb(27 24 21 / 0.08), 0 2px 4px rgb(27 24 21 / 0.04);
+  --shadow-overlay: 0 24px 48px rgb(27 24 21 / 0.18), 0 8px 16px rgb(27 24 21 / 0.08);
+
+  /* ── Motion tokens ───────────────────────────────────────────── */
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 120ms;
+  --duration-base: 220ms;
+  --duration-slow: 360ms;
+}
+
+/* @theme inline only for aliases of variables next/font sets on <html>. */
+@theme inline {
   --font-sans: var(--font-manrope);
   --font-serif: var(--font-instrument-serif);
 }
