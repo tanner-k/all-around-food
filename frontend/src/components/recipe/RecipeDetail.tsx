@@ -113,8 +113,8 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
         <em className="italic text-terra not-italic">{titleEnd}</em>
       </h1>
 
-      {/* Hero cover — 16:10 */}
-      <RecipeCover recipe={recipe} className="aspect-[16/10] w-full rounded-card" />
+      {/* Hero cover: 16:10 on phones, a 240px banner from md: so it never dominates the page */}
+      <RecipeCover recipe={recipe} className="aspect-[16/10] w-full rounded-card md:aspect-auto md:h-60" />
 
       {/* Meta pills */}
       {metaPills.length > 0 && (

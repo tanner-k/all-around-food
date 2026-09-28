@@ -1,12 +1,13 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ServiceWorkerRegister from "../ServiceWorkerRegister";
+import { isOfflineReady, setOfflineReady } from "@/lib/pwa-status";
 
 const mocks = vi.hoisted(() => ({ pathname: vi.fn(), readSnapshot: vi.fn(), subscribe: vi.fn() }));
 vi.mock("next/navigation", () => ({ usePathname: () => mocks.pathname() }));
 vi.mock("@/lib/local/repository", () => ({ readSnapshot: mocks.readSnapshot, saveSetting: vi.fn(), subscribeToLocalChanges: mocks.subscribe }));
 
-// An active worker that answers CHECK_READY with PWA_READY, so the "Offline ready" note would show.
+// An active worker that answers CHECK_READY with PWA_READY, so the app reports itself offline-ready.
 const active = {
   postMessage: (_message: unknown, ports: MessagePort[]) => ports[0].postMessage({ type: "PWA_READY", ready: true, buildId: "b1" }),
 };
@@ -18,15 +19,17 @@ beforeEach(() => {
   vi.stubGlobal("navigator", { serviceWorker: { controller: active, register: vi.fn().mockResolvedValue({ addEventListener: vi.fn(), removeEventListener: vi.fn(), update: vi.fn().mockResolvedValue(undefined) }), ready: Promise.resolve({ active }), addEventListener: vi.fn(), removeEventListener: vi.fn() } });
   Object.defineProperty(document, "readyState", { configurable: true, value: "complete" });
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); window.location.hash = ""; });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); window.location.hash = ""; setOfflineReady(false); });
 
-it("shows the Offline ready note outside cook mode", async () => {
+it("publishes offline readiness for Settings without a floating note", async () => {
   window.location.hash = "#/cookbook";
-  render(<ServiceWorkerRegister />);
-  expect(await screen.findByRole("status", { name: "Offline ready" })).toBeInTheDocument();
+  const { container } = render(<ServiceWorkerRegister />);
+  await waitFor(() => expect(isOfflineReady()).toBe(true));
+  expect(screen.queryByRole("status", { name: "Offline ready" })).not.toBeInTheDocument();
+  expect(container).toBeEmptyDOMElement();
 });
 
-it("hides the Offline ready note and renders nothing else on a cook hash", async () => {
+it("renders nothing on a cook hash", async () => {
   window.location.hash = "#/cookbook/abc123/cook";
   const { container } = render(<ServiceWorkerRegister />);
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)); });

@@ -129,7 +129,7 @@ export function AppMain({ children }: { children: ReactNode }) {
       className={
         isCook
           ? // Header is hidden in cook mode, so content clears the status bar itself.
-            "w-full max-w-none p-0 pt-[env(safe-area-inset-top)]"
+            "w-full max-w-none p-0"
           : "mx-auto w-full max-w-[1400px] px-4 py-16 pb-[calc(var(--tabbar-height)+1.5rem)] md:px-14 md:pb-24"
       }
     >

@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { deleteDB } from "idb";
 import { captureLocalAccount, closeLocalDB, selectLegacyGuest, selectVerifiedAccount, signOutLocalAccount } from "@/lib/local/db";
 import { DataSettings } from "../DataSettings";
+import { setOfflineReady } from "@/lib/pwa-status";
 
 const owner = "11111111-1111-4111-8111-111111111111";
 
@@ -13,6 +14,7 @@ beforeEach(async () => {
   await deleteDB(`aaf-local:${owner}`);
 });
 afterEach(async () => {
+  setOfflineReady(false);
   signOutLocalAccount();
   await closeLocalDB();
   await deleteDB("aaf-local");
@@ -86,4 +88,12 @@ it("requires both backup downloads and confirmation before a recipe copy", async
  expect(await screen.findByText(/1 recipes copied, 0 kept, 1 recipe changes/)).toBeInTheDocument();
  expect(await (await getLocalDB()).getAll("recipes")).toHaveLength(1);
  click.mockRestore(); vi.unstubAllGlobals();
+});
+
+it("shows Offline ready beside the install steps once the app shell is cached", async () => {
+  selectLegacyGuest();
+  render(<DataSettings />);
+  expect(screen.queryByRole("status", { name: "Offline ready" })).toBeNull();
+  act(() => setOfflineReady(true));
+  expect(await screen.findByRole("status", { name: "Offline ready" })).toBeInTheDocument();
 });

@@ -1,4 +1,5 @@
 import type { Ingredient } from "@/lib/recipe-schema";
+import { formatIngredientAmount } from "@/lib/format-quantity";
 
 function IngredientList({ ingredients }: { ingredients: Ingredient[] }) {
   return (
@@ -7,9 +8,9 @@ function IngredientList({ ingredients }: { ingredients: Ingredient[] }) {
         <li key={i} className="flex items-baseline gap-2 text-sm">
           <span className="text-ink-mute">·</span>
           <span className="text-ink">{ing.name}</span>
-          {ing.quantity.as_written && (
+          {formatIngredientAmount(ing.quantity) && (
             <span className="bg-terra-soft text-terra px-1.5 py-0.5 rounded-control text-xs font-medium whitespace-nowrap tabular-nums">
-              {ing.quantity.as_written}
+              {formatIngredientAmount(ing.quantity)}
             </span>
           )}
         </li>

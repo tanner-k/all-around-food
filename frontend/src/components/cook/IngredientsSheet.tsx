@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import { X, List } from "lucide-react";
 import type { Ingredient } from "@/lib/recipe-schema";
+import { formatIngredientAmount } from "@/lib/format-quantity";
 import { Sheet } from "@/components/ui/Sheet";
 import { IconButton } from "@/components/ui/IconButton";
 
@@ -21,9 +22,9 @@ function IngredientList({ ingredients }: { ingredients: Ingredient[] }) {
             ·
           </span>
           <span className="text-pretty text-ink">{ing.name}</span>
-          {ing.quantity.as_written && (
+          {formatIngredientAmount(ing.quantity) && (
             <span className="whitespace-nowrap rounded-control bg-terra-soft px-1.5 py-0.5 text-xs font-medium tabular-nums text-terra">
-              {ing.quantity.as_written}
+              {formatIngredientAmount(ing.quantity)}
             </span>
           )}
         </li>

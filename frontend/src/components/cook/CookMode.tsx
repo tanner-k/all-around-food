@@ -287,7 +287,7 @@ export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete,
           </div>
 
           {/* ── DESKTOP LAYOUT (md+) ─────────────────────────────────────── */}
-          <div className="hidden md:flex flex-col gap-6 min-h-[calc(100dvh-80px)]">
+          <div className="hidden md:flex flex-col gap-6 min-h-[100dvh] px-8 pb-8 pt-[env(safe-area-inset-top)] lg:px-14">
             {/* Top bar */}
             <div className="sticky top-0 z-20 -mx-2 px-2 py-3 flex items-center justify-between gap-3 flex-wrap bg-bg/85 backdrop-blur">
               <Button variant="secondary" size="sm" href={localHref("recipe", recipe.id)}>

@@ -5,6 +5,8 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { SyncAttentionBanner } from "@/components/app/SyncStatus";
 import type { LibrarySyncView } from "@/components/app/useLibrarySync";
 import { useEffect, useState } from "react";
+import { Check } from "lucide-react";
+import { useOfflineReady } from "@/lib/pwa-status";
 import { exportBackup, parseBackup, restoreBackup, type MigrationReport } from "@/lib/local/backup";
 import { downloadBackupFile, fetchSupabaseBackup, migrateSupabaseLibrary } from "@/lib/local/migrate";
 import { readSnapshot, saveSetting } from "@/lib/local/repository";
@@ -25,6 +27,7 @@ function message(error: unknown) {
 
 /** `sync` comes from the single `useLibrarySync` instance in `LocalApp`. */
 export function DataSettings({ sync }: { sync?: LibrarySyncView }) {
+  const offlineReady = useOfflineReady();
   const account = captureLocalAccount();
   const [local, setLocal] = useState<Counts | null>(null);
   const [cloud, setCloud] = useState<Counts | null>(null);
@@ -119,7 +122,7 @@ export function DataSettings({ sync }: { sync?: LibrarySyncView }) {
     <div className="rounded-2xl border border-line bg-paper p-5"><h2 className="font-serif text-2xl text-balance">Account</h2><p className="mt-2 text-sm text-ink-soft text-pretty">Use the same account on each device to sync your connected library. A new device needs an online sign-in before it can open that library.</p><div className="mt-3 flex gap-3"><a href="/login" className="rounded-xl border border-line-strong px-4 py-2 text-sm">Sign in</a>{account.ownerId && <SignOutButton />}</div></div>
     {sync && <SyncAttentionBanner sync={sync} embedded />}
     <div><p className="eyebrow text-terra">Your data</p><h1 className="font-serif text-4xl text-balance">Back up your kitchen</h1><p className="mt-2 text-ink-soft text-pretty">Recipes and shared import drafts sync when account sync is enabled. Plans, shopping, pantry, and cooking progress are device-only for this release. Pending import uploads are excluded from backups.</p></div>
-    <div className="rounded-2xl border border-line bg-paper p-5"><h2 className="font-serif text-2xl text-balance">Install for offline use</h2><p className="mt-2 text-sm text-ink-soft">Wait for “Offline ready” before disconnecting. Then install from your browser:</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink"><li>iPhone or iPad Safari: tap Share, then Add to Home Screen.</li><li>Android Chrome: open the browser menu, then Install app or Add to Home screen.</li><li>Desktop Chrome or Edge: use the install icon in the address bar or choose Install app from the menu.</li></ul><p className="mt-2 text-sm text-ink-soft">When your browser offers an Install app button here, you can use it too.</p></div>
+    <div className="rounded-2xl border border-line bg-paper p-5"><div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><h2 className="font-serif text-2xl text-balance">Install for offline use</h2>{offlineReady && <p role="status" aria-label="Offline ready" className="inline-flex items-center gap-1.5 text-sm font-semibold text-forest"><Check aria-hidden="true" className="size-4" />Offline ready</p>}</div><p className="mt-2 text-sm text-ink-soft">Wait for “Offline ready” before disconnecting. Then install from your browser:</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink"><li>iPhone or iPad Safari: tap Share, then Add to Home Screen.</li><li>Android Chrome: open the browser menu, then Install app or Add to Home screen.</li><li>Desktop Chrome or Edge: use the install icon in the address bar or choose Install app from the menu.</li></ul><p className="mt-2 text-sm text-ink-soft">When your browser offers an Install app button here, you can use it too.</p></div>
     {error && <p role="alert" className="rounded-xl bg-warn-soft p-4 text-ink">{error}</p>}
     {!local && <p role="status">Checking local storage…</p>}
     {local && <div className="rounded-2xl border border-line bg-paper p-5"><h2 className="font-serif text-2xl text-balance">Local library</h2><CountList values={local} /><p className="mt-3 text-sm text-ink-soft">Storage used: {size(estimate?.usage)} of {size(estimate?.quota)}. Persistence: {persistent === null ? "unavailable" : persistent ? "granted" : "not granted"}.</p><button type="button" disabled={busy || !navigator.storage?.persist} onClick={() => void run(async () => { const account = captureLocalAccount(); const granted = await navigator.storage.persist(); assertCurrentLocalAccount(account); setPersistent(granted); await saveSetting({ key: "storage_persistence_requested", value: new Date().toISOString() }, account); })} className="mt-3 rounded-xl border border-line-strong px-4 py-2 disabled:opacity-50">Request persistent storage</button><p className="mt-2 text-sm text-ink-soft">You can keep using the app if the browser declines.</p></div>}

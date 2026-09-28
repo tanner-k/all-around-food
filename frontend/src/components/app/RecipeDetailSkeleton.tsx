@@ -6,13 +6,13 @@ export function RecipeDetailSkeleton() {
       <div aria-hidden="true" className="flex flex-col gap-8 motion-safe:animate-pulse">
         <div className="h-3 w-32 rounded-control bg-paper-2" />
         <div className="h-10 w-2/3 rounded-control bg-paper-2 md:h-12" />
-        <div className="aspect-[16/10] w-full rounded-card bg-paper-2" />
+        <div className="aspect-[16/10] w-full rounded-card bg-paper-2 md:aspect-auto md:h-60" />
         <div className="flex flex-wrap gap-2">
           {["w-20", "w-24", "w-20", "w-16"].map((width, index) => (
             <div key={index} className={`h-7 rounded-full border border-line bg-paper-2 ${width}`} />
           ))}
         </div>
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-8 md:grid md:grid-cols-[minmax(260px,320px)_1fr] md:gap-10">
           <div className="flex flex-col gap-2.5">
             <div className="mb-1 h-3 w-24 rounded-control bg-paper-2" />
             {["w-3/4", "w-2/3", "w-4/5", "w-1/2", "w-3/5"].map((width, index) => (
