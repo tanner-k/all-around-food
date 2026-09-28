@@ -7,8 +7,8 @@ describe("Button", () => {
     render(<Button>Save</Button>);
     const button = screen.getByRole("button", { name: "Save" });
     expect(button).toHaveAttribute("type", "button");
-    expect(button.className).toContain("bg-terra");
-    expect(button.className).toContain("hover:bg-terra-strong");
+    expect(button).toHaveClass("bg-terra-strong", "text-on-accent");
+    expect(button).toHaveClass("hover:bg-terra-deep");
     expect(button.className).toContain("min-h-11");
     expect(button.className).toContain("rounded-full");
   });
@@ -35,7 +35,7 @@ describe("Button", () => {
     render(<Button href="/app#/cookbook/new">+ Add recipe</Button>);
     const link = screen.getByRole("link", { name: "+ Add recipe" });
     expect(link).toHaveAttribute("href", "/app#/cookbook/new");
-    expect(link.className).toContain("bg-terra");
+    expect(link).toHaveClass("bg-terra-strong");
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 

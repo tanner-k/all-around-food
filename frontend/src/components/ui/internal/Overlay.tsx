@@ -94,7 +94,7 @@ export function Overlay({
   return createPortal(
     <div
       data-overlay-backdrop=""
-      className={["fixed inset-0 z-50 bg-ink/40", containerClassName]
+      className={["fixed inset-0 z-50 bg-scrim", containerClassName]
         .filter(Boolean)
         .join(" ")}
       onClick={onBackdropClick}

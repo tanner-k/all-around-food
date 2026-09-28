@@ -59,7 +59,7 @@ describe("Dialog", () => {
   it("uses the primary variant by default", () => {
     renderDialog();
     expect(screen.getByRole("button", { name: "Delete" })).toHaveClass(
-      "bg-terra"
+      "bg-terra-strong"
     );
   });
 

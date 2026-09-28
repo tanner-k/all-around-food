@@ -11,11 +11,12 @@ const base =
   "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-terra text-white hover:bg-terra-strong active:bg-terra-strong",
+  primary:
+    "bg-terra-strong text-on-accent hover:bg-terra-deep active:bg-terra-deep",
   secondary:
     "border border-line-strong bg-paper text-ink hover:bg-paper-2 active:bg-paper-2",
   ghost: "text-ink-soft hover:bg-paper-2 hover:text-ink active:bg-paper-2",
-  danger: "bg-danger text-white hover:bg-danger/90 active:bg-danger/90",
+  danger: "bg-danger text-on-accent hover:bg-danger/90 active:bg-danger/90",
 };
 
 const sizes: Record<ButtonSize, string> = {
