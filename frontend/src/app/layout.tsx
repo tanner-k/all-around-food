@@ -71,6 +71,8 @@ export default function RootLayout({
             >
               All Around Food
             </a>
+            {/* Sync status slot: LocalApp portals its chip here on /app screens */}
+            <span id="app-header-status" className="-ml-5 flex min-w-0" />
 
             {/* Spacer */}
             <div className="flex-1" />

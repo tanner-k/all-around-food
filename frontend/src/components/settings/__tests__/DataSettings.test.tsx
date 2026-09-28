@@ -44,6 +44,19 @@ it("offers sign-in and hides the account immediately when sign-out starts", asyn
   expect(captureLocalAccount().dbName).toBe("");
 });
 
+it("shows full sync detail with exactly one sign-in link", async () => {
+  const { vi } = await import("vitest");
+  selectVerifiedAccount(owner);
+  const syncNow = vi.fn();
+  render(<DataSettings sync={{ account: captureLocalAccount(), status: { pending: 2, deferred: 0, conflicts: 0, lastSuccessAt: null }, running: false, authRequired: true, ready: true, stage: "recipes", syncNow }} />);
+  expect(screen.getByRole("heading", { name: "Library sync" })).toBeInTheDocument();
+  expect(screen.getByText("Sign in to sync")).toBeInTheDocument();
+  expect(screen.getByText(/2 recipe changes waiting/)).toBeInTheDocument();
+  expect(screen.getAllByRole("link", { name: "Sign in" })).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+  expect(syncNow).toHaveBeenCalled();
+});
+
 it("offers explicit recipe review while account Replace stays blocked", async () => {
  selectVerifiedAccount(owner); render(<DataSettings />);
  await waitFor(() => expect(screen.getByRole("button", { name: "Review recipes on this device" })).toBeEnabled());

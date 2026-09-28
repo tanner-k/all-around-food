@@ -102,6 +102,7 @@ test("an offline request resumes through mocked Supabase, survives review reload
   await page.goto("/app#/import");
   await expect(page.getByRole("link", { name: "Enter a recipe manually" })).toBeVisible();
   await expect(page.getByText("Up to date", { exact: true })).toBeVisible();
+  await expect(page.locator("#app-header-status").getByRole("link", { name: "Up to date" })).toHaveAttribute("href", "/app#/settings");
   expect(await page.evaluate(() => localStorage.getItem("aaf-verified-local-owner"))).toBe(owner);
   await page.evaluate(() => navigator.serviceWorker.ready);
   await context.setOffline(true);
@@ -113,7 +114,10 @@ test("an offline request resumes through mocked Supabase, survives review reload
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
   await expect.poll(() => submittedId).not.toBeNull();
+  // Sync now lives in Settings; hash navigation keeps the same app session.
+  await page.evaluate(() => { window.location.hash = "#/settings"; });
   await page.getByRole("button", { name: "Sync now" }).click();
+  await page.evaluate(() => { window.location.hash = "#/import"; });
   await expect(page.getByText("Check servings")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Unused legacy result")).toHaveCount(0);
   await expect.poll(() => acknowledged).toBe(true);
@@ -129,7 +133,10 @@ test("an offline request resumes through mocked Supabase, survives review reload
   await page.reload();
   await pullStarted;
   await expect(page.getByRole("heading", { name: "My Toast" })).toBeVisible();
+  await page.evaluate(() => { window.location.hash = "#/settings"; });
   await expect(page.getByRole("button", { name: "Syncing…" })).toBeDisabled();
+  await page.evaluate(() => { window.location.hash = "#/import"; });
+  await expect(page.getByRole("heading", { name: "My Toast" })).toBeVisible();
   await page.getByRole("button", { name: "Save to cookbook" }).click();
   await expect(page).toHaveURL(/#\/cookbook\/[^/]+$/);
   await expect(page.getByRole("heading", { name: "My Toast" })).toBeVisible();

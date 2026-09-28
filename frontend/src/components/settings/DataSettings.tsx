@@ -2,6 +2,8 @@
 
 import { RecipeCopySettings } from "./RecipeCopySettings";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { SyncAttentionBanner } from "@/components/app/SyncStatus";
+import type { LibrarySyncView } from "@/components/app/useLibrarySync";
 import { useEffect, useState } from "react";
 import { exportBackup, parseBackup, restoreBackup, type MigrationReport } from "@/lib/local/backup";
 import { downloadBackupFile, fetchSupabaseBackup, migrateSupabaseLibrary } from "@/lib/local/migrate";
@@ -21,7 +23,8 @@ function message(error: unknown) {
   return error instanceof Error ? error.message : "An unexpected error occurred.";
 }
 
-export function DataSettings() {
+/** `sync` comes from the single `useLibrarySync` instance in `LocalApp`. */
+export function DataSettings({ sync }: { sync?: LibrarySyncView }) {
   const account = captureLocalAccount();
   const [local, setLocal] = useState<Counts | null>(null);
   const [cloud, setCloud] = useState<Counts | null>(null);
@@ -114,6 +117,7 @@ export function DataSettings() {
 
   return <section className="mx-auto max-w-3xl space-y-8 px-4 py-8 text-ink">
     <div className="rounded-2xl border border-line bg-paper p-5"><h2 className="font-serif text-2xl">Account</h2><p className="mt-2 text-sm text-ink-soft">Use the same account on each device to sync your connected library. A new device needs an online sign-in before it can open that library.</p><div className="mt-3 flex gap-3"><a href="/login" className="rounded-xl border border-line-strong px-4 py-2 text-sm">Sign in</a>{account.ownerId && <SignOutButton />}</div></div>
+    {sync && <SyncAttentionBanner sync={sync} embedded />}
     <div><p className="text-xs font-semibold uppercase tracking-widest text-terra">Your data</p><h1 className="font-serif text-4xl">Back up your kitchen</h1><p className="mt-2 text-ink-soft">Recipes and shared import drafts sync when account sync is enabled. Plans, shopping, pantry, and cooking progress are device-only for this release. Pending import uploads are excluded from backups.</p></div>
     <div className="rounded-2xl border border-line bg-paper p-5"><h2 className="font-serif text-2xl">Install for offline use</h2><p className="mt-2 text-sm text-ink-soft">Wait for “Offline ready” before disconnecting. Then install from your browser:</p><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink"><li>iPhone or iPad Safari: tap Share, then Add to Home Screen.</li><li>Android Chrome: open the browser menu, then Install app or Add to Home screen.</li><li>Desktop Chrome or Edge: use the install icon in the address bar or choose Install app from the menu.</li></ul><p className="mt-2 text-sm text-ink-soft">When your browser offers an Install app button here, you can use it too.</p></div>
     {error && <p role="alert" className="rounded-xl bg-warn-soft p-4 text-ink">{error}</p>}
