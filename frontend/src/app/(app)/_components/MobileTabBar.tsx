@@ -41,9 +41,15 @@ export function MobileTabBar() {
                   active ? "font-semibold text-terra" : "text-ink-soft hover:text-ink active:text-ink"
                 }`}
               >
-                <span
-                  className={`flex h-8 w-14 items-center justify-center rounded-full ${active ? "bg-terra-soft" : ""}`}
-                >
+                <span className="relative isolate flex h-8 w-14 items-center justify-center rounded-full">
+                  {/* Mounted only when active so @starting-style plays on each tab change. */}
+                  {active && (
+                    <span
+                      aria-hidden="true"
+                      data-tab-pill=""
+                      className="absolute inset-0 -z-10 rounded-full bg-terra-soft transition-[opacity,scale] duration-(--duration-base) ease-(--ease-spring) starting:scale-x-50 starting:opacity-0"
+                    />
+                  )}
                   {/* A translucent currentColor fill weights the active icon while
                       keeping interior strokes (calendar dots, basket slats, box seams)
                       visible; a solid fill in the stroke color would blot them out. */}

@@ -81,4 +81,12 @@ describe("Dialog", () => {
     await user.click(screen.getByRole("dialog").parentElement!);
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it("fades and scales in with CSS-only entry motion", () => {
+    renderDialog();
+    expect(screen.getByRole("dialog")).toHaveClass(
+      "starting:opacity-0",
+      "starting:scale-[0.96]"
+    );
+  });
 });

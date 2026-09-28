@@ -97,4 +97,15 @@ describe("Menu", () => {
       "text-ink"
     );
   });
+
+  it("scales in from the trigger side", async () => {
+    const { user, trigger } = setup();
+    await user.click(trigger);
+    expect(screen.getByRole("menu")).toHaveClass(
+      "right-0",
+      "origin-top-right",
+      "starting:opacity-0",
+      "starting:scale-95"
+    );
+  });
 });

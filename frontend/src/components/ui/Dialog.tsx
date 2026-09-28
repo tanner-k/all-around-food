@@ -42,7 +42,10 @@ export function Dialog({
       aria-labelledby={titleId}
       aria-describedby={description ? descId : undefined}
       containerClassName="flex items-center justify-center p-4"
-      panelClassName="w-full max-w-sm rounded-sheet bg-paper p-6 text-ink shadow-overlay"
+      panelClassName={[
+        "w-full max-w-sm rounded-sheet bg-paper p-6 text-ink shadow-overlay",
+        "transition-[opacity,scale] duration-(--duration-base) ease-(--ease-out-soft) starting:opacity-0 starting:scale-[0.96]",
+      ].join(" ")}
     >
       <h2 id={titleId} className="text-lg font-semibold">
         {title}

@@ -56,4 +56,13 @@ describe("MobileTabBar", () => {
     expect(container).toBeEmptyDOMElement();
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
   });
+
+  it("mounts the animated pill only inside the active tab", () => {
+    mockUsePathname.mockReturnValue("/app");
+    const { container } = render(<MobileTabBar />);
+    const pills = container.querySelectorAll("[data-tab-pill]");
+    expect(pills).toHaveLength(1);
+    expect(screen.getByRole("link", { name: /cookbook/i })).toContainElement(pills[0] as HTMLElement);
+    expect(pills[0]).toHaveClass("starting:opacity-0", "starting:scale-x-50");
+  });
 });
