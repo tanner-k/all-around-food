@@ -7,6 +7,8 @@ continues working from IndexedDB. The personal `/app` library originally lived i
 IndexedDB alone; existing cloud and Parquet records are preserved during migration (see
 [`docs/plans/personal-supabase-pivot.md`](../docs/plans/personal-supabase-pivot.md)
 and [ADR 0007](../docs/decisions/0007-personal-supabase-rearchitecture.md)).
+Migration `0007` publishes completed imports to the journal. Migration `0008_library_fingerprint.sql`
+repairs the push RPC's SHA256 call without changing saved receipts or library data.
 
 ## Contents
 
@@ -19,7 +21,9 @@ supabase/
     ├── 0003_claim_and_payload.sql ← deployed legacy queue history
     ├── 0004_evaluation_stats.sql ← owner-scoped evaluation view
     ├── 0005_local_recipe_drafts.sql ← token-fenced transient drafts
-    └── 0006_library_sync.sql ← owner-scoped library, immutable revision batches, push/pull RPCs
+    ├── 0006_library_sync.sql ← owner-scoped library, immutable revision batches, push/pull RPCs
+    ├── 0007_shared_import_drafts.sql ← durable import draft publication
+    └── 0008_library_fingerprint.sql ← schema-independent SHA256 request fingerprint
 ```
 
 ## Required environment
@@ -33,9 +37,9 @@ supabase/
 
 ## Applying the migrations
 
-Run numbered migrations in order through `0006_library_sync.sql`. Check `supabase_migrations.schema_migrations` in each target first: dev uses version `0004` for evaluation stats. If a target already recorded version `0004` for local drafts, reconcile that database explicitly before applying anything. Pick one method:
+Run numbered migrations in order through `0008_library_fingerprint.sql`. Check `supabase_migrations.schema_migrations` in each target first: dev uses version `0004` for evaluation stats. If a target already recorded version `0004` for local drafts, reconcile that database explicitly before applying anything. The hosted repair requires a fresh backup, history exactly `0001`–`0007`, and the reviewed `0006` push-function body; apply only `0008` in a guarded transaction. Do not run an unfiltered `supabase db push` for that hosted repair. The commands below are for fresh disposable setup:
 
-### Supabase CLI (recommended)
+### Supabase CLI (fresh disposable database only)
 
 ```bash
 supabase link --project-ref <your-project-ref>
@@ -51,6 +55,8 @@ psql "$SUPABASE_DB_URL" -f supabase/migrations/0003_claim_and_payload.sql
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0004_evaluation_stats.sql
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0005_local_recipe_drafts.sql
 psql "$SUPABASE_DB_URL" -f supabase/migrations/0006_library_sync.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0007_shared_import_drafts.sql
+psql "$SUPABASE_DB_URL" -f supabase/migrations/0008_library_fingerprint.sql
 ```
 
 `$SUPABASE_DB_URL` is the connection string from
@@ -59,7 +65,7 @@ psql "$SUPABASE_DB_URL" -f supabase/migrations/0006_library_sync.sql
 ### Supabase SQL editor
 
 Open **SQL Editor** in the dashboard, paste the contents of `0001_init.sql`,
-run it, then do the same for `0002_storage.sql` through `0006_library_sync.sql` in order.
+run it, then do the same for `0002_storage.sql` through `0008_library_fingerprint.sql` in order.
 
 Apply each migration once. Track applied files before using the SQL editor or `psql`.
 
@@ -188,3 +194,16 @@ key out of this workflow; only the local worker and migration script need it.
 Migration backfill reports published/skipped/invalid completed rows. Service-only `backfill_import_drafts()` can retry still-present results; invalid/unpublished completed sources remain for recovery. Already-cleaned results require a surviving device's reviewed migration. Acknowledgement and cleanup affect only temporary job/source fields, never shared records.
 
 Disposable SQL checks: `supabase/tests/shared_imports.sql` (rollback) and `shared_imports_concurrency.sql` (commits fixture setup; use only `aaf_sync_task1`). Run with the same environment guards as the library protocol fixtures after migrations 0006/0007. No hosted application of these migrations is authorized by these tests.
+
+## Request fingerprint repair (0008)
+
+The deployed `0006` push function called `public.digest`, but some projects install
+`pgcrypto` under `extensions`. The repair replaces that single expression with
+`pg_catalog.sha256(pg_catalog.convert_to(p_request::text,'UTF8'))`. It retains the
+SHA256 `bytea` fingerprint used by existing mutation receipts and leaves the
+owner gate, conditional writes, journal, grants, and empty function search path
+unchanged. The migration rejects a push function whose body differs from the
+reviewed `0006` definition. Test `supabase/tests/library_fingerprint.sql` only
+on a disposable database with `pgcrypto` in `extensions` and two test users;
+it rolls back its rows. Existing `library_sync` and `shared_imports` suites
+remain the focused regression checks.
