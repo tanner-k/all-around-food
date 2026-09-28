@@ -196,7 +196,7 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
           Edit
         </a>
         <button type="button" onClick={() => void handleDelete()} disabled={busy} className="min-h-11 rounded-full border border-line bg-paper px-5 py-2.5 text-sm font-semibold text-warn disabled:opacity-50">Delete recipe</button>
-        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+        {error && <p role="alert" className="text-sm text-danger">{error}</p>}
         <button
           type="button"
           onClick={handleMarkCooked}
@@ -208,7 +208,7 @@ export function RecipeDetail({ recipe, onMarkCooked, onStartCook, onDelete }: Re
         <a
           href={localHref("cook", recipe.id)}
           onClick={(event) => { event.preventDefault(); void onStartCook().catch((err: unknown) => setError(err instanceof Error ? err.message : "Unable to start cook mode.")); }}
-          className="rounded-full bg-terra px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#A55230] sm:ml-auto min-h-11 flex items-center justify-center"
+          className="rounded-full bg-terra px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terra-strong sm:ml-auto min-h-11 flex items-center justify-center"
         >
           Start cook mode →
         </a>

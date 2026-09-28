@@ -36,8 +36,8 @@ export function ShoppingListView({ items, recipeOptions, onAdd, onAddRecipes, on
     <p className="text-sm text-ink-mute">{data.total_visible} {data.total_visible === 1 ? "item" : "items"} · grouped by aisle</p>
     <div className="flex flex-wrap items-start gap-3"><ShoppingAddForm onAdd={(name, quantity) => run(() => onAdd(name, quantity))} />
       <button type="button" onClick={() => setModalOpen(true)} className="min-h-11 rounded-xl border border-line bg-paper-2 px-4 py-2 text-sm font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra">+ Add from recipes</button></div>
-    {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</p>}
-    {notice && <p role="status" className="rounded-lg bg-green-50 px-4 py-2 text-sm text-green-700">{notice}</p>}
+    {error && <p role="alert" className="rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">{error}</p>}
+    {notice && <p role="status" className="rounded-lg bg-forest-soft px-4 py-2 text-sm text-forest">{notice}</p>}
     {data.groups.length === 0 ? <div className="rounded-2xl border border-line bg-paper p-12 text-center text-ink-mute">Nothing to buy. Add an item or pull from your recipes.</div> :
       <div className="flex flex-col gap-8">{data.groups.map((group) => <AisleSection key={group.aisle} aisle={group.aisle} items={group.items}
         onCheck={(id, checkedValue) => void run(() => onCheck(id, checkedValue))}

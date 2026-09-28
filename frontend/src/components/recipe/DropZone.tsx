@@ -220,7 +220,7 @@ export function DropZone({
           />
           <button
             type="submit"
-            className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230]"
+            className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-terra-strong"
           >
             Import
           </button>

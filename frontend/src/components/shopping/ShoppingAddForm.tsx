@@ -46,7 +46,7 @@ export function ShoppingAddForm({ onAdd }: ShoppingAddFormProps) {
       <button
         type="submit"
         disabled={busy || !name.trim()}
-        className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] disabled:opacity-50"
+        className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-terra-strong disabled:opacity-50"
       >
         Add
       </button>

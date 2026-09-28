@@ -95,7 +95,7 @@ export function TimerSheet({
             <button
               type="button"
               onClick={onPauseToggle}
-              className="flex-1 min-h-14 rounded-xl bg-terra text-white font-semibold text-xl flex items-center justify-center gap-2 transition-transform active:scale-[0.98] hover:bg-[#A55230] active:bg-[#A55230]"
+              className="flex-1 min-h-14 rounded-xl bg-terra text-white font-semibold text-xl flex items-center justify-center gap-2 transition-transform active:scale-[0.98] hover:bg-terra-strong active:bg-terra-strong"
               aria-label={running ? "Pause timer" : "Resume timer"}
             >
               {running ? (

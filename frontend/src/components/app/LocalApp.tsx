@@ -49,7 +49,7 @@ export function LocalApp() {
   return (
     <>
       <SyncStatus sync={sync} />
-      {error && <div role="alert" className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-red-800">
+      {error && <div role="alert" className="mb-6 rounded-xl border border-danger/30 bg-danger-soft p-4 text-danger">
         {error} <button type="button" onClick={refresh} className="underline">Retry</button>
       </div>}
       {snapshot && isCurrentLocalAccount(account) ? <LocalScreens key={account.generation} route={route} snapshot={snapshot} />

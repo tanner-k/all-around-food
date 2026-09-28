@@ -77,7 +77,7 @@ export function PlanView({ weekOf, initialPlan, recipes, onAdd, onRemove, onServ
         <p>Week of {formatMonthDay(weekOf)} · {meals.length} {meals.length === 1 ? "recipe" : "recipes"} planned</p>
         <div className="flex gap-2"><a href={localHref("plan", adjacentWeek(weekOf, -1))} className="rounded-lg border border-line px-3 py-2 text-ink">Previous week</a><a href={localHref("plan", adjacentWeek(weekOf, 1))} className="rounded-lg border border-line px-3 py-2 text-ink">Next week</a></div>
       </div>
-      {error && <p role="alert" className="rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="rounded-lg bg-danger-soft px-4 py-2 text-sm text-danger">{error}</p>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
         {weekDays(weekOf).map((day) => <DayColumn key={day.index} day={day}
           meals={meals.flatMap((meal, index) => meal.day_index === day.index ? [{ id: plannedMealId(initialPlan, index), title: recipesById.get(meal.recipe_id)?.title ?? "Unknown recipe", servings: meal.servings, baseServings: recipesById.get(meal.recipe_id)?.servings ?? null }] : [])}
@@ -88,7 +88,7 @@ export function PlanView({ weekOf, initialPlan, recipes, onAdd, onRemove, onServ
       <div className="flex flex-col justify-between gap-3 border-t border-line pt-5 sm:flex-row sm:flex-wrap sm:items-center">
         <p className="text-sm text-ink-mute">Plan your week, then turn it into a shopping list.</p>
         <button type="button" onClick={() => void handleReviewShopping()} disabled={meals.length === 0 || reviewing}
-          className="min-h-11 rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] disabled:opacity-50">{reviewing ? "Building list…" : "Review shopping →"}</button>
+          className="min-h-11 rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-terra-strong disabled:opacity-50">{reviewing ? "Building list…" : "Review shopping →"}</button>
       </div>
       {picker && <RecipePickerModal recipes={recipes} onPick={handlePick} onClose={() => setPicker(null)} />}
     </div>

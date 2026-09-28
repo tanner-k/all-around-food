@@ -292,7 +292,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
                 type="button"
                 onClick={() => removeIngredient(i)}
                 disabled={recipe.ingredients.length <= 1}
-                className="pb-2 text-ink-mute hover:text-red-500 transition-colors disabled:opacity-30"
+                className="pb-2 text-ink-mute hover:text-danger transition-colors disabled:opacity-30"
                 aria-label="Remove ingredient"
               >
                 ×
@@ -370,7 +370,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
               type="button"
               onClick={() => removeStep(i)}
               disabled={recipe.steps.length <= 1}
-              className="text-ink-mute hover:text-red-500 transition-colors self-start mt-1 disabled:opacity-30"
+              className="text-ink-mute hover:text-danger transition-colors self-start mt-1 disabled:opacity-30"
               aria-label="Remove step"
             >
               ×
@@ -388,7 +388,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
 
       {/* Save / Cancel */}
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2">
+        <p className="text-sm text-danger bg-danger-soft rounded-lg px-4 py-2">
           {error} — please try again.
         </p>
       )}
@@ -403,7 +403,7 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="rounded-full bg-terra px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#A55230] disabled:opacity-60"
+          className="rounded-full bg-terra px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-terra-strong disabled:opacity-60"
         >
           {saving ? "Saving…" : "Save"}
         </button>

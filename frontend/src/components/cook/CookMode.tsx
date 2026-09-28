@@ -196,7 +196,7 @@ export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete,
               className={[
                 "min-h-14 rounded-xl font-semibold text-sm flex items-center justify-center transition-transform active:scale-[0.98]",
                 timerSeconds >= 0 && timerRunning
-                  ? "bg-terra text-white hover:bg-[#A55230] active:bg-[#A55230]"
+                  ? "bg-terra text-white hover:bg-terra-strong active:bg-terra-strong"
                   : timerSeconds >= 0
                   ? "bg-terra-soft text-terra border border-terra-soft hover:bg-terra/20 active:bg-terra/20"
                   : "border border-line bg-paper text-ink-soft opacity-40 cursor-not-allowed",
@@ -210,7 +210,7 @@ export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete,
             <button
               type="button"
               onClick={handleNext}
-              className="min-h-14 rounded-xl bg-terra text-white font-semibold text-sm flex items-center justify-center transition-transform active:scale-[0.98] hover:bg-[#A55230] active:bg-[#A55230]"
+              className="min-h-14 rounded-xl bg-terra text-white font-semibold text-sm flex items-center justify-center transition-transform active:scale-[0.98] hover:bg-terra-strong active:bg-terra-strong"
             >
               {currentStep >= total - 1 ? "Finish →" : "Next →"}
             </button>
@@ -302,7 +302,7 @@ export function CookMode({ recipe, progress, pantry, onSaveProgress, onComplete,
             <CookScrollView recipe={recipe} />
           )}
         </div>
-        {saveError && <p role="alert" className="text-sm text-red-600">{saveError}</p>}
+        {saveError && <p role="alert" className="text-sm text-danger">{saveError}</p>}
       </div>
 
       {/* ── SHEETS (mobile only, rendered at root level) ──────────────── */}
