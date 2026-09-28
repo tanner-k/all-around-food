@@ -56,3 +56,29 @@ body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
+
+/* ── Navigation frame and touch (plan 07) ──────────────────────── */
+/* --tabbar-height: space the mobile tab bar covers at the bottom of the
+   viewport. Sticky footers sit at calc(var(--tabbar-height) + 0.75rem).
+   It is 0px wherever the bar isn't rendered (cook mode, non-/app pages)
+   and from md: up, where the bar is hidden. */
+:root {
+  --tabbar-row: 3.5rem; /* h-14 */
+  --tabbar-height: 0px;
+  -webkit-tap-highlight-color: transparent;
+}
+:root:has([data-mobile-tabbar]) {
+  --tabbar-height: calc(var(--tabbar-row) + env(safe-area-inset-bottom));
+}
+@media (width >= 48rem) {
+  :root:has([data-mobile-tabbar]) {
+    --tabbar-height: 0px;
+  }
+}
+
+/* Keep the page's native rubber-band bounce, but stop scrolling inside a
+   sheet, dialog or menu panel from dragging the page behind it. */
+[data-overlay-backdrop] > [aria-modal],
+[role="menu"] {
+  overscroll-behavior: contain;
+}
