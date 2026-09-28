@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { MarkOutOfStep } from "./MarkOutOfStep";
 import type { PantryItem, PantryStatus } from "@/lib/pantry-schema";
 import { localHref } from "@/lib/local/navigation";
@@ -53,39 +54,34 @@ export function CookDoneView({
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-8 py-12 px-4 text-center max-w-md mx-auto">
+    <div className="cook-rise flex flex-col items-center justify-center gap-10 py-16 md:py-24 px-4 text-center max-w-md mx-auto min-h-[70dvh]">
       {/* Heading */}
       <div>
-        <h1 className="font-serif text-3xl md:text-5xl leading-tight tracking-tight text-ink">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-ink-mute tabular-nums">
+          {stepCount} step{stepCount !== 1 ? "s" : ""} · all done
+        </p>
+        <h1 className="mt-4 font-serif text-5xl md:text-6xl leading-tight tracking-tight text-ink">
           Nicely{" "}
           <em className="italic text-terra">done.</em>
         </h1>
-        <p className="text-ink-mute mt-3 text-sm">
-          {recipeTitle} · {stepCount} step{stepCount !== 1 ? "s" : ""}
+        <p className="text-ink-mute mt-3 text-base text-balance">
+          {recipeTitle}
         </p>
       </div>
 
       {/* Actions */}
       <div className="flex flex-col gap-3 w-full">
         {error && (
-          <p className="text-sm text-danger bg-danger-soft rounded-lg px-4 py-2">
+          <p role="alert" className="text-sm text-danger bg-danger-soft rounded-control px-4 py-2">
             {error} — please try again.
           </p>
         )}
-        <button
-          type="button"
-          onClick={handleMarkCooked}
-          disabled={loading}
-          className="w-full min-h-14 rounded-xl bg-terra text-white font-semibold text-base transition-colors hover:bg-terra-strong active:bg-terra-strong disabled:opacity-60"
-        >
+        <Button size="lg" fullWidth onClick={handleMarkCooked} loading={loading}>
           {loading ? "Saving…" : "Mark as cooked"}
-        </button>
-        <a
-          href={localHref("recipe", recipeId)}
-          className="w-full min-h-14 rounded-xl border border-line bg-paper text-ink font-semibold text-base flex items-center justify-center transition-colors hover:bg-paper-2 active:bg-paper-2"
-        >
+        </Button>
+        <Button variant="secondary" size="lg" fullWidth href={localHref("recipe", recipeId)}>
           Back to recipe
-        </a>
+        </Button>
       </div>
     </div>
   );
