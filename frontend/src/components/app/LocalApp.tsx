@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { readSnapshot, subscribeToLocalChanges } from "@/lib/local/repository";
 import { captureLocalAccount, isCurrentLocalAccount, subscribeToLocalAccountChange } from "@/lib/local/db";
 import { parseLocalRoute, type LocalRoute } from "@/lib/local/navigation";
+import { transitionRoute } from "@/lib/local/route-transition";
 import type { LibrarySnapshot } from "@/lib/local/schema";
 import { CookbookSkeleton } from "./CookbookSkeleton";
 import { LocalScreens } from "./LocalScreens";
@@ -22,6 +23,7 @@ export function LocalApp() {
   useLocalImportSync();
   const [account, setAccount] = useState(captureLocalAccount);
   const [route, setRoute] = useState<LocalRoute>({ view: "plan" });
+  const routeRef = useRef(route);
   const [snapshot, setSnapshot] = useState<LibrarySnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const statusSlot = useSyncExternalStore(subscribeNever, headerStatusSlot, () => null);
@@ -38,12 +40,23 @@ export function LocalApp() {
   }), []);
 
   useEffect(() => {
-    const onHashChange = () => setRoute(parseLocalRoute(window.location.hash));
+    const commitHash = () => {
+      const next = parseLocalRoute(window.location.hash);
+      routeRef.current = next;
+      setRoute(next);
+    };
+    // Navigations animate; the first read on mount (and after an account switch) commits directly.
+    const onHashChange = () => {
+      const prev = routeRef.current;
+      const next = parseLocalRoute(window.location.hash);
+      routeRef.current = next;
+      transitionRoute(prev, next, () => setRoute(next));
+    };
     const onStorageError = (event: Event) => {
       const detail = (event as CustomEvent<{ message: string }>).detail;
       setError(detail?.message ?? "Local storage is unavailable.");
     };
-    onHashChange();
+    commitHash();
     refresh();
     const unsubscribe = subscribeToLocalChanges(refresh, account);
     window.addEventListener("hashchange", onHashChange);
