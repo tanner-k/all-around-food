@@ -36,7 +36,7 @@ function PriceCompareRow({ row, isCheapest }: RowData) {
     <tr
       className="border-b border-line last:border-b-0 hover:bg-terra/5 transition-colors"
     >
-      <td className="px-4 py-3 text-ink-mute">{row.rank}</td>
+      <td className="px-4 py-3 text-ink-mute tabular-nums">{row.rank}</td>
       <td className="px-4 py-3 font-medium text-ink capitalize">
         {row.retailer}
       </td>
@@ -54,7 +54,7 @@ function PriceCompareRow({ row, isCheapest }: RowData) {
         )}
         {centsToDisplay(row.price_cents)}
       </td>
-      <td className="px-4 py-3 text-right text-ink-mute">
+      <td className="px-4 py-3 text-right text-ink-mute tabular-nums">
         {formatObservedAt(row.observed_at)}
       </td>
     </tr>
@@ -130,31 +130,31 @@ export function PriceCompareTable({ rankings }: PriceCompareTableProps) {
             <tr className="border-b border-line bg-paper/80">
               <th
                 scope="col"
-                className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-mute"
+                className="px-4 py-3 text-left eyebrow text-ink-mute"
               >
                 Rank
               </th>
               <th
                 scope="col"
-                className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-mute"
+                className="px-4 py-3 text-left eyebrow text-ink-mute"
               >
                 Retailer
               </th>
               <th
                 scope="col"
-                className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-ink-mute"
+                className="px-4 py-3 text-left eyebrow text-ink-mute"
               >
                 Store ID
               </th>
               <th
                 scope="col"
-                className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-ink-mute"
+                className="px-4 py-3 text-right eyebrow text-ink-mute"
               >
                 Price
               </th>
               <th
                 scope="col"
-                className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-ink-mute"
+                className="px-4 py-3 text-right eyebrow text-ink-mute"
               >
                 Observed
               </th>

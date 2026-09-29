@@ -38,8 +38,9 @@ for (const viewport of [{ width: 375, height: 812 }, { width: 812, height: 375 }
     await copy.click(); await expect(page.getByText(/1 recipes copied, 0 kept, 1 recipe changes/)).toBeVisible();
     await page.goto(`/app#/cookbook/${accountRecipe.id}`);
     await expect(page.getByRole("heading", { name: "Source Toast" })).toBeVisible();
-    page.once("dialog", dialog => dialog.accept());
-    await page.getByRole("button", { name: "Delete recipe" }).click();
+    await page.getByRole("button", { name: "Recipe options" }).click();
+    await page.getByRole("menuitem", { name: "Delete" }).click();
+    await page.getByRole("dialog", { name: "Delete recipe?" }).getByRole("button", { name: "Delete" }).click();
     await expect(page.getByText("Your cookbook is empty. Add a recipe to get started.")).toBeVisible();
     const groups = await page.evaluate(async owner => new Promise<unknown[]>((resolve, reject) => {
       const opening = indexedDB.open(`aaf-local:${owner}`); opening.onerror = () => reject(opening.error);

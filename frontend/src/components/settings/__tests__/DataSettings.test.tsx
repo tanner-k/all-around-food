@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { deleteDB } from "idb";
 import { captureLocalAccount, closeLocalDB, selectLegacyGuest, selectVerifiedAccount, signOutLocalAccount } from "@/lib/local/db";
 import { DataSettings } from "../DataSettings";
+import { setOfflineReady } from "@/lib/pwa-status";
 
 const owner = "11111111-1111-4111-8111-111111111111";
 
@@ -13,6 +14,7 @@ beforeEach(async () => {
   await deleteDB(`aaf-local:${owner}`);
 });
 afterEach(async () => {
+  setOfflineReady(false);
   signOutLocalAccount();
   await closeLocalDB();
   await deleteDB("aaf-local");
@@ -44,6 +46,19 @@ it("offers sign-in and hides the account immediately when sign-out starts", asyn
   expect(captureLocalAccount().dbName).toBe("");
 });
 
+it("shows full sync detail with exactly one sign-in link", async () => {
+  const { vi } = await import("vitest");
+  selectVerifiedAccount(owner);
+  const syncNow = vi.fn();
+  render(<DataSettings sync={{ account: captureLocalAccount(), status: { pending: 2, deferred: 0, conflicts: 0, lastSuccessAt: null }, running: false, authRequired: true, ready: true, stage: "recipes", syncNow }} />);
+  expect(screen.getByRole("heading", { name: "Library sync" })).toBeInTheDocument();
+  expect(screen.getByText("Sign in to sync")).toBeInTheDocument();
+  expect(screen.getByText(/2 recipe changes waiting/)).toBeInTheDocument();
+  expect(screen.getAllByRole("link", { name: "Sign in" })).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
+  expect(syncNow).toHaveBeenCalled();
+});
+
 it("offers explicit recipe review while account Replace stays blocked", async () => {
  selectVerifiedAccount(owner); render(<DataSettings />);
  await waitFor(() => expect(screen.getByRole("button", { name: "Review recipes on this device" })).toBeEnabled());
@@ -73,4 +88,12 @@ it("requires both backup downloads and confirmation before a recipe copy", async
  expect(await screen.findByText(/1 recipes copied, 0 kept, 1 recipe changes/)).toBeInTheDocument();
  expect(await (await getLocalDB()).getAll("recipes")).toHaveLength(1);
  click.mockRestore(); vi.unstubAllGlobals();
+});
+
+it("shows Offline ready beside the install steps once the app shell is cached", async () => {
+  selectLegacyGuest();
+  render(<DataSettings />);
+  expect(screen.queryByRole("status", { name: "Offline ready" })).toBeNull();
+  act(() => setOfflineReady(true));
+  expect(await screen.findByRole("status", { name: "Offline ready" })).toBeInTheDocument();
 });

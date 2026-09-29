@@ -140,7 +140,7 @@ export default async function PricesPage({ searchParams }: PageProps) {
           <section>
             <h2 className="mb-3 font-serif text-lg italic text-ink">
               Results for{" "}
-              <span className="text-terra">&ldquo;{q}&rdquo;</span>
+              <span className="text-terra-strong">&ldquo;{q}&rdquo;</span>
             </h2>
             <div className="rounded-xl border border-line bg-paper divide-y divide-line">
               {searchResults.map((product) => (
@@ -220,7 +220,7 @@ function ProductSearch({
       />
       <button
         type="submit"
-        className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] min-h-11 whitespace-nowrap"
+        className="rounded-xl bg-terra-strong px-4 py-2 text-sm font-semibold text-on-accent transition-colors hover:bg-terra-deep min-h-11 whitespace-nowrap"
       >
         Search
       </button>

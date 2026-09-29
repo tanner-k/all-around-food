@@ -62,8 +62,9 @@ describe("IngredientsSheet", () => {
         onClose={onClose}
       />
     );
-    // The backdrop is the element with aria-hidden="true" before the dialog
-    const backdrop = document.querySelector('[aria-hidden="true"]') as HTMLElement;
+    const backdrop = document.querySelector(
+      "[data-overlay-backdrop]"
+    ) as HTMLElement;
     fireEvent.click(backdrop);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -117,5 +118,18 @@ describe("IngredientsSheet", () => {
     );
     expect(screen.getByText("2 cups")).toBeInTheDocument();
     expect(screen.getByText("1 cup")).toBeInTheDocument();
+  });
+
+  it("focuses the close button on open", () => {
+    render(
+      <IngredientsSheet
+        open={true}
+        ingredients={INGREDIENTS}
+        onClose={vi.fn()}
+      />
+    );
+    expect(
+      screen.getByRole("button", { name: /close ingredients/i })
+    ).toHaveFocus();
   });
 });

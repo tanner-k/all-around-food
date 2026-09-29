@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/Button";
 
 interface PantryAddFormProps {
   onAdd: (name: string) => Promise<boolean>;
@@ -31,13 +32,9 @@ export function PantryAddForm({ onAdd }: PantryAddFormProps) {
         placeholder="Add an item to your pantry…"
         className="flex-1 rounded-xl border border-line bg-paper px-4 py-2 text-sm text-ink placeholder:text-ink-mute focus:border-terra focus:outline-none"
       />
-      <button
-        type="submit"
-        disabled={busy || !value.trim()}
-        className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230] disabled:opacity-50"
-      >
+      <Button type="submit" disabled={busy || !value.trim()}>
         Add
-      </button>
+      </Button>
     </form>
   );
 }

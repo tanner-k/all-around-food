@@ -2,6 +2,7 @@
 
 import type { ShoppingListItem } from "@/lib/shopping-schema";
 import { ShoppingRow } from "./ShoppingRow";
+import { Card } from "@/components/ui/Card";
 
 interface AisleSectionProps {
   aisle: string;
@@ -22,7 +23,7 @@ export function AisleSection({
         {aisle}{" "}
         <span className="text-sm not-italic text-ink-mute">{items.length}</span>
       </h2>
-      <div className="rounded-xl border border-line bg-paper px-4">
+      <Card padding="none" className="px-4">
         {items.map((item) => (
           <ShoppingRow
             key={item.id}
@@ -31,7 +32,7 @@ export function AisleSection({
             onDelete={onDelete}
           />
         ))}
-      </div>
+      </Card>
     </section>
   );
 }

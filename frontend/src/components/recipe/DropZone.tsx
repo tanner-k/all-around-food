@@ -135,8 +135,8 @@ export function DropZone({
             : "border-line-strong",
         ].join(" ")}
       >
-        <span className="text-4xl leading-none select-none">⬇</span>
-        <p className="font-serif italic text-2xl text-ink">
+        <span aria-hidden="true" className="text-4xl leading-none select-none">⬇</span>
+        <p className="font-serif italic text-2xl text-ink text-balance">
           {isReceipt
             ? "Drop receipt photo or paste image"
             : "Drop screenshot or paste link"}
@@ -148,7 +148,7 @@ export function DropZone({
       <div className="flex flex-wrap gap-2">
         {/* Screenshot — active */}
         <label
-          className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra"
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra-strong"
         >
           {isReceipt ? "📷 Receipt photo" : "📷 Screenshot"}
           <input
@@ -174,7 +174,7 @@ export function DropZone({
                 setShowUrlInput((v) => !v);
                 setTimeout(() => urlInputRef.current?.focus(), 50);
               }}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra-strong"
             >
               🔗 URL
             </button>
@@ -185,7 +185,7 @@ export function DropZone({
                 setShowUrlInput((v) => !v);
                 setTimeout(() => urlInputRef.current?.focus(), 50);
               }}
-              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra"
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-line bg-paper-2 px-3 py-1.5 text-xs font-medium text-ink-soft transition-colors hover:border-terra hover:text-terra-strong"
             >
               🎬 TikTok / Instagram
             </button>
@@ -220,7 +220,7 @@ export function DropZone({
           />
           <button
             type="submit"
-            className="rounded-xl bg-terra px-4 py-2 text-sm font-semibold text-paper transition-colors hover:bg-[#A55230]"
+            className="rounded-xl bg-terra-strong px-4 py-2 text-sm font-semibold text-on-accent transition-colors hover:bg-terra-deep"
           >
             Import
           </button>

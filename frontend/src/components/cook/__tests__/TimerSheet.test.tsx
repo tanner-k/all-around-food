@@ -167,4 +167,18 @@ describe("TimerSheet", () => {
     expect(screen.queryByRole("button", { name: /pause timer/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /resume timer/i })).not.toBeInTheDocument();
   });
+
+  it("focuses the close button on open", () => {
+    render(
+      <TimerSheet
+        open={true}
+        remainingSeconds={60}
+        running={true}
+        onPauseToggle={vi.fn()}
+        onReset={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+    expect(screen.getByRole("button", { name: /close timer/i })).toHaveFocus();
+  });
 });
