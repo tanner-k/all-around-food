@@ -1,21 +1,29 @@
 # Changelog
 
+## 2026-10-07
+
+- Shipped premium UI plans 01–10 to production via PRs #20 and #21 (merged 2026-09-29)
+
 ## 2026-09-25
+
 - Publish durable shared import drafts with owner-wide queue metadata
 - Implement source-grounded Jev recipe parsing in the import worker
 
 ## 2026-07-04
+
 - Archived migrated core Parquet files under `data/archive/` after Supabase row counts matched.
 - Cut over the app from hosted server proxies to Supabase reads/writes plus the local import worker.
 - Removed the deferred user-facing pricing surface while keeping the backend pricing library.
 - Deleted the Python HTTP server, proxy routes, and core Parquet store path after adding Supabase evaluation stats.
 
 ## 2026-06-07
+
 - Text shopping list to any number via Apple Messages
 
 > Shipped work, newest first. Promoted from `TODO.md` via `python3 scripts/done.py "description"`.
 
 ## Conventions
+
 - Group by date (ISO `YYYY-MM-DD`).
 - Each entry = one shipped change, written in past tense.
 - The top 5 entries get pulled into `README.md`'s "Recent updates" section (between the `<!-- BEGIN:RECENT-UPDATES -->` / `<!-- END:RECENT-UPDATES -->` markers).
@@ -84,4 +92,5 @@
 - Updated `README.md` with "Run Phase B locally" section: step-by-step terminal split setup, env config, expected URLs.
 
 ## 2026-05-19
+
 - Scaffolded project from the Tree template
