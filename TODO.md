@@ -7,19 +7,13 @@ Completed historical phase notes live in `CHANGELOG.md`.
 
 ## Phase D (Next)
 
-- [ ] Real E2E import test: sign in, enqueue, run the Mac worker, review the draft, and save it locally
 - [ ] Configure Vercel Git integration for the PWA (`dev` staging, `main` production)
 - [ ] Validate the native Mac LaunchAgent and `python -m allaroundfood.worker --watch`
-
-## Supabase cutover follow-ups
-
-- [ ] Inspect hosted migration history, then apply `0004_evaluation_stats.sql` and `0005_local_recipe_drafts.sql` in order
 
 ## Audit follow-ups — Video recipe parsing
 
 > Pipeline is code-complete; these make it actually runnable.
 
-- [ ] Install + document `ffmpeg` and `yt-dlp` for dev/deploy (`ffmpeg` is not a Python package)
 - [ ] Pre-fetch whisper model (`base.en` GGML) in worker provisioning
 - [ ] Add skippable end-to-end video-import test (`@network`/`@slow`)
 
@@ -44,12 +38,8 @@ Completed historical phase notes live in `CHANGELOG.md`.
 
 ## Later
 
-- [ ] Real responsive mobile layout (current is desktop-first)
 - [ ] Background eval re-runs when worker prompt changes (auto re-grade historical parses)
-- [ ] TikTok / video import source
 - [ ] Email recipe forwarding
-- [ ] Manual recipe entry form
-- [ ] Deploy to production
 
 ## Icebox
 

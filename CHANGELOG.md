@@ -2,6 +2,13 @@
 
 ## 2026-10-07
 
+- Deployed the PWA to production on Vercel from `main`
+- Added manual recipe entry that works offline
+- Added Instagram and TikTok video import (yt-dlp, ffmpeg, local whisper.cpp)
+- Shipped a phone-first responsive layout with the premium UI
+- Documented `ffmpeg` and `yt-dlp` installation for the worker (`infra/worker/README.md`; `yt-dlp` ships in `backend/pyproject.toml`)
+- Applied hosted Supabase migrations `0004`–`0008` in order after inspecting migration history
+- Verified a real E2E import in production Chrome: owner-scoped enqueue, Mac worker Jev draft, review, and offline local save (2026-09-25)
 - Shipped premium UI plans 01–10 to production via PRs #20 and #21 (merged 2026-09-29)
 
 ## 2026-09-25

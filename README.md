@@ -417,11 +417,11 @@ The old direct parsing routes (`POST /api/import/parse` and `POST /api/pantry/re
 
 <!-- BEGIN:RECENT-UPDATES -->
 
-- Shipped premium UI plans 01–10 to production via PRs #20 and #21 (merged 2026-09-29)
-- Publish durable shared import drafts with owner-wide queue metadata
-- Implement source-grounded Jev recipe parsing in the import worker
-- Archived migrated core Parquet files under `data/archive/` after Supabase row counts matched.
-- Cut over the app from hosted server proxies to Supabase reads/writes plus the local import worker.
+- Deployed the PWA to production on Vercel from `main`
+- Added manual recipe entry that works offline
+- Added Instagram and TikTok video import (yt-dlp, ffmpeg, local whisper.cpp)
+- Shipped a phone-first responsive layout with the premium UI
+- Documented `ffmpeg` and `yt-dlp` installation for the worker (`infra/worker/README.md`; `yt-dlp` ships in `backend/pyproject.toml`)
 
 <!-- END:RECENT-UPDATES -->
 
