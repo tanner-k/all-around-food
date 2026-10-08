@@ -365,7 +365,7 @@ cd backend && uv run ruff check && uv run mypy && uv run pytest
 CI runs on PRs and pushes to `dev` and `main`. It covers frontend lint, typecheck, unit tests, build and PWA tests; backend ruff, mypy and pytest; and a `CLAUDE.md` = `AGENTS.md` check. The PWA tests use the placeholder public values above.
 
 - **Branches:** PRs target `dev`. Merging `dev` into `main` is a release, and Vercel deploys `main`.
-- **Hooks:** Husky runs Prettier and ESLint on commit. Do not bypass it.
+- **Hooks:** run `git config core.hooksPath .husky` once per clone. The pre-commit hook runs ESLint on staged frontend code and Prettier on staged Markdown, JSON and YAML. Do not bypass it.
 - **Tracking:** open tasks are `- [ ]` lines in [TODO.md](TODO.md). When a task ships, `python3 scripts/done.py "task"` moves it to [CHANGELOG.md](CHANGELOG.md).
 
 <details>
