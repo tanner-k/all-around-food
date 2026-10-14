@@ -6,27 +6,28 @@
 Completed historical phase notes live in `CHANGELOG.md`.
 
 ## Phase D (Next)
-- [ ] Real E2E import test: sign in, enqueue, run the Mac worker, review the draft, and save it locally
+
 - [ ] Configure Vercel Git integration for the PWA (`dev` staging, `main` production)
 - [ ] Validate the native Mac LaunchAgent and `python -m allaroundfood.worker --watch`
 
-## Supabase cutover follow-ups
-- [ ] Inspect hosted migration history, then apply `0004_evaluation_stats.sql` and `0005_local_recipe_drafts.sql` in order
-
 ## Audit follow-ups — Video recipe parsing
+
 > Pipeline is code-complete; these make it actually runnable.
-- [ ] Install + document `ffmpeg` and `yt-dlp` for dev/deploy (`ffmpeg` is not a Python package)
+
 - [ ] Pre-fetch whisper model (`base.en` GGML) in worker provisioning
 - [ ] Add skippable end-to-end video-import test (`@network`/`@slow`)
 
 ## Audit follow-ups — Shopping list upload
+
 - [ ] Worker: add a `shopping_list_image` parse-job kind that parses uploaded images into shopping-list items
 - [ ] Frontend: `ShoppingListImportFlow` component + upload entry on `/shop`; extend `DropZone` with a `"shopping-list"` variant
 - [ ] Supabase: write parsed shopping-list items through `frontend/src/lib/db/shopping.ts` or a worker-side insert helper
 - [ ] Tests for shopping-list parse schema + worker job handling
 
 ## Audit follow-ups — Shopping list store comparison
+
 > Pricing library is retained, but the user-facing pricing surface is deferred.
+
 - [ ] Write a pricing Supabase/pgvector migration plan
 - [ ] Move pricing stores from Parquet to Supabase when the future pricing plan is approved
 - [ ] Restore a user-facing price comparison surface after pricing data is queryable from Supabase
@@ -36,17 +37,16 @@ Completed historical phase notes live in `CHANGELOG.md`.
 - [ ] Add Costco adapter test
 
 ## Later
-- [ ] Real responsive mobile layout (current is desktop-first)
+
 - [ ] Background eval re-runs when worker prompt changes (auto re-grade historical parses)
-- [ ] TikTok / video import source
 - [ ] Email recipe forwarding
-- [ ] Manual recipe entry form
-- [ ] Deploy to production
 
 ## Icebox
+
 - [ ] (ideas that aren't on the roadmap yet)
 
 ## Local-first PWA — implementation in progress, release pending
+
 - [ ] Implement the local-first installable PWA and Mac Mini import loop
   - Plan: [Downloadable Local-First Cooking App](docs/superpowers/plans/2026-09-19-local-first-pwa.md)
   - [ ] Integrate `origin/dev` while retaining the backend/pricing suite and resolving the `0004` migration collision; inspect hosted migration history before applying SQL
@@ -58,13 +58,14 @@ Completed historical phase notes live in `CHANGELOG.md`.
   - [ ] Confirm the stable production origin, deployment, branch checks, and recovery/rollback procedure before promoting this item to `CHANGELOG.md`
 
 ## Account sync — narrowed recipe release and deferred expansion
+
 - [ ] Verify and release recipe/import account sync with real offline/online proof — [reduced release plan](docs/superpowers/plans/2026-09-26-recipe-sync-release.md)
 - [ ] Finish cooking history/session/count sync after recipe sync is proved — [preserved work and follow-ups](docs/plans/account-sync-followups.md)
 - [ ] Verify planning/shopping/pantry integration before enabling all-stage — [follow-ups](docs/plans/account-sync-followups.md)
 - [ ] Add advanced account backup/history/conflict restoration and source-draft enrollment — [follow-ups](docs/plans/account-sync-followups.md)
 
-## Premium UI — implemented on `claude/premium-ui-feel-05we0e`, not yet merged
-- [ ] Merge the premium UI branch into `dev`. Plans 01–10 are implemented and merged on the branch, and local lint, typecheck, 645 unit tests, build and 14 PWA tests pass — [index and notes](docs/plans/premium-ui/README.md)
+## Premium UI — shipped to `main` 2026-09-29; device checks and follow-ups open
+
 - [ ] Verify on an installed iPhone/iPad:
   - status bar and safe areas;
   - Screen Wake Lock (iOS 18.4+);
@@ -74,6 +75,7 @@ Completed historical phase notes live in `CHANGELOG.md`.
   - light/dark `theme-color`.
 
   Each plan's "Needs a device" list has the details.
+
 - [ ] Plan 02 phase 2: optional recipe photos (device-only first; ADR before any cloud sync)
 - [ ] Small follow-ups from implementation notes:
   - `Menu` should flip up when there is no room below.
