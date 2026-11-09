@@ -1,8 +1,12 @@
 #!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
+# Plain git hook (no husky install). Enable once per clone: git config core.hooksPath .husky
+set -e
+cd "$(git rev-parse --show-toplevel)"
 
-# Run linters on staged files only
-npx lint-staged
+# Run linters on staged files only. lint-staged and prettier live in frontend/.
+# ponytail: Prettier skips TS/CSS; most frontend files predate it and use double quotes
+# against .prettierrc's singleQuote. Reformat the codebase in one commit, then add them.
+PATH="$PWD/frontend/node_modules/.bin:$PATH" lint-staged
 
 # Optional: warn if any `- [x]` lines remain in TODO.md that haven't been promoted
 if grep -q "^- \[x\]" TODO.md 2>/dev/null; then

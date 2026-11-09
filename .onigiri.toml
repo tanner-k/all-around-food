@@ -1,0 +1,8 @@
+[project]
+key = "AAF"
+
+[commands]
+test = "node frontend/node_modules/vitest/vitest.mjs run --root frontend --reporter=junit --outputFile={report} -t {target}"
+
+[limits]
+timeout = 120

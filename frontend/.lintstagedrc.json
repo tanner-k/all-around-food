@@ -1,0 +1,4 @@
+{
+  "*.{js,jsx,mjs,ts,tsx}": "eslint --fix",
+  "!(pnpm-lock).{json,md,yml,yaml}": "prettier --write"
+}
