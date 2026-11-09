@@ -37,16 +37,18 @@ beforeEach(() => {
 });
 
 describe("GET /api/export", () => {
+  const request = new Request("https://example.test/api/export");
+
   it("requires a signed-in owner and never reads tables for other users", async () => {
     const signedOut = mockClient({}, null);
-    const unauthorized = await GET();
+    const unauthorized = await GET(request);
     expect(unauthorized.status).toBe(401);
     expect(unauthorized.headers.get("Cache-Control")).toBe("no-store");
     expect(signedOut.client.rpc).not.toHaveBeenCalled();
     expect(signedOut.client.from).not.toHaveBeenCalled();
 
     const nonOwner = mockClient({}, "other-user");
-    const forbidden = await GET();
+    const forbidden = await GET(request);
     expect(forbidden.status).toBe(403);
     expect(forbidden.headers.get("Cache-Control")).toBe("no-store");
     expect(nonOwner.client.rpc).toHaveBeenCalledWith("import_owner_uid");
@@ -66,7 +68,7 @@ describe("GET /api/export", () => {
       planned_meals: [{ id: "meal-1", meal_plan_id: "2026-09-21", day_index: 3, recipe_id: "recipe-500" }],
       pantry_items: [pantry], shopping_list_items: [shopping],
     });
-    const response = await GET();
+    const response = await GET(request);
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(response.headers.get("Content-Disposition")).toContain("attachment");
@@ -87,7 +89,7 @@ describe("GET /api/export", () => {
 
   it("reports orphan plan and recipe references rather than silently dropping rows", async () => {
     mockClient({ planned_meals: [{ id: "orphan-1", meal_plan_id: "missing-plan", day_index: 0, recipe_id: "missing-recipe" }] });
-    const response = await GET();
+    const response = await GET(request);
     expect(response.status).toBe(409);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     const body = await response.json();

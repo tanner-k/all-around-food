@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store" };
 const PAGE_SIZE = 500;
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -21,9 +21,9 @@ export async function GET(request?: Request) {
       return NextResponse.json({ error: "Only the configured library owner may export." }, { status: 403, headers });
     }
 
-    const params = request ? new URL(request.url).searchParams : null;
-    const recipeCopy = params?.get("scope") === "recipes";
-    if (recipeCopy && params?.get("expected_owner") !== user.id) {
+    const params = new URL(request.url).searchParams;
+    const recipeCopy = params.get("scope") === "recipes";
+    if (recipeCopy && params.get("expected_owner") !== user.id) {
       return NextResponse.json({ error: "Cloud export owner does not match this account. Sign in again." }, { status: 409, headers });
     }
 

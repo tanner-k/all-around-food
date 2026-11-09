@@ -29,7 +29,7 @@ it("loads the local cookbook and follows hash navigation in both directions", as
   expect(screen.getAllByText("bread").length).toBeGreaterThan(0);
 
   act(() => { window.location.hash = "#/cookbook"; window.dispatchEvent(new Event("hashchange")); });
-  await waitFor(() => expect(screen.getByRole("link", { name: /Toast/ })).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole("link", { name: "Toast" })).toBeInTheDocument());
 });
 
 function goTo(hash: string) {
@@ -38,9 +38,9 @@ function goTo(hash: string) {
 
 async function fillAndSaveNewRecipe(title: string) {
   await screen.findByRole("heading", { name: "New recipe" });
-  fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: title } });
-  fireEvent.change(screen.getByPlaceholderText("e.g. olive oil"), { target: { value: "bread" } });
-  fireEvent.change(document.querySelectorAll("textarea")[1], { target: { value: "Toast it." } });
+  fireEvent.change(screen.getByLabelText("Title"), { target: { value: title } });
+  fireEvent.change(screen.getByLabelText("Name"), { target: { value: "bread" } });
+  fireEvent.change(screen.getByLabelText("Instruction"), { target: { value: "Toast it." } });
   fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await screen.findByRole("heading", { name: title });
 }
@@ -53,7 +53,7 @@ it("gives every manual recipe its own id within one mounted app", async () => {
   await fillAndSaveNewRecipe("First recipe");
 
   goTo("#/cookbook");
-  await screen.findByRole("link", { name: /First recipe/ });
+  await screen.findByRole("link", { name: "First recipe" });
   goTo("#/cookbook/new");
   await fillAndSaveNewRecipe("Second recipe");
 
@@ -138,7 +138,7 @@ it("opens new screens at the top and leaves scroll alone when going back", async
 
   scrollTo.mockClear();
   act(() => { window.location.hash = "#/cookbook"; window.dispatchEvent(new Event("hashchange")); });
-  await waitFor(() => expect(screen.getByRole("link", { name: /Toast/ })).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByRole("link", { name: "Toast" })).toBeInTheDocument());
   expect(scrollTo).not.toHaveBeenCalled();
 
   act(() => { window.location.hash = "#/shop"; window.dispatchEvent(new Event("hashchange")); });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { withEditedAmount, type Recipe, type Ingredient, type Step } from "@/lib/recipe-schema";
 import { localHref } from "@/lib/local/navigation";
 import { ChevronDown, X } from "lucide-react";
@@ -51,6 +51,8 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
   const [baseline] = useState(() => isNew ? null : initialRecipe);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const savingRef = useRef(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   function updateField<K extends keyof Recipe>(key: K, value: Recipe[K]) {
     setRecipe((r) => ({ ...r, [key]: value }));
@@ -105,23 +107,32 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
   }
 
   async function handleSave() {
-    if (!recipe.title.trim() || !recipe.ingredients.some((item) => item.name.trim()) || !recipe.steps.some((step) => step.instruction.trim())) {
+    if (savingRef.current) return;
+    const title = recipe.title.trim();
+    if (!title || !recipe.ingredients.some((item) => item.name.trim()) || !recipe.steps.some((step) => step.instruction.trim())) {
       setError("Add a title, an ingredient, and a step before saving.");
+      if (!title) titleInputRef.current?.focus();
       return;
     }
+    savingRef.current = true;
     setSaving(true);
     setError(null);
     try {
-      await onSave({ ...recipe, ingredients: recipe.ingredients.filter((item) => item.name.trim()), steps: recipe.steps.filter((step) => step.instruction.trim()).map((step, index) => ({...step, order: index + 1})) }, baseline);
+      await onSave({ ...recipe, title, ingredients: recipe.ingredients.filter((item) => item.name.trim()), steps: recipe.steps.filter((step) => step.instruction.trim()).map((step, index) => ({...step, order: index + 1})) }, baseline);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }
 
   return (
-    <div className="flex flex-col gap-8 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between gap-4">
+    <form
+      className="flex flex-col gap-8 max-w-3xl mx-auto"
+      onSubmit={(e) => { e.preventDefault(); void handleSave(); }}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-serif text-3xl text-ink leading-tight">
           {isNew ? "New recipe" : "Edit recipe"}
         </h1>
@@ -131,8 +142,16 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
         >
           Cancel
         </a>
+        <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
       </div>
 
+      {error && (
+        <p role="alert" className="text-sm text-danger bg-danger-soft rounded-lg px-4 py-2">
+          {error} — please try again.
+        </p>
+      )}
+
+      <fieldset disabled={saving} className="contents">
       {/* Basic info */}
       <section className="flex flex-col gap-4">
         <h2 className={sectionHeadingClass}>
@@ -140,8 +159,10 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
         </h2>
 
         <div>
-          <label className={labelClass}>Title</label>
+          <label className={labelClass} htmlFor="recipe-title">Title</label>
           <input
+            id="recipe-title"
+            ref={titleInputRef}
             className={inputClass}
             value={recipe.title}
             onChange={(e) => updateField("title", e.target.value)}
@@ -149,8 +170,9 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
         </div>
 
         <div>
-          <label className={labelClass}>Description</label>
+          <label className={labelClass} htmlFor="recipe-description">Description</label>
           <textarea
+            id="recipe-description"
             className={`${inputClass} min-h-[80px] resize-y`}
             value={recipe.description ?? ""}
             onChange={(e) =>
@@ -161,8 +183,9 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className={labelClass}>Prep time (min)</label>
+            <label className={labelClass} htmlFor="recipe-prep-time">Prep time (min)</label>
             <input
+              id="recipe-prep-time"
               type="number"
               className={inputClass}
               value={recipe.prep_time_min ?? ""}
@@ -175,8 +198,9 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
             />
           </div>
           <div>
-            <label className={labelClass}>Cook time (min)</label>
+            <label className={labelClass} htmlFor="recipe-cook-time">Cook time (min)</label>
             <input
+              id="recipe-cook-time"
               type="number"
               className={inputClass}
               value={recipe.cook_time_min ?? ""}
@@ -189,8 +213,9 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
             />
           </div>
           <div>
-            <label className={labelClass}>Total time (min)</label>
+            <label className={labelClass} htmlFor="recipe-total-time">Total time (min)</label>
             <input
+              id="recipe-total-time"
               type="number"
               className={inputClass}
               value={recipe.total_time_min ?? ""}
@@ -206,8 +231,9 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Servings</label>
+            <label className={labelClass} htmlFor="recipe-servings">Servings</label>
             <input
+              id="recipe-servings"
               type="number"
               className={inputClass}
               value={recipe.servings ?? ""}
@@ -220,9 +246,10 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
             />
           </div>
           <div>
-            <label className={labelClass}>Difficulty</label>
+            <label className={labelClass} htmlFor="recipe-difficulty">Difficulty</label>
             <div className="relative">
               <select
+                id="recipe-difficulty"
                 className={selectClass}
                 value={recipe.difficulty ?? ""}
                 onChange={(e) =>
@@ -237,13 +264,27 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
                 <option value="medium">Medium</option>
                 <option value="hard">Hard</option>
               </select>
-              <ChevronDown
-                aria-hidden="true"
-                size={18}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-mute"
-              />
+              <ChevronDown aria-hidden="true" size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-mute" />
             </div>
           </div>
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="recipe-notes">Notes</label>
+          <textarea
+            id="recipe-notes"
+            className={`${inputClass} min-h-[80px] resize-y`}
+            value={recipe.notes ?? ""}
+            onChange={(e) => updateField("notes", e.target.value || null)}
+          />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="recipe-storage-instructions">Storage instructions</label>
+          <textarea
+            id="recipe-storage-instructions"
+            className={`${inputClass} min-h-[80px] resize-y`}
+            value={recipe.storage_instructions ?? ""}
+            onChange={(e) => updateField("storage_instructions", e.target.value || null)}
+          />
         </div>
       </section>
 
@@ -258,8 +299,9 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
             className="flex flex-col md:flex-row gap-2 p-3 rounded-lg bg-paper-2 border border-line"
           >
             <div className="flex-1 min-w-0">
-              <label className={labelClass}>Name</label>
+              <label className={labelClass} htmlFor={`ingredient-${i}-name`}>Name</label>
               <input
+                id={`ingredient-${i}-name`}
                 className={inputClass}
                 value={ing.name}
                 onChange={(e) => updateIngredient(i, { name: e.target.value })}
@@ -267,8 +309,9 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
               />
             </div>
             <div className="w-full md:w-32">
-              <label className={labelClass}>Amount</label>
+              <label className={labelClass} htmlFor={`ingredient-${i}-amount`}>Amount</label>
               <input
+                id={`ingredient-${i}-amount`}
                 className={inputClass}
                 value={ing.quantity.as_written}
                 onChange={(e) =>
@@ -280,8 +323,9 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
               />
             </div>
             <div className="flex-1 min-w-0">
-              <label className={labelClass}>Preparation</label>
+              <label className={labelClass} htmlFor={`ingredient-${i}-preparation`}>Preparation</label>
               <input
+                id={`ingredient-${i}-preparation`}
                 className={inputClass}
                 value={ing.preparation ?? ""}
                 onChange={(e) =>
@@ -303,8 +347,8 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
                 <span>Optional</span>
               </label>
               <IconButton
-                aria-label="Remove ingredient"
                 icon={<X size={18} />}
+                aria-label="Remove ingredient"
                 onClick={() => removeIngredient(i)}
                 disabled={recipe.ingredients.length <= 1}
               />
@@ -335,8 +379,9 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
             </span>
             <div className="flex-1 flex flex-col gap-2">
               <div>
-                <label className={labelClass}>Instruction</label>
+                <label className={labelClass} htmlFor={`step-${i}-instruction`}>Instruction</label>
                 <textarea
+                  id={`step-${i}-instruction`}
                   className={`${inputClass} min-h-[72px] resize-y`}
                   value={step.instruction}
                   onChange={(e) =>
@@ -346,9 +391,11 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className={labelClass}>Duration (min)</label>
+                  <label className={labelClass} htmlFor={`step-${i}-duration`}>Duration (min)</label>
                   <input
+                    id={`step-${i}-duration`}
                     type="number"
+                    step="any"
                     className={inputClass}
                     value={step.duration_min ?? ""}
                     onChange={(e) =>
@@ -361,8 +408,9 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
                   />
                 </div>
                 <div>
-                  <label className={labelClass}>Temperature (°F)</label>
+                  <label className={labelClass} htmlFor={`step-${i}-temperature`}>Temperature (°F)</label>
                   <input
+                    id={`step-${i}-temperature`}
                     type="number"
                     className={inputClass}
                     value={step.temperature_f ?? ""}
@@ -378,8 +426,8 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
               </div>
             </div>
             <IconButton
-              aria-label="Remove step"
               icon={<X size={18} />}
+              aria-label="Remove step"
               onClick={() => removeStep(i)}
               disabled={recipe.steps.length <= 1}
               className="self-start"
@@ -396,22 +444,13 @@ export function RecipeEditForm({ recipe: initialRecipe, onSave, isNew = false }:
       </section>
 
       {/* Save / Cancel */}
-      {error && (
-        <p className="text-sm text-danger bg-danger-soft rounded-lg px-4 py-2">
-          {error} — please try again.
-        </p>
-      )}
+      </fieldset>
       <div className="flex gap-3 justify-end pt-2 border-t border-line">
-        <Button
-          variant="secondary"
-          href={isNew ? localHref("cookbook") : localHref("recipe", recipe.id)}
-        >
+        <Button variant="secondary" href={isNew ? localHref("cookbook") : localHref("recipe", recipe.id)}>
           Cancel
         </Button>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save"}
-        </Button>
+        <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
       </div>
-    </div>
+    </form>
   );
 }

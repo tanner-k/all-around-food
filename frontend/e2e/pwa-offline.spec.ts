@@ -107,7 +107,7 @@ test("installed shell opens an unvisited recipe offline and recovers online afte
     await page.goto(`/app#/cookbook/${recipeId}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Offline Soup" })).toBeVisible();
     await page.goto(`/app#/cookbook/${recipeId}/edit`, { waitUntil: "domcontentloaded" });
-    await page.locator("section").filter({ has: page.getByRole("heading", { name: "Basic info" }) }).locator("input").first().fill("Offline Soup Updated");
+    await page.getByLabel("Title").fill("Offline Soup Updated");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Offline Soup Updated" })).toBeVisible();
     await page.goto(`/cookbook/${recipeId}/cook`, { waitUntil: "domcontentloaded" });
