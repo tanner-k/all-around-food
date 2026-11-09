@@ -52,14 +52,13 @@ describe("CookbookCard", () => {
   });
 });
 
-it("renders the cookbook as a list of cards with no empty placeholder", () => {
+it("renders the cookbook as an alphabetical name list without recipe covers", () => {
   const snapshot: LibrarySnapshot = { recipes: [recipe, { ...recipe, id: "recipe-2", title: "Toast", times_made: 5 }], meal_plans: [], shopping: [], pantry: [], cook_progress: [], drafts: [], settings: [] };
   const { container } = render(<LocalScreens route={{ view: "cookbook" }} snapshot={snapshot} />);
-  const items = screen.getAllByRole("listitem");
-  expect(items).toHaveLength(2);
-  expect(items[0]).toHaveTextContent("Toast");
-  expect(items[0]).toHaveTextContent("5× cooked");
-  expect(items[0]).toHaveClass("ring-terra");
-  expect(container.querySelector(".aspect-video.bg-paper-2")).toBeNull();
-  expect(container.querySelectorAll("[data-recipe-cover]")).toHaveLength(2);
+  expect([...container.querySelectorAll("[data-recipe-card]")].map((link) => link.textContent?.trim())).toEqual(["Carrot Soup", "Toast"]);
+  expect(screen.getByRole("link", { name: "Carrot Soup" })).toHaveAttribute("data-recipe-card", "recipe-1");
+  expect(screen.getByText("Carrot Soup")).toHaveAttribute("data-recipe-title", "");
+  expect(screen.getByText("5 made")).toBeInTheDocument();
+  expect(screen.getByRole("navigation", { name: "Cookbook letters" })).toBeInTheDocument();
+  expect(container.querySelector("[data-recipe-cover]")).toBeNull();
 });

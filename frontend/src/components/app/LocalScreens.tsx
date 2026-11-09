@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import { SectionHeader } from "@/components/SectionHeader";
 import { RecipeDetail } from "@/components/recipe/RecipeDetail";
 import { RecipeEditForm } from "@/components/recipe/RecipeEditForm";
+import { CookbookList } from "@/components/recipe/CookbookList";
 import { CookMode } from "@/components/cook/CookMode";
 import { DataSettings } from "@/components/settings/DataSettings";
 import { LocalImports } from "./LocalImports";
-import { CookbookCard } from "./CookbookCard";
 import { PlanView } from "@/components/plan/PlanView";
 import { ShoppingListView } from "@/components/shopping/ShoppingListView";
 import { PantryView } from "@/components/pantry/PantryView";
@@ -77,16 +77,15 @@ export function LocalScreens({ route, snapshot, sync }: { route: LocalRoute; sna
   if (route.view === "settings") return <DataSettings sync={sync} />;
 
   if (route.view === "cookbook") {
-    const recipes = [...snapshot.recipes].sort((a, b) => b.times_made - a.times_made || b.created_at.localeCompare(a.created_at));
+    const recipes = snapshot.recipes;
     return <>
-      <SectionHeader number="02" scene="YOUR LIBRARY" title={<>Every recipe you&apos;ve <em className="italic text-terra">saved</em>.</>} description="Sorted by what you cook most." />
+      <SectionHeader number="02" scene="YOUR LIBRARY" title={<>Every recipe you&apos;ve <em className="italic text-terra">saved</em>.</>} description="Browse recipes alphabetically and see how many times you’ve made each one." />
       <div className="mt-8 flex flex-wrap gap-3">
         <a href={localHref("edit")} className="rounded-full bg-terra-strong px-5 py-2.5 text-sm font-semibold text-on-accent">+ Add recipe</a>
         <a href={localHref("import")} className="rounded-full border border-line px-5 py-2.5 text-sm font-semibold text-ink">Import recipe</a>
       </div>
       {recipes.length === 0 ? <div className="mt-12 rounded-2xl border border-line bg-paper p-12 text-center text-ink-mute">Your cookbook is empty. Add a recipe to get started.</div>
-        : <ul className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">{recipes.map((item, index) =>
-          <CookbookCard key={item.id} recipe={item} featured={index === 0} index={index} />)}</ul>}
+        : <div className="mt-8"><CookbookList recipes={recipes} /></div>}
     </>;
   }
 

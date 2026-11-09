@@ -143,7 +143,7 @@ test("an offline request resumes through mocked Supabase, survives review reload
   expect(records.get(`recipe:${submittedId}`)).toBeUndefined();
   releasePull();
   await page.goto("/app#/cookbook");
-  await expect(page.getByRole("link", { name: /My Toast/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "My Toast", exact: true })).toBeVisible();
   // A save during a busy pass is sent by the next 30s foreground poll.
   await expect.poll(() => records.get(`recipe:${submittedId}`)?.payload, { timeout: 45_000 }).toMatchObject({ title: "My Toast" });
   await expect.poll(() => records.get(`draft:${submittedId}`)?.deleted).toBe(true);

@@ -1,23 +1,28 @@
 # frontend/
 
 ## Scope
+
 - UI components, pages, routes
 - Client-side state management
 - Styles, assets, public files
 
 ## Not in scope
+
 - Business logic → `backend/`
 - Data models and migrations → `data/`
 - Deployment / infrastructure → `infra/`
 
 ## Stack
+
 Next.js 16 + React 19 + TypeScript + Tailwind CSS v4 + shadcn/ui
 
 ## Local skills / conventions
+
 - ui-ux-pro-max
 - shadcn/ui MCP
 
 ## Run
+
 ```bash
 cd frontend
 pnpm dev
@@ -26,13 +31,14 @@ pnpm dev
 ## Routes
 
 ### App Pages
+
 - `/` (root index)
 - `/app` — offline local app shell; hash routes `#/plan`, `#/cookbook`, `#/cookbook/new`, `#/cookbook/[id]`, `#/cookbook/[id]/edit`, `#/cookbook/[id]/cook`, `#/shop`, `#/pantry`, `#/import`, `#/settings`
 - `/plan` — redirects to local weekly meal planner at `/app#/plan`
-- `/cookbook` — recipe list view
+- `/cookbook` — redirects to the alphabetical name list at `/app#/cookbook`, with lifetime cook counts, Edit links, and a right-side letter index
 - `/cookbook/[id]` — recipe detail page (magazine-style)
 - `/cookbook/[id]/cook` — immersive cook mode (step-by-step or full-scroll layout)
-- `/cookbook/[id]/edit` — edit saved recipe
+- `/cookbook/[id]/edit` — local recipe editor with top/bottom save, notes, storage instructions, and preserved concurrency baseline
 - `/evaluations` — eval dashboard (dev tool)
 - `/import` — redirects to the local import queue at `/app#/import`
 - `/shop` — redirects to local shopping list at `/app#/shop`
@@ -40,6 +46,7 @@ pnpm dev
 - `/prices` — legacy pricing comparison page, hidden from the personal `/app` navigation
 
 ### API Routes
+
 - `POST /api/import/parse` and `POST /api/pantry/receipt` — retired direct frontend parsers; both return 410
 - `GET /api/export` — authenticated owner-only legacy library export; recipe-copy requests use `scope=recipes&expected_owner=<destination>` and return freshly verified owner identity, recipe records, and retained raw excluded source tables
 - `/api/pricing/*` — legacy FastAPI pricing proxies, kept for the separate opt-in pricing suite; the personal app does not call them
@@ -47,6 +54,7 @@ pnpm dev
 The evaluation dashboard uses the owner-scoped Supabase `evaluation_stats` view. Old recipe, meal-plan, pantry, shopping-list, and evaluation proxy routes have been removed; the personal `/app` reads and writes IndexedDB directly.
 
 ## Notes for agents
+
 - The installed app enters through `/app`. Cookbook, edit, cook, and settings read IndexedDB through `lib/local/repository.ts`; shell views subscribe to local changes. Legacy cookbook, plan, shop, and pantry URLs redirect to matching local hash routes. The local plan, shop, and pantry views commit through IndexedDB transactions; shopping generation replaces only the selected week.
 - Offline screen components use local repository callbacks. Keep server actions, backend API wrappers, and private configuration outside the `/app` client import tree. `/`, `/app`, `/assets`, and legacy local redirect routes (including `/import`) bypass auth middleware; online export and API routes remain protected.
 - The production service worker precaches `/app` and emitted assets, not API/auth/Supabase responses. `pnpm build` generates the asset manifest; `pnpm test:pwa` needs that build and Chromium. The app's data stays with one browser profile and origin; Settings supports versioned JSON backup and restore.
@@ -56,24 +64,29 @@ The evaluation dashboard uses the owner-scoped Supabase `evaluation_stats` view.
 - Before adding a new dependency, check whether it duplicates something already in `package.json`
 
 ## Account library sync
+
 - `LocalApp` owns the single `useLibrarySync` instance: freshly verified identities select isolated local libraries, foreground passes use cancellable sync, and conflict review retains both versions with recovery-reference exports. Auth callbacks schedule checks outside Supabase’s lock. Explicit sign-out stays closed until a successful confirmation return is freshly verified.
 - Sync UI (`SyncStatus.tsx`) stays out of the content path. `LocalApp` portals `SyncStatusChip` (dot + label, the only `role="status"` for the label, links to Settings) into the empty `#app-header-status` slot the root layout renders; keep that slot if the header moves. `SyncAttentionBanner` renders above content only for conflicts or actionable errors (not `paused`/`account`/`auth`), and Settings mounts it `embedded` (full detail, no self-link, no second Sign in link) from the `sync` prop `LocalScreens` passes to `DataSettings`. Nothing sync-related renders on cook routes. Don't lift the hook into a layout provider.
 - `NEXT_PUBLIC_ACCOUNT_SYNC_STAGE=off|recipes|all` defaults to `off`. Next config defaults Vercel builds to recipes and other builds to off; an explicit environment value overrides it. Off preserves account databases and queues while pausing cloud activity; recipes uploads recipes/drafts and labels other collections as device-only. Enable all only after the remaining collection codecs and mutations pass integration checks.
 - Settings provides explicit recipe-only copy from the fixed original guest library, a v1 backup, or owner-bound legacy cloud export. Each recipe write and create/update outbox intent commits atomically; unchanged recipes enroll only without a shadow/predecessor. Same-ID differences default to keeping the account version; pending matching drafts require Imports review. Source and account backup downloads plus confirmation are required, and stale account/library previews abort. Source drafts/other collections stay in originals/backups; full account restore/Replace remains disabled. Cached app readiness and cloud library status remain separate.
 
 ## Shared import drafts
+
 - Foreground import polling discovers the verified owner's submitted queue even on devices without local jobs. Only queue metadata is copied; unsent screenshots and pasted source text remain on the submitting device. Unsubmitted offline requests appear elsewhere only after upload.
 - Worker-completed draft content arrives through library sync, never a duplicate local null-base create from parse queue results. Completed metadata waits for library sync before review/acknowledgement; recipe/draft Save is one conditional group. Restored account-local drafts without a shadow or queued predecessor explicitly queue a draft-create predecessor before Save; account enrollment normally supplies that predecessor.
 
 ## Planning, shopping, and pantry sync
+
 - Each planned occurrence has a persisted ID and position; `meal_plans` remains a weekly local projection. Independent offline additions sort by position then ID. Missing recipe references remain visible/recoverable.
 - Full-stage planning, shopping, and pantry actions commit one bounded outbox group with their entity writes. Shopping generation uses explicit removed-row tombstones and preserves checked state for unchanged demand. Completion groups pantry stock with purchased-row removal.
 - Shopping coverage flags are derived locally from pantry records after sync and never uploaded. Pantry records retain independent IDs even when names match. Cooking sync/codecs remain a separate integration gate before enabling full rollout.
 
 ## Recipe deletion
+
 - Recipe detail provides a Delete action (overflow menu, confirmed with a danger `Dialog`) through the captured account boundary. Removal and a valid recipe tombstone intent commit together. Synced rows use their shadow base; unsent creates supply a dependency. Guest or unknown unenrolled local recipes are removed locally without an invalid never-existing cloud tombstone. Referenced plans, shopping, and cook progress remain recoverable. Missing recipes are a no-op.
 
 ## Motion
+
 - Route transitions start in `LocalApp`'s `hashchange` listener through `lib/local/route-transition.ts`: the route commits with `flushSync` inside `document.startViewTransition`, and `data-nav-direction` (`push`/`pop`/`tab`, from route depth) drives the CSS. Links are never intercepted. Unsupported browsers, `prefers-reduced-motion` and the first read on mount commit directly.
-- The cookbook card ↔ recipe detail morph names one title and one cover at a time through `data-recipe-card`, `data-recipe-detail`, `data-recipe-title` and `data-recipe-cover`. Keep those hooks if the card or detail markup changes.
+- The cookbook list ↔ recipe detail morph names one title at a time; cover morphing is used only when both views contain a cover. It uses `data-recipe-card`, `data-recipe-detail`, `data-recipe-title` and `data-recipe-cover`. Keep those hooks if the card or detail markup changes.
 - All motion CSS lives in the delimited plan 06 block in `globals.css` and uses the `--duration-*`/`--ease-*` tokens; `animate-rise` is the shared entrance. One global `prefers-reduced-motion` rule zeroes every animation and transition. Overlay, menu and tab-pill entry use Tailwind's `starting:` variant (`@starting-style`).
